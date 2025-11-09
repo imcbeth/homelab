@@ -12,7 +12,7 @@ spec:
       - dns01:
           webhook:
             # This group needs to be configured when installing the helm package, otherwise the webhook won't have permission to create an ACME challenge for this API group.
-            groupName: k8s.n37.ca
+            groupName: stg.k8s.n37.ca
             solverName: pdns
             config:
               zone: k8s.n37.ca # (Optional): When not provided the Zone will obtained by cert-manager's ResolvedZone
@@ -20,6 +20,11 @@ spec:
               secretKey: api-key
               zoneName: k8s.n37.ca.
               apiUrl: http://162.240.232.116:953
+        selector:
+          dnsZones:
+            - 'stg.k8s.n37.ca'
+            - '*.stg.k8s.n37.ca'
+
 ---
 
 apiVersion: cert-manager.io/v1
@@ -44,6 +49,10 @@ spec:
               secretKey: api-key
               zoneName: k8s.n37.ca.
               apiUrl: http://162.240.232.116:953
+        selector:
+          dnsZones:
+            - 'k8s.n37.ca'
+            - '*.k8s.n37.ca'
 
 ---
 
