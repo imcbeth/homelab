@@ -1,0 +1,15 @@
+controller:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+speaker:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+speaker_frr:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
