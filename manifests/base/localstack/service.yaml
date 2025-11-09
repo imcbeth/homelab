@@ -11,4 +11,4 @@ spec:
     - protocol: TCP
       port: 4566
       targetPort: 4566
-  type: LoadBalancer # Or NodePort/LoadBalancer if external access is needed
+  type: LoadBalancer # ClusterIP Or NodePort/LoadBalancer if external access is needed

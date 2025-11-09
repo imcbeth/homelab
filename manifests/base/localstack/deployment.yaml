@@ -21,6 +21,6 @@ spec:
             - containerPort: 4566 # Default LocalStack port
           env:
             - name: SERVICES
-              value: s3,sqs,lambda # Example services
+              value: s3,sns,sqs,lambda,dynamodb,ec2,elb # Enabled Services
             - name: DEBUG
               value: "1"
