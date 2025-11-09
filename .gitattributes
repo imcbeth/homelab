@@ -1,0 +1,4 @@
+# Example: Encrypt all files ending with .key, has secret in the file name or in a 'secrets' directory
+*.key filter=git-crypt diff=git-crypt
+*secret* filter=git-crypt diff=git-crypt
+secrets/** filter=git-crypt diff=git-crypt
