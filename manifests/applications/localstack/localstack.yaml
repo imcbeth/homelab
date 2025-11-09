@@ -2,19 +2,19 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: localstack
-  namespace: argocd # Or the namespace where your Argo CD instance is running
+  namespace: argocd
 spec:
-  project: default # Or your desired Argo CD project
-  source:
-    repoURL: https://github.com/imcbeth/homelab.git # Replace with your Git repository URL
-    targetRevision: HEAD # Or a specific branch/tag like 'main' or 'v1.0.0'
-    path: manifests/base/localstack # Path within your Git repository to the LocalStack manifests
   destination:
-    server: https://kubernetes.default.svc # Or the API server URL of your target cluster
-    namespace: localstack # The namespace where LocalStack will be deployed
+    namespace: localstack
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: manifests/base/localstack
+    repoURL: git@github.com:imcbeth/homelab.git
+    targetRevision: HEAD
   syncPolicy:
     automated:
-      prune: true
+      enabled: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true # Automatically create the namespace if it doesn't exist
+    - CreateNamespace=true
