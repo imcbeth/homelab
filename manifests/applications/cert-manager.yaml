@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  project: default
+  sources:
+    - chart: cert-manager
+      repoURL: https://charts.jetstack.io
+      targetRevision: v1.17.0 # specify the cert-manager version to install
+      helm:
+        releaseName: cert-manager
+        valuesObject:
+          installCRDs: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+          webhook:
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+          cainjector:
+            resources:
+              requests:
+                cpu: 10m
+                memory: 128Mi
+    - path: manifests/base/cert-manager
+      repoURL: 'git@github.com:imcbeth/homelab.git'
+      targetRevision: HEAD
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      enabled: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
