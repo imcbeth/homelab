@@ -41,7 +41,7 @@ spec:
       - dns01:
           webhook:
             # This group needs to be configured when installing the helm package, otherwise the webhook won't have permission to create an ACME challenge for this API group.
-            # groupName: k8s.n37.ca
+            groupName: k8s.n37.ca
             solverName: pdns
             config:
               host: http://162.240.232.116:953
