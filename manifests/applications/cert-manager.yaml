@@ -32,6 +32,8 @@ spec:
     - path: manifests/base/cert-manager
       repoURL: 'git@github.com:imcbeth/homelab.git'
       targetRevision: HEAD
+      directory:
+        exclude: 'secret.yaml'
   destination:
     server: "https://kubernetes.default.svc"
     namespace: cert-manager
