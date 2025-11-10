@@ -81,7 +81,7 @@ subjects:
   - apiGroup: ""
     kind: ServiceAccount
     name: cert-manager-webhook-pdns
-    namespace: default
+    namespace: cert-manager
 ---
 # Source: cert-manager-webhook-pdns/templates/rbac.yaml
 # apiserver gets the auth-delegator role to delegate auth decisions to
@@ -150,7 +150,7 @@ subjects:
   - apiGroup: ""
     kind: ServiceAccount
     name: cert-manager-webhook-pdns
-    namespace: default
+    namespace: cert-manager
 ---
 # Source: cert-manager-webhook-pdns/templates/service.yaml
 apiVersion: v1
