@@ -268,7 +268,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: cert-manager-webhook-pdns-ca
-  namespace: "default"
+  namespace: "cert-manager"
   labels:
     helm.sh/chart: cert-manager-webhook-pdns-3.2.3
     app.kubernetes.io/name: cert-manager-webhook-pdns
