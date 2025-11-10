@@ -10,20 +10,11 @@ spec:
       name: lets-encrypt-k8s-n37-ca-key-staging
     solvers:
       - dns01:
-          webhook:
-            # This group needs to be configured when installing the helm package, otherwise the webhook won't have permission to create an ACME challenge for this API group.
-            groupName: stg.k8s.n37.ca
-            solverName: pdns
-            config:
-              zone: k8s.n37.ca # (Optional): When not provided the Zone will obtained by cert-manager's ResolvedZone
-              secretName: pdns-api-key
-              secretKey: api-key
-              zoneName: k8s.n37.ca.
-              apiUrl: http://162.240.232.116:953
-        selector:
-          dnsZones:
-            - 'stg.k8s.n37.ca'
-            - '*.stg.k8s.n37.ca'
+          cloudflare:
+            email: imcbeth1980@gmail.com 
+            apiTokenSecretRef:
+              name: cloudflare-api-token-secret
+              key: api-token
 
 ---
 
@@ -39,34 +30,8 @@ spec:
       name: lets-encrypt-k8s-n37-ca-key-prod
     solvers:
       - dns01:
-          webhook:
-            # This group needs to be configured when installing the helm package, otherwise the webhook won't have permission to create an ACME challenge for this API group.
-            groupName: k8s.n37.ca
-            solverName: pdns
-            config:
-              host: http://162.240.232.116:953
-
-              # Reference to the Kubernetes secret containing the API key.
-              apiKeySecretRef:
-                name: pdns-api-key
-                key: api-key
-              serverID: localhost
-              allowed-zones:
-                - k8s.n37.ca.
-
----
-
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: lets-encrypt-k8s-n37-ca-nginx
-spec:
-  acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: imcbeth1980@gmail.com
-    privateKeySecretRef:
-      name: lets-encrypt-k8s-n37-ca-key-nginx
-    solvers:
-    - http01:
-        ingress:
-          class: nginx
+          cloudflare:
+            email: imcbeth1980@gmail.com 
+            apiTokenSecretRef:
+              name: cloudflare-api-token-secret
+              key: api-token
