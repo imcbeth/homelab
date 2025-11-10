@@ -81,7 +81,7 @@ subjects:
   - apiGroup: ""
     kind: ServiceAccount
     name: cert-manager-webhook-pdns
-    namespace: cert-manager
+    namespace: default
 ---
 # Source: cert-manager-webhook-pdns/templates/rbac.yaml
 # apiserver gets the auth-delegator role to delegate auth decisions to
@@ -150,7 +150,7 @@ subjects:
   - apiGroup: ""
     kind: ServiceAccount
     name: cert-manager-webhook-pdns
-    namespace: cert-manager
+    namespace: default
 ---
 # Source: cert-manager-webhook-pdns/templates/service.yaml
 apiVersion: v1
@@ -268,7 +268,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: cert-manager-webhook-pdns-ca
-  namespace: "cert-manager"
+  namespace: "default"
   labels:
     helm.sh/chart: cert-manager-webhook-pdns-3.2.3
     app.kubernetes.io/name: cert-manager-webhook-pdns
@@ -289,7 +289,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: cert-manager-webhook-pdns-webhook-tls
-  namespace: "cert-manager"
+  namespace: "default"
   labels:
     helm.sh/chart: cert-manager-webhook-pdns-3.2.3
     app.kubernetes.io/name: cert-manager-webhook-pdns
