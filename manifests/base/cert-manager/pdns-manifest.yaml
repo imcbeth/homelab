@@ -259,7 +259,7 @@ spec:
   versionPriority: 15
   service:
     name: cert-manager-webhook-pdns
-    namespace: default
+    namespace: cert-manager
   version: v1alpha1
 ---
 # Source: cert-manager-webhook-pdns/templates/pki.yaml
