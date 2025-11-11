@@ -1,15 +1,26 @@
+# metallb-values.yaml
+
+# Enable metrics for the controller and speaker components
 controller:
   metrics:
     enabled: true
     serviceMonitor:
+      # Set this to false as we want to use PodMonitor instead
+      enabled: false
+    podMonitor:
+      # Enable the PodMonitor resource creation by the Helm chart
       enabled: true
+
 speaker:
   metrics:
     enabled: true
     serviceMonitor:
+      # Set this to false as we want to use PodMonitor instead
+      enabled: false
+    podMonitor:
+      # Enable the PodMonitor resource creation by the Helm chart
       enabled: true
-speaker_frr:
-  metrics:
+
+prometheus:
+  podMonitors:
     enabled: true
-    serviceMonitor:
-      enabled: true
