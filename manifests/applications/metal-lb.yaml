@@ -15,9 +15,12 @@ spec:
       targetRevision: v0.15.2 # specify the MetalLB version to install
       helm:
         releaseName: metallb
+        valueFiles:
+          - $metallb/manifests/base/metal-lb/metallb-metrics-yaml
     - path: manifests/base/metal-lb
       repoURL: 'git@github.com:imcbeth/homelab.git'
       targetRevision: HEAD
+      ref: metallb
   destination:
     server: https://kubernetes.default.svc
     namespace: metallb-system
