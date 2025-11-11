@@ -1,0 +1,24 @@
+server:
+  service:
+    type: ClusterIP # Expose Argo CD server via a ClusterIP
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-internal: "true" # Example for AWS internal load balancer
+
+controller:
+  replicas: 2 # Increase the number of application controller replicas
+
+configs:
+  cm:
+    url: https://argocd.k8s.n37.ca # Set the external URL for Argo CD
+
+# You can add more configurations here, such as:
+# dex:
+#   enabled: true
+#   config:
+#     connectors:
+#       - type: github
+#         id: github
+#         name: GitHub
+#         config:
+#           clientID: <YOUR_GITHUB_CLIENT_ID>
+#           clientSecret: <YOUR_GITHUB_CLIENT_SECRET>
