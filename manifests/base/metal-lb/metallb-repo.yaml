@@ -6,4 +6,6 @@
       labels:
         argocd.argoproj.io/secret-type: repository
     stringData:
+      name: metallb
+      type: helm
       url: https://metallb.github.io/metallb
