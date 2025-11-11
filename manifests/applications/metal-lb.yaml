@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metal-lb
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-35"
+spec:
+  project: default
+  sources:
+    - chart: metallb
+      repoURL: https://metallb.github.io/metallb
+      targetRevision: v0.15.2 # specify the MetalLB version to install
+      helm:
+        releaseName: metallb
+    - path: manifests/base/metal-lb
+      repoURL: 'git@github.com:imcbeth/homelab.git'
+      targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
