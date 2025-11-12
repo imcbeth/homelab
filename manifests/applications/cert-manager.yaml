@@ -34,7 +34,7 @@ spec:
                 cpu: 10m
                 memory: 128Mi
     - path: manifests/base/cert-manager
-      repoURL: 'git@github.com:imcbeth/homelab.git'
+      repoURL: git@github.com:imcbeth/homelab.git
       targetRevision: HEAD
       directory:
         exclude: 'secret.yaml'
