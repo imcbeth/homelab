@@ -10,9 +10,9 @@ metadata:
 spec:
   project: default
   sources:
-    - chart: argocd
+    - chart: argo-cd
       repoURL: https://argoproj.github.io/argo-helm
-      targetRevision: v3.1.9 # specify the MetalLB version to install
+      targetRevision: 9.0.5 # specify the argocd version to install
       helm:
         releaseName: argocd
         valueFiles:
