@@ -19,7 +19,7 @@ echo http://$NODE_IP:$NODE_PORT--kubectl get pods -n localstack
 `alias aws="aws --endpoint-url=http://localhost:4566"`
 
 # Using LB
-`alias aws="aws --endpoint-url=https://localstack.k8s.n37.ca:4566"`
+`alias aws="aws --endpoint-url=https://localstack.k8s.n37.ca"`
 
 ```
 export AWS_ACCESS_KEY_ID=test
