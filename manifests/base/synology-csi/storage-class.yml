@@ -62,7 +62,7 @@ kind: StorageClass
 metadata:
   name: synology-iscsi-retain-ssd
   annotations:
-    storageclass.kubernetes.io/is-default-class: "true"
+    storageclass.kubernetes.io/is-default-class: "false"
 provisioner: csi.san.synology.com
 parameters:
   fsType: 'btrfs'
