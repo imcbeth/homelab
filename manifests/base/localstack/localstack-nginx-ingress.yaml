@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: localstack-ingress
+  namespace: localstack
+  annotations:
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod # Or your chosen issuer
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP" # LocalStack uses HTTP internally
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - localstack.k8s.n37.ca
+    secretName: localstack-k8s-n37-ca-nginx-tls # Cert-manager will create this secret
+  rules:
+  - host: localstack.k8s.n37.ca
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: localstack
+            port:
+              number: 4566
