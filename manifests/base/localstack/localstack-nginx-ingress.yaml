@@ -5,7 +5,6 @@ metadata:
   namespace: localstack
   annotations:
     cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod # Or your chosen issuer
-    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP" # LocalStack uses HTTP internally
 spec:
   ingressClassName: nginx
