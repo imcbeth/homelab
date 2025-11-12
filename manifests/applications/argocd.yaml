@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-50"
+spec:
+  project: default
+  sources:
+    - chart: argocd
+      repoURL: https://argoproj.github.io/argo-helm
+      targetRevision: v3.1.9 # specify the MetalLB version to install
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $argocd/manifests/base/argocd/argocd-config.yaml
+    - path: manifests/base/argocd
+      repoURL: 'git@github.com:imcbeth/homelab.git'
+      targetRevision: HEAD
+      ref: argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

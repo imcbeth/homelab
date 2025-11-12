@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argo-helm-repo
+  namespace: argocd # Or your Argo CD namespace
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  name: argo
+  type: helm
+  url: https://argoproj.github.io/argo-helm
