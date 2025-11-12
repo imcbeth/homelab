@@ -1,0 +1,15 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: argocd-k8s-n37-ca-prd
+  namespace: cert-manager
+spec:
+  secretName: argocd-k8s-n37-ca-prd
+  duration: 2160h # 90 days
+  renewBefore: 360h # 15 days
+  issuerRef:
+    name: lets-encrypt-k8s-n37-ca-prod
+    kind: ClusterIssuer
+  commonName: k8s.n37.ca # The domain you want a certificate for
+  dnsNames:
+    - "argocd.k8s.n37.ca"

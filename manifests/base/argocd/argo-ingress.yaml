@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-ingress
+  namespace: argocd
+  annotations:
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod # Or your chosen issuer
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS" # If your Argo CD server uses TLS internally
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - argocd.k8s.n37.ca
+    secretName: argocd-k8s-n37-ca-prd # Cert-manager will create this secret
+  rules:
+  - host: argocd.k8s.n37.ca
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: argocd-server
+            port:
+              number: 443
