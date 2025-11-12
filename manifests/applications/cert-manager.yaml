@@ -13,6 +13,10 @@ spec:
       targetRevision: v1.17.0 # specify the cert-manager version to install
       helm:
         releaseName: cert-manager
+        extraArgs:
+          - '--enable-certificate-owner-ref=true'
+          - '--dns01-recursive-nameservers-only=true'
+          - '--dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53,4.2.2.1:53'
         valuesObject:
           installCRDs: true
           resources:
