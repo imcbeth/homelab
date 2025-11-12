@@ -12,7 +12,7 @@ spec:
   tls:
   - hosts:
     - argocd.k8s.n37.ca
-    secretName: argocd-k8s-n37-ca-prd # Cert-manager will create this secret
+    secretName: argocd-k8s-n37-ca-nginx-tls # Cert-manager will create this secret
   rules:
   - host: argocd.k8s.n37.ca
     http:
