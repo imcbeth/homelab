@@ -13,3 +13,4 @@ spec:
   commonName: k8s.n37.ca # The domain you want a certificate for
   dnsNames:
     - "argocd.k8s.n37.ca"
+    - "k8s.n37.ca"
