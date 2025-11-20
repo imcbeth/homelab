@@ -359,7 +359,7 @@ doh:
       initialDelaySeconds: 60
       # -- defines the failure threshold for the liveness probe
       failureThreshold: 10
-      # -- defines the timeout in secondes for the liveness probe
+      # -- defines the timeout in seconds for the liveness probe
       timeoutSeconds: 5
     readiness:
       # -- set to true to enable readiness probe
