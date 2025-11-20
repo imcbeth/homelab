@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pihole
+  namespace: pihole
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-35"
+spec:
+  project: default
+  sources:
+    - chart: mojo2600
+      repoURL: https://mojo2600.github.io/pihole-kubernetes/
+      targetRevision: pihole-2.34.0
+      helm:
+        releaseName: mojo2600
+        valueFiles:
+          - $pihole/manifests/base/pihole/config.yaml
+    - path: manifests/base/pihole
+      repoURL: 'git@github.com:imcbeth/homelab.git'
+      targetRevision: HEAD
+      ref: pihole
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: metallb-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
