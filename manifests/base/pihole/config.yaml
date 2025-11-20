@@ -440,7 +440,7 @@ whitelist: {}
 # -- list of blacklisted domains to import during initial start of the container
 blacklist: {}
   # If you want to have special domains blacklisted, add them here
-  # - *.blackist.com
+  # - *.blacklist.com
 
 # -- list of blacklisted regex expressions to import during initial start of the container
 regex: {}
