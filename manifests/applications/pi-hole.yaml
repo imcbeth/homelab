@@ -23,7 +23,7 @@ spec:
       ref: pihole
   destination:
     server: https://kubernetes.default.svc
-    namespace: metallb-system
+    namespace: pihole
   syncPolicy:
     automated:
       prune: true
