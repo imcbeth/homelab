@@ -5,7 +5,7 @@
 # -- The number of replicas
 replicaCount: 1
 
-# -- The `spec.strategyTpye` for updates
+# -- The `spec.strategyType` for updates
 strategyType: RollingUpdate
 
 # -- The maximum number of Pods that can be created over the desired number of `ReplicaSet` during updating.
