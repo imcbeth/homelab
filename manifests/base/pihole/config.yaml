@@ -18,7 +18,7 @@ maxUnavailable: 1
 revisionHistoryLimit: 10
 
 image:
-  # -- the repostory to pull the image from
+  # -- the repository to pull the image from
   repository: "pihole/pihole"
   # -- the docker tag, if left empty it will get it from the chart's appVersion
   tag: ""
