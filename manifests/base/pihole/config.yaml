@@ -228,7 +228,7 @@ resources: {}
   #  cpu: 100m
   #  memory: 128Mi
 
-# -- `spec.PersitentVolumeClaim` configuration
+# -- `spec.PersistentVolumeClaim` configuration
 persistentVolumeClaim:
   # -- set to true to use pvc
   enabled: false
