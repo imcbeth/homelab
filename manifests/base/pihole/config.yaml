@@ -549,7 +549,7 @@ deploymentAnnotations: {}
 
 # -- Additional annotations for pods
 podAnnotations: {}
-  # Example below allows Prometheus to scape on metric port (requires pihole-exporter sidecar enabled)
+  # Example below allows Prometheus to scrape on metric port (requires pihole-exporter sidecar enabled)
   # prometheus.io/port: '9617'
   # prometheus.io/scrape: 'true'
 
