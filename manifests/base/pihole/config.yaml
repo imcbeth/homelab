@@ -376,7 +376,7 @@ doh:
       initialDelaySeconds: 60
       # -- defines the failure threshold for the readiness probe
       failureThreshold: 10
-      # -- defines the timeout in secondes for the readiness probe
+      # -- defines the timeout in seconds for the readiness probe
       timeoutSeconds: 5
   monitoring:
     podMonitor:
