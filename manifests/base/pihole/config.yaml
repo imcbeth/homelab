@@ -332,7 +332,7 @@ doh:
   name: "cloudflared"
   # -- repository
   repository: "crazymax/cloudflared"
-  tag: latest
+  tag: "2025.9.1"
   # -- Pull policy
   pullPolicy: IfNotPresent
   # -- Here you can pass environment variables to the DoH container, for example:
