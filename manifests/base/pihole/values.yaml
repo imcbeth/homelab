@@ -55,9 +55,9 @@ serviceWeb:
   externalTrafficPolicy: Local
   loadBalancerIPv6: ""
   loadBalancerClass: ""
-  annotations: {
-      metallb.universe.tf/allow-shared-ip: pihole-svc
-    }
+  annotations: 
+    metallb.universe.tf/allow-shared-ip: pihole-svc
+
   extraLabels:
     {}
 
@@ -99,7 +99,13 @@ probes:
     failureThreshold: 10
     timeoutSeconds: 5
 
-resources: {}
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
 
 persistentVolumeClaim:
   enabled: false
@@ -122,6 +128,7 @@ admin:
   annotations:
 
 extraEnvVars:
+  TZ: America/Edmonton
   FTLCONF_dns_listeningMode: 'all'
 extraEnvVarsSecret: {}
 DNS1: 1.1.1.1
