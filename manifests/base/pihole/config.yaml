@@ -12,7 +12,7 @@ strategyType: RollingUpdate
 maxSurge: 1
 
 # -- The maximum number of Pods that can be unavailable during updating
-maxUnavailable: 1
+maxUnavailable: 0
 
 # -- The number of old ReplicaSets to retain to allow rollback
 revisionHistoryLimit: 10
@@ -21,7 +21,7 @@ image:
   # -- the repository to pull the image from
   repository: "pihole/pihole"
   # -- the docker tag, if left empty it will get it from the chart's appVersion
-  tag: ""
+  tag: "2025.11.0"
   # -- the pull policy
   pullPolicy: IfNotPresent
 
@@ -53,19 +53,16 @@ serviceDns:
   # externalTrafficPolicy: Local
 
   # -- A fixed `spec.loadBalancerIP` for the DNS Service
-  loadBalancerIP: "10.0.0.200"
+  loadBalancerIP: 10.0.0.200
   # -- A fixed `spec.loadBalancerIP` for the IPv6 DNS Service
   loadBalancerIPv6: ""
   # -- `spec.loadBalancerClass` for the DNS Service. Only used if type is LoadBalancer.
   loadBalancerClass: ""
 
   # -- Annotations for the DNS service
-  annotations: {
-      metallb.universe.tf/address-pool: first-pool
-      metallb.universe.tf/allow-shared-ip: pihole-svc
-    }
-    # metallb.universe.tf/address-pool: network-services
-    # metallb.universe.tf/allow-shared-ip: pihole-svc
+  annotations:
+    metallb.universe.tf/allow-shared-ip: pihole-svc
+
 
   # -- Labels for the DNS service
   extraLabels:
@@ -141,11 +138,8 @@ serviceWeb:
 
   # -- Annotations for the DHCP service
   annotations: {
-      metallb.universe.tf/address-pool: first-pool
       metallb.universe.tf/allow-shared-ip: pihole-svc
     }
-    # metallb.universe.tf/address-pool: network-services
-    # metallb.universe.tf/allow-shared-ip: pihole-svc
 
   # -- Labels for the web interface service
   extraLabels:
@@ -162,20 +156,19 @@ ingress:
   ingressClassName: nginx
 
   # -- Annotations for the ingress
-  annotations: {
+  annotations: 
     cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-  }
+  
   path: /
   pathType: ImplementationSpecific
   hosts:
     # virtualHost (default value is pi.hole) will be appended to the hosts
     - pihole.k8s.n37.ca
-  tls: [
+  tls: 
     - secretName: pihole-k8s-n37-ca-nginx-tls
       hosts:
        - pihole.k8s.n37.ca
-  ]
 
 # -- Probes configuration
 probes:
