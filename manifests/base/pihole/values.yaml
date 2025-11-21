@@ -1,0 +1,230 @@
+replicaCount: 1
+strategyType: RollingUpdate
+maxSurge: 1
+maxUnavailable: 0
+revisionHistoryLimit: 10
+
+image:
+  repository: "pihole/pihole"
+  tag: "2025.11.0"
+  pullPolicy: IfNotPresent
+
+dualStack:
+  enabled: false
+
+dnsHostPort:
+  enabled: false
+  port: 53
+
+serviceDns:
+  mixedService: false
+  type: LoadBalancer
+  port: 53
+  nodePort: ""
+  loadBalancerIP: 10.0.0.200
+  loadBalancerIPv6: ""
+  loadBalancerClass: ""
+  annotations:
+    metallb.universe.tf/allow-shared-ip: pihole-svc
+  extraLabels:
+    {}
+
+serviceDhcp:
+  enabled: false
+  type: NodePort
+  port: 67
+  nodePort: ""
+  externalTrafficPolicy: Local
+  loadBalancerIP: ""
+  loadBalancerIPv6: ""
+  loadBalancerClass: ""
+  annotations: {}
+  extraLabels:
+    {}
+
+serviceWeb:
+  http:
+    enabled: true
+    port: 80
+    nodePort: ""
+  https:
+    enabled: true
+    port: 443
+    nodePort: ""
+  type: ClusterIP
+  externalTrafficPolicy: Local
+  loadBalancerIPv6: ""
+  loadBalancerClass: ""
+  annotations: {
+      metallb.universe.tf/allow-shared-ip: pihole-svc
+    }
+  extraLabels:
+    {}
+
+virtualHost: pihole.k8s.n37.ca
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations: 
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+  path: /
+  pathType: ImplementationSpecific
+  hosts:
+    - pihole.k8s.n37.ca
+  tls: 
+    - secretName: pihole-k8s-n37-ca-nginx-tls
+      hosts:
+       - pihole.k8s.n37.ca
+
+probes:
+  liveness:
+    type: command
+    command:
+      - /bin/sh
+      - -c
+      - "curl --silent http://localhost/api/info/login | jq 'if (.dns | not) then halt_error(1) end'"
+    enabled: true
+    initialDelaySeconds: 60
+    failureThreshold: 10
+    timeoutSeconds: 5
+  readiness:
+    type: command
+    command:
+      - /bin/sh
+      - -c
+      - "curl --silent http://localhost/api/info/login | jq 'if (.dns | not) then halt_error(1) end'"
+    enabled: true
+    initialDelaySeconds: 60
+    failureThreshold: 10
+    timeoutSeconds: 5
+
+resources: {}
+
+persistentVolumeClaim:
+  enabled: false
+  annotations: {}
+  accessModes:
+    - ReadWriteOnce
+  size: "500Mi"
+
+nodeSelector: {}
+tolerations: []
+topologySpreadConstraints: []
+
+affinity: {}
+
+adminPassword: "unused-see-existingSecret"
+admin:
+  enabled: true
+  existingSecret: "pihole-web-password"
+  passwordKey: "web_password"
+  annotations:
+
+extraEnvVars:
+  FTLCONF_dns_listeningMode: 'all'
+extraEnvVarsSecret: {}
+DNS1: 1.1.1.1
+DNS2: 8.8.4.4
+
+antiaff:
+  enabled: false
+  avoidRelease: pihole1
+  strict: true
+  namespaces: []
+
+doh:
+  enabled: false
+  name: "cloudflared"
+  repository: "crazymax/cloudflared"
+  tag: "2025.9.1"
+  pullPolicy: IfNotPresent
+  envVars: {}
+  command: []
+  probes:
+    liveness:
+      enabled: true
+      probe:
+        exec:
+          command:
+            - nslookup
+            - -po=5053
+            - cloudflare.com
+            - "127.0.0.1"
+      initialDelaySeconds: 60
+      failureThreshold: 10
+      timeoutSeconds: 5
+    readiness:
+      enabled: true
+      probe:
+        exec:
+          command:
+            - nslookup
+            - -po=5053
+            - cloudflare.com
+            - "127.0.0.1"
+      initialDelaySeconds: 60
+      failureThreshold: 10
+      timeoutSeconds: 5
+  monitoring:
+    podMonitor:
+      enabled: false
+  enableCustomDnsMasq: true
+  upstreamServers: []
+  customDnsEntries: []
+  additionalHostsEntries: []
+  staticDhcpEntries: []
+  customSettings:
+  customCnameEntries: []
+
+adlists: {}
+whitelist: {}
+blacklist: {}
+regex: {}
+ftl: {}
+
+webHttp: "80"
+webHttps: "443"
+hostname: ""
+hostNetwork: "false"
+privileged: "false"
+capabilities: {}
+
+customVolumes:
+  enabled: false
+  config: {}
+extraVolumes: {}
+extraVolumeMounts: {}
+
+extraContainers: []
+extraObjects: []
+
+deploymentAnnotations: {}
+podAnnotations: {}
+extraInitContainers: []
+
+monitoring:
+  podMonitor:
+    enabled: false
+  sidecar:
+    enabled: false
+    port: 9617
+    image:
+      repository: ekofr/pihole-exporter
+      tag: v1.0.0
+      pullPolicy: IfNotPresent
+    resources:
+      limits:
+        memory: 128Mi
+
+podDnsConfig:
+  enabled: true
+  policy: "None"
+  nameservers:
+    - 127.0.0.1
+    - 1.1.1.1
+    - 8.8.8.8
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
