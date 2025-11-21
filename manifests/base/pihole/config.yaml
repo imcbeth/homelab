@@ -145,8 +145,7 @@ serviceWeb:
   extraLabels:
     {}
 
-virtualHost: pi.hole
-
+virtualHost: pihole.k8s.n37.ca
 # -- Configuration for the Ingress
 ingress:
   # -- Generate a Ingress resource
