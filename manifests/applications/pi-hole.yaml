@@ -2,21 +2,19 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: pihole
-  namespace: pihole
+  namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "-35"
 spec:
   project: default
   sources:
-    - chart: pihole
-      repoURL: https://mojo2600.github.io/pihole-kubernetes/
-      targetRevision: pihole-2.34.0
-      helm:
-        releaseName: mojo2600
+    - repoURL: https://mojo2600.github.io/pihole-kubernetes/
+      chart: pihole
+      targetRevision: 2.34.0
         valueFiles:
-          - $pihole/manifests/base/pihole/config.yaml
-    - path: manifests/base/pihole
-      repoURL: 'git@github.com:imcbeth/homelab.git'
+          - $pihole/manifests/base/pihole/values.yaml
+    - repoURL: 'git@github.com:imcbeth/homelab.git'
+      path: manifests/base/pihole
       targetRevision: HEAD
       ref: pihole
   destination:
