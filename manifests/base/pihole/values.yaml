@@ -56,7 +56,7 @@ serviceWeb:
   loadBalancerIPv6: ""
   loadBalancerClass: ""
   annotations: 
-      metallb.universe.tf/allow-shared-ip: pihole-svc
+    metallb.universe.tf/allow-shared-ip: pihole-svc
 
   extraLabels:
     {}
