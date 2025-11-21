@@ -3,8 +3,6 @@ kind: Application
 metadata:
   name: pihole
   namespace: pihole
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "-35"
 spec:
