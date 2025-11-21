@@ -11,6 +11,7 @@ spec:
     - repoURL: https://mojo2600.github.io/pihole-kubernetes/
       chart: pihole
       targetRevision: 2.34.0
+      helm:
         valueFiles:
           - $pihole/manifests/base/pihole/values.yaml
     - repoURL: 'git@github.com:imcbeth/homelab.git'
