@@ -163,7 +163,7 @@ ingress:
 
   # -- Annotations for the ingress
   annotations: {
-    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod 
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
   }
   path: /
