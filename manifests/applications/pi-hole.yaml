@@ -12,7 +12,7 @@ spec:
       chart: pihole
       targetRevision: 2.34.0
         valueFiles:
-          - $pihole/manifests/base/pihole/config.yaml
+          - $pihole/manifests/base/pihole/values.yaml
     - repoURL: 'git@github.com:imcbeth/homelab.git'
       path: manifests/base/pihole
       targetRevision: HEAD
