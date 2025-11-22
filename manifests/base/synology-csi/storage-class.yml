@@ -1,0 +1,70 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: synology-iscsi-retain
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: csi.san.synology.com
+parameters:
+  protocol: 'iscsi'
+  location: '/volume2'
+  dsm: '10.0.0.17'
+  fsType: 'btrfs'
+  formatOptions: '--nodiscard'
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+
+---
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: synology-iscsi-delete
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: csi.san.synology.com
+parameters:
+  protocol: 'iscsi'
+  location: '/volume2'
+  dsm: '10.0.0.17'
+  fsType: 'btrfs'
+  formatOptions: '--nodiscard'
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+
+---
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: synology-iscsi-retain-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: csi.san.synology.com
+parameters:
+  protocol: 'iscsi'
+  location: '/volume4'
+  dsm: '10.0.0.17'
+  fsType: 'btrfs'
+  formatOptions: '--nodiscard'
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+
+---
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: synology-iscsi-delete-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: csi.san.synology.com
+parameters:
+  protocol: 'iscsi'
+  location: '/volume4'
+  dsm: '10.0.0.17'
+  fsType: 'btrfs'
+  formatOptions: '--nodiscard'
+  location: "/volume4"
+reclaimPolicy: Delete
+allowVolumeExpansion: true

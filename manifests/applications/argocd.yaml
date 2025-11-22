@@ -18,7 +18,7 @@ spec:
         valueFiles:
           - $argocd/manifests/base/argocd/argocd-config.yaml
     - path: manifests/base/argocd
-      repoURL: 'git@github.com:imcbeth/homelab.git'
+      repoURL: git@github.com:imcbeth/homelab.git
       targetRevision: HEAD
       ref: argocd
   destination:

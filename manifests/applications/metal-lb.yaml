@@ -18,7 +18,7 @@ spec:
         valueFiles:
           - $metallb/manifests/base/metal-lb/metallb-metrics-yaml
     - path: manifests/base/metal-lb
-      repoURL: 'git@github.com:imcbeth/homelab.git'
+      repoURL: git@github.com:imcbeth/homelab.git
       targetRevision: HEAD
       ref: metallb
   destination:

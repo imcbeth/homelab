@@ -14,7 +14,7 @@ spec:
       helm:
         valueFiles:
           - $pihole/manifests/base/pihole/values.yaml
-    - repoURL: 'git@github.com:imcbeth/homelab.git'
+    - repoURL: git@github.com:imcbeth/homelab.git
       path: manifests/base/pihole
       targetRevision: HEAD
       ref: pihole
