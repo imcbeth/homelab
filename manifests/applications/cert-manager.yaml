@@ -39,7 +39,7 @@ spec:
       directory:
         exclude: 'secret.yaml'
   destination:
-    server: "https://kubernetes.default.svc"
+    server: https://kubernetes.default.svc
     namespace: cert-manager
   syncPolicy:
     automated:

@@ -4,14 +4,14 @@ metadata:
   name: localstack
   namespace: argocd
 spec:
-  destination:
-    namespace: localstack
-    server: https://kubernetes.default.svc
-  project: default
   source:
     path: manifests/base/localstack
     repoURL: git@github.com:imcbeth/homelab.git
     targetRevision: HEAD
+  destination:
+    namespace: localstack
+    server: https://kubernetes.default.svc
+  project: default
   syncPolicy:
     automated:
       prune: true
