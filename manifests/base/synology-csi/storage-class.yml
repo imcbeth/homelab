@@ -65,6 +65,5 @@ parameters:
   dsm: '10.0.0.17'
   fsType: 'btrfs'
   formatOptions: '--nodiscard'
-  location: "/volume4"
 reclaimPolicy: Delete
 allowVolumeExpansion: true
