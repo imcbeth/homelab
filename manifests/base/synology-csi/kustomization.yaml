@@ -10,7 +10,7 @@ resources:
   - storage-class.yml
   - snapshotter/snapshotter.yml
   - snapshotter/volume-snapshot-class.yml
-secretGenerator:
-  - name: client-info-secret
-    files:
-      - client-info.yml=configs/client-info-secret.yml
+# secretGenerator:
+#   - name: client-info-secret
+#     files:
+#       - client-info.yml=configs/client-info-secret.yml
