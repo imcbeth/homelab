@@ -102,11 +102,14 @@ probes:
 resources: {}
 
 persistentVolumeClaim:
-  enabled: false
+  enabled: true
   annotations: {}
+  labels:
+    app: pihole
+  storageClass: synology-iscsi-retain
   accessModes:
     - ReadWriteOnce
-  size: "500Mi"
+  size: 5Gi
 
 nodeSelector: {}
 tolerations: []
@@ -114,12 +117,12 @@ topologySpreadConstraints: []
 
 affinity: {}
 
-adminPassword: "unused-see-existingSecret"
+# adminPassword: "unused-see-existingSecret"
 admin:
   enabled: true
   existingSecret: "pihole-web-password"
   passwordKey: "web_password"
-  annotations:
+  annotations: {}
 
 extraEnvVars:
   FTLCONF_dns_listeningMode: 'all'
