@@ -8,7 +8,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-30"
 spec:
-  project: default
+  project: infrastructure
   source:
     path: manifests/base/synology-csi
     repoURL: git@github.com:imcbeth/homelab.git

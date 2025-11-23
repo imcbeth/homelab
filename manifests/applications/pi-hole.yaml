@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-35"
 spec:
-  project: default
+  project: infrastructure
   sources:
     - repoURL: https://mojo2600.github.io/pihole-kubernetes/
       chart: pihole
