@@ -8,7 +8,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-50"
 spec:
-  project: default
+  project: infrastructure
   sources:
     - chart: argo-cd
       repoURL: https://argoproj.github.io/argo-helm
