@@ -15,15 +15,15 @@ spec:
         releaseName: cert-manager
         valuesObject:
           installCRDs: true
+          extraArgs:
+            - --enable-certificate-owner-ref=true
+            - --dns01-recursive-nameservers=10.0.0.200:53,1.1.1.1:53,8.8.8.8:53
+            - --dns01-recursive-nameservers-only
+          # Set resource requests to low values for home lab environments
           resources:
             requests:
               cpu: 10m
               memory: 128Mi
-          controller:
-            extraArgs:
-              - --dns01-recursive-nameservers=10.0.0.200:53,1.1.1.1:53,8.8.8.8:53
-              - --dns01-recursive-nameservers-only
-              - --enable-certificate-owner-ref=true
           webhook:
             resources:
               requests:
