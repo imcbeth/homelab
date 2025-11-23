@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: infrastructure
+  namespace: argocd # Namespace where Argo CD is installed
+spec:
+  description: "A project for my infrastructure deployments"
+  sourceRepos:
+  - '*' # Allow applications in this project to source from any repository
+  # Or specify specific repositories:
+  # - https://github.com/my-org/my-repo.git
+  destinations:
+  - namespace: '*' # Allow applications in this project to deploy to any namespace
+    server: https://kubernetes.default.svc # The Kubernetes API server URL
+  # Or specify specific namespaces and servers:
+  # - namespace: my-app-namespace
+  #   server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*' # Allow applications to manage all cluster-scoped resources
+  # Or specify specific cluster-scoped resources:
+  # - group: rbac.authorization.k8s.io
+  #   kind: ClusterRole
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*' # Allow applications to manage all namespace-scoped resources
+  # Or specify specific namespace-scoped resources:
+  # - group: apps
+  #   kind: Deployment
