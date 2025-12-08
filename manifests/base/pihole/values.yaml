@@ -6,7 +6,7 @@ revisionHistoryLimit: 10
 
 image:
   repository: "pihole/pihole"
-  tag: "2025.11.0"
+  tag: "2025.11.1"
   pullPolicy: IfNotPresent
 
 dualStack:
