@@ -44,7 +44,7 @@ sudo sysctl --system
 
 ## Install runc
 ```bash
-curl -LO https://github.com/opencontainers/runc/releases/download/v1.3.0/runc.arm64
+curl -LO https://github.com/opencontainers/runc/releases/download/v1.4.0/runc.arm64
 chmod +x runc.arm64
 sudo mv runc.arm64 /usr/local/sbin/runc
 runc --version
@@ -52,20 +52,20 @@ runc --version
 
 ## Install CNI
 ```bash
-curl -LO https://github.com/containernetworking/plugins/releases/download/v1.7.1/cni-plugins-linux-arm-v1.7.1.tgz
+curl -LO https://github.com/containernetworking/plugins/releases/download/v1.9.0/cni-plugins-linux-arm-v1.9.0.tgz
 sudo mkdir -p /opt/cni/bin
-sudo tar -C /opt/cni/bin -xzf cni-plugins-linux-arm-v1.7.1.tgz
+sudo tar -C /opt/cni/bin -xzf cni-plugins-linux-arm-v1.9.0.tgz
 ls /opt/cni/bin
-rm cni-plugins-linux-arm-v1.7.1.tgz
+rm cni-plugins-linux-arm-v1.9.0.tgz
 ```
 
 ## Install containerd
 ```bash
-curl -LO https://github.com/containerd/containerd/releases/download/v2.1.0/containerd-2.1.0-linux-arm64.tar.gz
-tar -xvzf containerd-2.1.0-linux-arm64.tar.gz
+curl -LO https://github.com/containerd/containerd/releases/download/v2.2.1/containerd-2.2.1-linux-arm64.tar.gz
+tar -xvzf containerd-2.2.1-linux-arm64.tar.gz
 sudo mv bin/* /usr/local/bin/
 containerd --version
-rm containerd-2.1.0-linux-arm64.tar.gz
+rm containerd-2.2.1-linux-arm64.tar.gz
 rm -rf bin
 ```
 
@@ -141,12 +141,12 @@ kubectl version --client --output=yaml
 
 ```bash
 sudo mkdir -p -m 755 /etc/apt/keyrings
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.35/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg 
 ```
 This overwrites any existing configuration in /etc/apt/sources.list.d/kubernetes.list
 ```bash
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.35/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo chmod 644 /etc/apt/sources.list.d/kubernetes.list   
 ```
 helps tools such as command-not-found to work correctly
@@ -158,10 +158,10 @@ sudo apt-get install -y kubelet kubeadm kubectl
 
 # Install K8s Kubernetes
 ```bash
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.35/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 ```
 ```bash
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.35/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
 ```
 ```bash
 sudo systemctl enable --now kubelet
@@ -177,9 +177,7 @@ sudo kubeadm config images pull
 
 ## Initializing your control-plane (Master Only) - Please update your IP address here
 ```bash
-sudo kubeadm init \
-  --control-plane-endpoint=10.0.0.95:6443 \
-  --cri-socket=unix:///var/run/containerd/containerd.sock
+sudo kubeadm init --control-plane-endpoint=10.0.10.214:6443 --cri-socket=unix:///var/run/containerd/containerd.sock
 ```
  (Master Only)
 ```bash
@@ -200,7 +198,7 @@ kubectl cluster-info
 
 ## Install Calico
 ```bash
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.29.1/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.31.3/manifests/tigera-operator.yaml
 kubectl taint nodes --all node-role.kubernetes.io/control-plane
 ```
 
@@ -219,8 +217,8 @@ wait for all to be running
 
 ### Get Detailed Pod Information
 ```bash
-kubectl describe pod <pod-name> -n <namespace>
-kubectl describe pod kube-apiserver-k8smaster -n kube-system
+kubectl describe pod <pod-name> -n <namespace> 
+kubectl describe pod kube-apiserver-control-plane -n kube-system
 kubectl get nodes -o wide
 ```
 
@@ -235,5 +233,5 @@ helm version
 ## Install Ingress
 ___
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0/deploy/static/provider/cloud/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.14.1/deploy/static/provider/cloud/deploy.yaml
 ```
