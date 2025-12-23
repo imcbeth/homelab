@@ -8,7 +8,7 @@ provisioner: csi.san.synology.com
 parameters:
   protocol: 'iscsi'
   location: '/volume2'
-  dsm: '192.168.1.204'
+  dsm: '10.0.1.204'
   fsType: 'btrfs'
   formatOptions: '--nodiscard'
 reclaimPolicy: Retain
@@ -26,7 +26,7 @@ provisioner: csi.san.synology.com
 parameters:
   protocol: 'iscsi'
   location: '/volume2'
-  dsm: '192.168.1.204'
+  dsm: '10.0.1.204'
   fsType: 'btrfs'
   formatOptions: '--nodiscard'
 reclaimPolicy: Delete
@@ -44,7 +44,7 @@ provisioner: csi.san.synology.com
 parameters:
   protocol: 'iscsi'
   location: '/volume4'
-  dsm: '192.168.1.204'
+  dsm: '10.0.1.204'
   fsType: 'btrfs'
   formatOptions: '--nodiscard'
 reclaimPolicy: Retain
@@ -62,7 +62,7 @@ provisioner: csi.san.synology.com
 parameters:
   protocol: 'iscsi'
   location: '/volume4'
-  dsm: '192.168.1.204'
+  dsm: '10.0.1.204'
   fsType: 'btrfs'
   formatOptions: '--nodiscard'
 reclaimPolicy: Delete
