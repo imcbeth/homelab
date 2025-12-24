@@ -27,7 +27,7 @@ spec:
           name: tcp
           protocol: TCP
         imagePullPolicy: IfNotPresent
-        env:  
+        env:
           - name: UP_UNIFI_CONTROLLER_0_PASS
             valueFrom:
               secretKeyRef:
@@ -46,7 +46,7 @@ metadata:
   labels:
     app: unifi-poller
     type: poller
-spec: 
+spec:
   ports:
   - name: http
     port: 9130
