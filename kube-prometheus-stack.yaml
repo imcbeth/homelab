@@ -19,7 +19,7 @@ crds:
       kubectl:
         registry: registry.k8s.io
         repository: kubectl
-        tag: ""  
+        tag: ""
         sha: ""
         pullPolicy: IfNotPresent
     env: {}
