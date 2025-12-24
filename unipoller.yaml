@@ -4,10 +4,6 @@ metadata:
   name: unifi-poller
   namespace: default
 spec:
-  labels:
-    app: unifi-poller
-    type: poller
-spec:
   replicas: 1
   selector:
     matchLabels:
