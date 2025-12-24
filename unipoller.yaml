@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifi-poller
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unifi-poller
+      type: poller
+  template:
+    metadata:
+      labels:
+        app: unifi-poller
+        type: poller
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9130"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+      - name: unifi-poller
+        image: ghcr.io/unpoller/unpoller:latest
+        ports:
+        - containerPort: 9130
+          name: tcp
+          protocol: TCP
+        imagePullPolicy: IfNotPresent
+        env:  
+          - name: UP_UNIFI_CONTROLLER_0_PASS
+            valueFrom:
+              secretKeyRef:
+                name: unipoller-secret
+                key: password
+        envFrom:
+          - configMapRef:
+              name: uni-poller-config
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-poller
+  namespace: default
+  labels:
+    app: unifi-poller
+    type: poller
+spec: 
+  ports:
+  - name: http
+    port: 9130
+    protocol: TCP
+    targetPort: 9130
+  selector:
+    app: unifi-poller
+    type: poller
+  type: ClusterIP
