@@ -30,9 +30,6 @@ spec:
         - containerPort: 9130
           name: tcp
           protocol: TCP
-        - containerPort: 9130
-          name: udp
-          protocol: UDP
         imagePullPolicy: IfNotPresent
         env:  
           - name: UP_UNIFI_CONTROLLER_0_PASS
