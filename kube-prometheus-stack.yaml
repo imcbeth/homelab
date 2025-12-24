@@ -1380,7 +1380,7 @@ prometheus:
       - job_name: 'unpoller'
         static_configs:
         - targets: ['unifi-poller:9130']
-        scrape_interval: 60s
+        scrape_interval: 20s
         scrape_timeout: 10s
     additionalScrapeConfigsSecret: {}
     additionalPrometheusSecretsAnnotations: {}
