@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: unifi-poller
-  namespace: default
+  namespace: unipoller
 spec:
   replicas: 1
   selector:
@@ -44,22 +44,3 @@ spec:
           - configMapRef:
               name: uni-poller-config
       restartPolicy: Always
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: unifi-poller
-  namespace: default
-  labels:
-    app: unifi-poller
-    type: poller
-spec: 
-  ports:
-  - name: http
-    port: 9130
-    protocol: TCP
-    targetPort: 9130
-  selector:
-    app: unifi-poller
-    type: poller
-  type: ClusterIP

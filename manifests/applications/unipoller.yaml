@@ -1,21 +1,22 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: localstack
+  name: unipoller
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
 spec:
+  project: infrastructure
   source:
-    path: manifests/base/localstack
+    path: manifests/base/unipoller
     repoURL: git@github.com:imcbeth/homelab.git
     targetRevision: HEAD
   destination:
-    namespace: localstack
     server: https://kubernetes.default.svc
-  project: applications
+    namespace: unipoller
   syncPolicy:
     automated:
       prune: true
-      enabled: true
       selfHeal: true
     syncOptions:
-    - CreateNamespace=true
+      - CreateNamespace=true
