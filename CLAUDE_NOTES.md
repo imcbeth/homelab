@@ -538,3 +538,7 @@ k8s-docs-n37/docs/
 ---
 
 **Remember:** This is a **production homelab** with active services. Always test changes in a branch and use the PR workflow. ArgoCD will auto-deploy merged changes, so review carefully before merging. When making significant changes, update both the infrastructure repo (`homelab/`) and the documentation site (`k8s-docs-n37/`).
+
+---
+
+**Remember:** This is a **production homelab** with active services. Always test changes in a branch and use the PR workflow. ArgoCD will auto-deploy merged changes, so review carefully before merging.

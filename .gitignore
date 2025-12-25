@@ -1,0 +1,35 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+.cache/
+
+# Docusaurus (prevent accidental builds in wrong directory)
+docs/
+.docusaurus/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+.env.local
+.env.*.local
+
+# Backup files
+*.bak
+*~
