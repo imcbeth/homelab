@@ -1382,6 +1382,24 @@ prometheus:
         - targets: ['unifi-poller.unipoller:9130']
         scrape_interval: 20s
         scrape_timeout: 10s
+
+      # SNMP exporter for Synology NAS monitoring
+      - job_name: 'snmp-synology'
+        static_configs:
+        - targets:
+          - 10.0.1.204  # Synology NAS IP
+        metrics_path: /snmp
+        params:
+          module: [synology]
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: snmp-exporter:9116
+        scrape_interval: 60s
+        scrape_timeout: 30s
     additionalScrapeConfigsSecret: {}
     additionalPrometheusSecretsAnnotations: {}
     additionalAlertManagerConfigs: []
