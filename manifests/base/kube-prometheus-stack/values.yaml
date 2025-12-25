@@ -1390,6 +1390,7 @@ prometheus:
           - 10.0.1.204  # Synology NAS IP
         metrics_path: /snmp
         params:
+          auth: [synology_v3]  # Updated for auth-split format
           module: [synology]
         relabel_configs:
           - source_labels: [__address__]

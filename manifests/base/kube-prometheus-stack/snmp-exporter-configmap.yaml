@@ -7,10 +7,11 @@ metadata:
 data:
   snmp.yml: |
     # Synology NAS monitoring with SNMPv3 authentication
+    # Updated to new auth-split format (v0.23.0+)
     # Update the credentials in snmp-exporter-secret.yaml before deploying
-    synology:
-      version: 3
-      auth:
+    auths:
+      synology_v3:
+        version: 3
         # IMPORTANT: Update snmp-exporter-secret.yaml with your actual credentials
         # These values must match what you configure in Synology DSM:
         # Control Panel -> Terminal & SNMP -> SNMP -> SNMPv3 Settings
@@ -21,6 +22,9 @@ data:
         priv_protocol: AES                # AES (recommended) or DES
         priv_password: YOUR_PRIV_PASSWORD # Set this in snmp-exporter-secret.yaml
         context_name: ""
+    
+    modules:
+      synology:
       walk:
         - 1.3.6.1.2.1.1      # System information
         - 1.3.6.1.2.1.2      # Interfaces

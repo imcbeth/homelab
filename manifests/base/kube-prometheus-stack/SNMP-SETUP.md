@@ -2,6 +2,8 @@
 
 This guide explains how to configure SNMP monitoring for your Synology NAS using SNMPv3 authentication.
 
+**Note:** This configuration uses the new auth-split format introduced in SNMP exporter v0.23.0+.
+
 ## Overview
 
 The SNMP exporter monitors your Synology NAS (10.0.1.204) and exposes metrics to Prometheus including:
@@ -56,20 +58,36 @@ stringData:
 
 **IMPORTANT:** This file should be encrypted with git-crypt before committing!
 
-### 2. Update SNMP Configuration (Optional)
+### 2. Configuration Structure (New Auth-Split Format)
 
-If you used different credentials, update `snmp-exporter-configmap.yaml`:
+The new format separates authentication from module configuration:
 
+**snmp-exporter-configmap.yaml structure:**
 ```yaml
-synology:
-  version: 3
-  auth:
-    username: snmp_monitor        # Must match secret
-    security_level: authPriv
-    password: YOUR_AUTH_PASSWORD  # Placeholder - actual value in secret
-    auth_protocol: SHA
-    priv_protocol: AES
-    priv_password: YOUR_PRIV_PASSWORD
+data:
+  snmp.yml: |
+    auths:
+      synology_v3:
+        version: 3
+        username: snmp_monitor        # Must match secret
+        security_level: authPriv
+        password: YOUR_AUTH_PASSWORD  # Placeholder - actual value in secret
+        auth_protocol: SHA
+        priv_protocol: AES
+        priv_password: YOUR_PRIV_PASSWORD
+    
+    modules:
+      synology:
+        walk: [...]
+        metrics: [...]
+```
+
+**Prometheus scrape configuration:**
+```yaml
+- job_name: 'snmp-synology'
+  params:
+    auth: [synology_v3]  # References the auth section
+    module: [synology]   # References the module section
 ```
 
 **Note:** The ConfigMap uses placeholders. You must manually update the ConfigMap after deploying with the actual passwords, OR regenerate the ConfigMap from a template.
@@ -127,8 +145,8 @@ Look for successful startup, no authentication errors.
 # Port-forward to SNMP exporter
 kubectl port-forward -n default svc/snmp-exporter 9116:9116
 
-# Query Synology metrics
-curl "http://localhost:9116/snmp?target=10.0.1.204&module=synology"
+# Query Synology metrics with auth-split format
+curl "http://localhost:9116/snmp?auth=synology_v3&module=synology&target=10.0.1.204"
 ```
 
 Expected: Should return Prometheus-formatted metrics
