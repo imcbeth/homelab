@@ -6,11 +6,21 @@ metadata:
   namespace: default
 data:
   snmp.yml: |
-    # Synology NAS monitoring configuration
+    # Synology NAS monitoring with SNMPv3 authentication
+    # Update the credentials in snmp-exporter-secret.yaml before deploying
     synology:
-      version: 2
+      version: 3
       auth:
-        community: public
+        # IMPORTANT: Update snmp-exporter-secret.yaml with your actual credentials
+        # These values must match what you configure in Synology DSM:
+        # Control Panel -> Terminal & SNMP -> SNMP -> SNMPv3 Settings
+        username: snmp_monitor
+        security_level: authPriv          # Requires both authentication and encryption
+        password: YOUR_AUTH_PASSWORD      # Set this in snmp-exporter-secret.yaml
+        auth_protocol: SHA                # SHA (recommended) or MD5
+        priv_protocol: AES                # AES (recommended) or DES
+        priv_password: YOUR_PRIV_PASSWORD # Set this in snmp-exporter-secret.yaml
+        context_name: ""
       walk:
         - 1.3.6.1.2.1.1      # System information
         - 1.3.6.1.2.1.2      # Interfaces
