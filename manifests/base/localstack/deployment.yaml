@@ -16,9 +16,16 @@ spec:
     spec:
       containers:
         - name: localstack
-          image: localstack/localstack:latest # Or a specific version
+          image: localstack/localstack:3.9.0
           ports:
             - containerPort: 4566 # Default LocalStack port
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
           env:
             - name: SERVICES
               value: iam,s3,sns,sqs,lambda,dynamodb,ec2,elb # Enabled Services
