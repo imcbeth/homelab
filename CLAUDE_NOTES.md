@@ -486,12 +486,58 @@ kubectl cluster-info dump
 
 ---
 
+## 📚 Comprehensive Documentation Site
+
+### Docusaurus Site: ~/k8s-docs-n37
+
+**IMPORTANT:** There is a comprehensive Docusaurus documentation site that provides detailed guides for this cluster.
+
+**Location:** `/Users/imcbeth/k8s-docs-n37`
+
+**When to Update the Docs Site:**
+- ✅ After deploying new applications → Create/update docs in `docs/applications/`
+- ✅ After infrastructure changes → Update relevant sections
+- ✅ After monitoring stack updates → Update `docs/monitoring/`
+- ✅ After adding/modifying storage → Update `docs/storage/`
+
+**Documentation Structure:**
+```
+k8s-docs-n37/docs/
+├── intro.md                    # Main landing page
+├── getting-started/
+│   ├── hardware.md
+│   ├── overview.md
+│   └── prerequisites.md
+├── kubernetes/
+│   ├── installation.md
+│   └── cluster-configuration.md
+├── applications/              # Application deployment guides
+├── monitoring/                # Monitoring stack documentation
+│   └── overview.md
+├── storage/                   # Storage documentation
+├── security/                  # Security documentation
+└── troubleshooting/           # Common issues and solutions
+```
+
+**Workflow:**
+1. Make infrastructure changes in `homelab/` repo
+2. Update documentation in `k8s-docs-n37/` repo
+3. Keep both repositories in sync
+4. The docs site provides user-friendly guides while `homelab/` is the source of truth for configs
+
+---
+
 ## 📞 Getting Help
 
 - **GitHub Issues:** https://github.com/imcbeth/homelab/issues
 - **ArgoCD Docs:** https://argo-cd.readthedocs.io/
 - **Kubernetes Docs:** https://kubernetes.io/docs/
 - **Repository Owner:** @imcbeth
+- **Comprehensive Docs:** `/Users/imcbeth/k8s-docs-n37` (Docusaurus site)
+
+---
+
+**Remember:** This is a **production homelab** with active services. Always test changes in a branch and use the PR workflow. ArgoCD will auto-deploy merged changes, so review carefully before merging. When making significant changes, update both the infrastructure repo (`homelab/`) and the documentation site (`k8s-docs-n37/`).
 
 ---
 
