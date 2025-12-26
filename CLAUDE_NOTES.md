@@ -31,7 +31,7 @@
 **Build Status:** ✅ Documentation builds successfully without errors
 
 **Key Additions:**
-- SNMP exporter monitors Synology DS1522+ NAS (10.0.1.204)
+- SNMP exporter monitors Synology DS925+ NAS (10.0.1.204)
 - SNMPv3 authentication with encrypted credentials
 - Comprehensive metrics: disk health, volume capacity, RAID status, iSCSI stats
 - Grafana dashboard included (Synology_Dashboard2.json)
@@ -356,7 +356,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 
 # SNMP Exporter (Synology NAS monitoring)
 - job_name: 'snmp-nas'
-  targets: ['10.0.1.204']  # Synology DS1522+
+  targets: ['10.0.1.204']  # Synology DS925+
   metrics_path: /snmp
   params:
     module: [synology]
