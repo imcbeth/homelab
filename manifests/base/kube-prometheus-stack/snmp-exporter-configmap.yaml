@@ -1213,7 +1213,7 @@ data:
           oid: 1.3.6.1.4.1.6574.4.2.18
           type: DisplayString
           help: UPS external contact sensors - 1.3.6.1.4.1.6574.4.2.18
-        - name: upsInfoEffciency
+        - name: upsInfoEfficiency
           oid: 1.3.6.1.4.1.6574.4.2.19
           type: gauge
           help: Efficiency of the UPS (ratio of the output current on the input current)
