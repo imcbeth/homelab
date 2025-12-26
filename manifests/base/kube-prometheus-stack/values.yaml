@@ -742,7 +742,7 @@ kubeEtcd:
     additionalLabels: {}
     targetLabels: []
 kubeScheduler:
-  enabled: true
+  enabled: false  # Disabled: binds to localhost in kubeadm, unreachable via node IP
   jobNameOverride: ""
   endpoints: []
   service:
