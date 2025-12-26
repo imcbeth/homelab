@@ -230,6 +230,7 @@ Implement one of these from the TODO list:
 | kube-prometheus-stack | default | Monitoring | -15 | Prometheus/Grafana/AlertManager |
 | snmp-exporter | default | NAS monitoring | -15 | SNMPv3 to 10.0.1.204 |
 | cert-manager | cert-manager | TLS certs | -10 | Let's Encrypt via Cloudflare |
+| external-dns | external-dns | DNS automation | -10 | Cloudflare + UniFi RFC2136 |
 | localstack | localstack | AWS mock | 0 | Dev/testing |
 
 ---
@@ -406,6 +407,22 @@ prometheus-kube-prometheus-stack-prometheus-db-prometheus-kube-prometheus-stack-
 The UniFi controller at 10.0.1.1 **does not have a valid certificate**.
 Setting: `UP_UNIFI_CONTROLLER_0_VERIFY_SSL: "false"` is **intentional** and documented.
 **Do not** flag this as a security issue in future reviews.
+
+### External-DNS Configuration
+
+**Dual Provider Setup:**
+- **Cloudflare**: Manages public DNS for `k8s.n37.ca` (reuses cert-manager API token)
+- **UniFi RFC2136**: Manages internal DNS for `k8s.n37.ca` via RFC2136 protocol
+
+**Important:**
+- Both providers watch Ingress and LoadBalancer Service resources
+- Policy: `upsert-only` (safe - only creates/updates, never deletes)
+- TXT registry tracks ownership to prevent conflicts
+- UniFi UDR7 at 10.0.1.1 must have RFC2136 enabled with TSIG authentication
+
+**Secret to Update:**
+- `rfc2136-credentials` in `external-dns` namespace needs TSIG key from UniFi
+- See `manifests/base/external-dns/README.md` for setup instructions
 
 ### Container Image Versions
 
