@@ -16,6 +16,53 @@ spec:
       labels:
         app: snmp-exporter
     spec:
+      initContainers:
+      - name: config-processor
+        image: busybox:1.36
+        env:
+        - name: SNMP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-username
+        - name: SNMP_AUTH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-auth-password
+        - name: SNMP_PRIV_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-priv-password
+        - name: SNMP_AUTH_PROTOCOL
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-auth-protocol
+        - name: SNMP_PRIV_PROTOCOL
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-priv-protocol
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Process the config template and substitute environment variables
+          sed "s/\${SNMP_USERNAME}/$SNMP_USERNAME/g; \
+               s/\${SNMP_AUTH_PASSWORD}/$SNMP_AUTH_PASSWORD/g; \
+               s/\${SNMP_PRIV_PASSWORD}/$SNMP_PRIV_PASSWORD/g; \
+               s/\${SNMP_AUTH_PROTOCOL}/$SNMP_AUTH_PROTOCOL/g; \
+               s/\${SNMP_PRIV_PROTOCOL}/$SNMP_PRIV_PROTOCOL/g" \
+               /config-template/snmp.yml > /config/snmp.yml
+          echo "Configuration processed successfully"
+          cat /config/snmp.yml | head -20
+        volumeMounts:
+        - name: snmp-config-template
+          mountPath: /config-template
+        - name: snmp-config-processed
+          mountPath: /config
       containers:
       - name: snmp-exporter
         image: prom/snmp-exporter:v0.26.0
@@ -33,7 +80,7 @@ spec:
             cpu: 100m
             memory: 128Mi
         volumeMounts:
-        - name: snmp-config
+        - name: snmp-config-processed
           mountPath: /config
           readOnly: true
         livenessProbe:
@@ -49,6 +96,8 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 5
       volumes:
-      - name: snmp-config
+      - name: snmp-config-template
         configMap:
           name: snmp-exporter-config
+      - name: snmp-config-processed
+        emptyDir: {}
