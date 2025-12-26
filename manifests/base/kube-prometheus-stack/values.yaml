@@ -418,6 +418,15 @@ alertmanager:
     data: {}
 grafana:
   enabled: true
+  deploymentStrategy:
+    type: Recreate
+    rollingUpdate: null
+  persistence:
+    enabled: true
+    storageClassName: synology-iscsi-retain
+    accessModes:
+      - ReadWriteOnce
+    size: 5Gi
   namespaceOverride: ""
   forceDeployDatasources: false
   forceDeployDashboards: false
@@ -614,7 +623,7 @@ kubelet:
     additionalLabels: {}
     targetLabels: []
 kubeControllerManager:
-  enabled: true
+  enabled: false  # Disabled: binds to localhost in kubeadm, unreachable via node IP
   jobNameOverride: ""
   endpoints: []
   service:
@@ -700,7 +709,7 @@ kubeDns:
     additionalLabels: {}
     targetLabels: []
 kubeEtcd:
-  enabled: true
+  enabled: false  # Disabled: binds to localhost in kubeadm, unreachable via node IP
   endpoints: []
   service:
     enabled: true
@@ -764,7 +773,7 @@ kubeScheduler:
     additionalLabels: {}
     targetLabels: []
 kubeProxy:
-  enabled: true
+  enabled: false  # Disabled: binds to localhost in kubeadm, unreachable via node IP
   jobNameOverride: ""
   endpoints: []
   service:
@@ -819,6 +828,8 @@ prometheus-node-exporter:
   podLabels:
     jobLabel: node-exporter
   releaseLabel: true
+  hostNetwork: false
+  hostPID: true
   extraArgs:
     - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/containerd/.+|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
     - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|erofs)$

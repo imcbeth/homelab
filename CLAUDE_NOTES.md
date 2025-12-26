@@ -10,7 +10,132 @@
 
 ## 📋 Recent Updates
 
-### 2025-12-26: Documentation Site Fixes and SNMP Documentation
+### 2025-12-26 (Evening): Prometheus Monitoring Stack Fixes
+
+**Completed Work:**
+- ✅ Fixed node-exporter scraping issue (all 5 nodes now monitored)
+- ✅ Fixed Grafana Multi-Attach PVC errors during ArgoCD updates
+- ✅ Disabled unreachable control plane component monitoring
+- ✅ Cleaned up Prometheus targets (removed error-prone ServiceMonitors)
+
+**Pull Requests:**
+- **PR #72:** [Merged] Disable hostNetwork for node-exporter to fix Prometheus scraping
+- **PR #73:** [Merged] Set Grafana deployment strategy to Recreate for RWO PVC
+- **PR #74:** [Merged] Explicitly set rollingUpdate to null for Grafana Recreate strategy
+- **PR #75:** [Merged] Disable unreachable control plane ServiceMonitors
+
+**Issues Resolved:**
+
+1. **Node-Exporter Scraping Failures**
+   - **Problem:** Prometheus could only scrape 1/5 node-exporters
+   - **Root Cause:** node-exporter using `hostNetwork: true` + Calico CNI routing limitation
+   - **Error:** `Get "http://10.0.10.211:9100/metrics": context deadline exceeded`
+   - **Solution:** Changed node-exporter to `hostNetwork: false`, kept `hostPID: true`
+   - **Result:** All 5 node-exporters now UP and scraping successfully via pod IPs (192.168.x.x)
+
+2. **Grafana Multi-Attach PVC Errors**
+   - **Problem:** ArgoCD updates failed with volume already attached errors
+   - **Root Cause:** `ReadWriteOnce` PVC + `RollingUpdate` strategy = conflict
+   - **Error:** `Multi-Attach error for volume... already used by pod`
+   - **Solution:** Changed Grafana deployment strategy to `Recreate` with `rollingUpdate: null`
+   - **Result:** Clean pod replacements with ~10-30s downtime (acceptable for Grafana)
+
+3. **Control Plane Component Scraping Failures**
+   - **Problem:** kube-controller-manager, kube-etcd, kube-proxy all failing to scrape
+   - **Root Cause:** Components bind to localhost (127.0.0.1) in kubeadm, unreachable via node IPs
+   - **Errors:**
+     - controller-manager: `connection refused on https://10.0.10.214:10257`
+     - etcd: `context deadline exceeded on http://10.0.10.214:2381`
+     - kube-proxy: `connection refused on http://10.0.10.x:10249`
+   - **Solution:** Disabled ServiceMonitors for these three components
+   - **Rationale:** Standard kubeadm security practice, sufficient monitoring via kubelet/API server
+
+**Technical Deep-Dives:**
+
+**Calico CNI + hostNetwork Issue:**
+- When pods try to connect to hostNetwork pods via node IPs, Calico routing fails
+- Reverse path filtering and CNI limitations cause timeouts
+- Solution: Use pod network (Calico) instead of host network where possible
+- node-exporter doesn't need hostNetwork (only needs hostPID for process metrics)
+
+**PVC Deployment Strategies:**
+- `ReadWriteOnce` PVCs can only attach to one pod at a time
+- `RollingUpdate` creates new pod before terminating old one → Multi-Attach error
+- `Recreate` terminates old pod first, then creates new one → Clean attachment
+- Trade-off: Small downtime during updates vs. deployment failures
+
+**Control Plane Monitoring in kubeadm:**
+- kubeadm binds control plane components to localhost for security
+- Making them reachable requires modifying kubeadm config (not recommended)
+- Sufficient monitoring from kubelet, API server, kube-state-metrics
+- Best practice for homelab: disable these ServiceMonitors
+
+**Files Modified:**
+- `manifests/base/kube-prometheus-stack/values.yaml`
+  - node-exporter: `hostNetwork: false`, `hostPID: true`
+  - grafana: `deploymentStrategy.type: Recreate`, `rollingUpdate: null`
+  - kubeControllerManager: `enabled: false`
+  - kubeEtcd: `enabled: false`
+  - kubeProxy: `enabled: false`
+
+**Current State:**
+- All node-exporters scraping successfully (5/5 UP)
+- Grafana updates work cleanly via Recreate strategy
+- Prometheus targets page clean (no unreachable control plane errors)
+- All PRs merged (#72, #73, #74, #75)
+
+**Next Steps (User Action Required):**
+1. ✅ Merge PR #74 (homelab) - Fixes Grafana rollingUpdate conflict
+2. ✅ Merge PR #75 (homelab) - Removes control plane monitoring errors
+3. Verify Prometheus targets: all should show UP status
+4. Monitor Grafana updates to confirm no Multi-Attach errors
+
+---
+
+### 2025-12-26 (Afternoon): External-DNS Deployment
+
+**Completed Work:**
+- ✅ Deployed external-dns with dual provider support (Cloudflare + UniFi RFC2136)
+- ✅ Created comprehensive external-dns documentation
+- ✅ Updated k8s-docs-n37 TODO list with completed items
+- ✅ Deployed external-dns ArgoCD Application to cluster
+
+**Homelab Repository:**
+- Created `manifests/base/external-dns/` with all resources
+- Created `manifests/applications/external-dns.yaml` ArgoCD Application
+- Updated `CLAUDE_NOTES.md` with external-dns configuration notes
+- **PR #66:** [Merged] External-DNS dual provider implementation
+- **PR #67:** [Ready] Fix YAML parsing in Cloudflare secret
+
+**k8s-docs-n37 Repository:**
+- Created `docs/applications/external-dns.md` - Complete guide
+- Updated `docs/todo.md` - Marked SNMP, Node Exporter, External-DNS as completed
+- **PR #4:** [Ready] Update TODO and add external-dns documentation
+
+**Architecture:**
+- Two separate external-dns deployments for split-horizon DNS
+- Cloudflare provider: Public DNS for k8s.n37.ca (reuses cert-manager token)
+- RFC2136 provider: Internal DNS via UniFi UDR7 at 10.0.1.1
+- Policy: upsert-only (safe mode)
+- Watches: Ingress + LoadBalancer Service resources
+
+**Next Steps (User Action Required):**
+1. Merge PR #67 (homelab) - Fixes external-dns secret YAML
+2. Merge PR #4 (k8s-docs-n37) - Documentation updates
+3. Configure UniFi UDR7 RFC2136:
+   - Settings → System → Advanced → Enable RFC2136
+   - Create TSIG key: name=external-dns, algorithm=hmac-sha256
+   - Update secret: `kubectl edit secret rfc2136-credentials -n external-dns`
+   - Restart: `kubectl rollout restart deployment/external-dns-rfc2136 -n external-dns`
+
+**Current State:**
+- External-DNS Application created in ArgoCD (waiting for PR #67 merge to sync)
+- Cloudflare provider ready to auto-create DNS for all Ingresses
+- UniFi provider pending RFC2136 configuration on UDR7
+
+---
+
+### 2025-12-26 (Morning): Documentation Site Fixes and SNMP Documentation
 
 **Completed Work:**
 - ✅ Fixed broken documentation links preventing Docusaurus deployment
@@ -26,7 +151,11 @@
 **Files Updated:**
 - `docs/monitoring/overview.md` - Added SNMP exporter integration
 
+<<<<<<< HEAD
 **Pull Request:** [#3](https://github.com/imcbeth/k8s-docs-n37/pull/3) - Fix broken documentation links
+=======
+**Pull Request:** [#3](https://github.com/imcbeth/k8s-docs-n37/pull/3) - [Merged] Fix broken documentation links
+>>>>>>> main
 
 **Build Status:** ✅ Documentation builds successfully without errors
 
@@ -139,16 +268,34 @@ homelab/
 
 ## 🚀 GitOps Workflow
 
-### Branch Protection
+### Branch Protection & PR Workflow
 
 ⚠️ **IMPORTANT:** The `main` branch has protection rules requiring pull requests.
 
-**Workflow:**
-1. Create feature branch: `git checkout -b feature-name`
-2. Make changes and commit
-3. Push branch: `git push -u origin feature-name`
-4. Create PR: `gh pr create --title "..." --body "..." --base main`
-5. Merge PR: `gh pr merge <number> --squash --admin`
+**Workflow Division:**
+
+**Claude Can Do:**
+- ✅ Create feature branches
+- ✅ Make changes and commit to branches
+- ✅ Push branches to remote
+- ✅ Create pull requests using `gh pr create`
+
+**User Must Do:**
+- ⚠️ **MERGE pull requests** - Claude will create PRs but cannot merge them
+- ⚠️ Final approval and review of changes
+
+**Claude's Responsibility:**
+- Always prompt the user when a PR is ready for merge
+- Provide PR URL and summary of changes
+- Wait for user approval before proceeding with dependent work
+
+**Standard Workflow:**
+1. Claude creates feature branch: `git checkout -b feature-name`
+2. Claude makes changes and commits
+3. Claude pushes branch: `git push -u origin feature-name`
+4. Claude creates PR: `gh pr create --title "..." --body "..." --base main`
+5. **Claude prompts user:** "PR #X is ready for your review and merge"
+6. **User merges PR:** Via GitHub UI or `gh pr merge <number>`
 
 ### ArgoCD Auto-Sync
 
@@ -212,6 +359,7 @@ Implement one of these from the TODO list:
 | kube-prometheus-stack | default | Monitoring | -15 | Prometheus/Grafana/AlertManager |
 | snmp-exporter | default | NAS monitoring | -15 | SNMPv3 to 10.0.1.204 |
 | cert-manager | cert-manager | TLS certs | -10 | Let's Encrypt via Cloudflare |
+| external-dns | external-dns | DNS automation | -10 | Cloudflare + UniFi RFC2136 |
 | localstack | localstack | AWS mock | 0 | Dev/testing |
 
 ---
@@ -388,6 +536,22 @@ prometheus-kube-prometheus-stack-prometheus-db-prometheus-kube-prometheus-stack-
 The UniFi controller at 10.0.1.1 **does not have a valid certificate**.
 Setting: `UP_UNIFI_CONTROLLER_0_VERIFY_SSL: "false"` is **intentional** and documented.
 **Do not** flag this as a security issue in future reviews.
+
+### External-DNS Configuration
+
+**Dual Provider Setup:**
+- **Cloudflare**: Manages public DNS for `k8s.n37.ca` (reuses cert-manager API token)
+- **UniFi RFC2136**: Manages internal DNS for `k8s.n37.ca` via RFC2136 protocol
+
+**Important:**
+- Both providers watch Ingress and LoadBalancer Service resources
+- Policy: `upsert-only` (safe - only creates/updates, never deletes)
+- TXT registry tracks ownership to prevent conflicts
+- UniFi UDR7 at 10.0.1.1 must have RFC2136 enabled with TSIG authentication
+
+**Secret to Update:**
+- `rfc2136-credentials` in `external-dns` namespace needs TSIG key from UniFi
+- See `manifests/base/external-dns/README.md` for setup instructions
 
 ### Container Image Versions
 
