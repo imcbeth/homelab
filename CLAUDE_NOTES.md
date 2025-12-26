@@ -2,9 +2,39 @@
 
 ## Quick Reference for AI Assistants Working in This Repository
 
-**Last Updated:** 2025-12-25
+**Last Updated:** 2025-12-26
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
+
+---
+
+## 📋 Recent Updates
+
+### 2025-12-26: Documentation Site Fixes and SNMP Documentation
+
+**Completed Work:**
+- ✅ Fixed broken documentation links preventing Docusaurus deployment
+- ✅ Created comprehensive documentation for recently deployed infrastructure
+- ✅ Added SNMP exporter documentation for Synology NAS monitoring
+
+**Files Created in k8s-docs-n37:**
+- `docs/applications/argocd.md` - Complete ArgoCD GitOps workflow guide
+- `docs/applications/snmp-exporter.md` - SNMP exporter for NAS monitoring
+- `docs/storage/synology-csi.md` - Synology CSI storage driver documentation
+- `docs/troubleshooting/monitoring.md` - Monitoring stack troubleshooting guide
+
+**Files Updated:**
+- `docs/monitoring/overview.md` - Added SNMP exporter integration
+
+**Pull Request:** [#3](https://github.com/imcbeth/k8s-docs-n37/pull/3) - Fix broken documentation links
+
+**Build Status:** ✅ Documentation builds successfully without errors
+
+**Key Additions:**
+- SNMP exporter monitors Synology DS1522+ NAS (10.0.1.204)
+- SNMPv3 authentication with encrypted credentials
+- Comprehensive metrics: disk health, volume capacity, RAID status, iSCSI stats
+- Grafana dashboard included (Synology_Dashboard2.json)
 
 ---
 
@@ -180,6 +210,7 @@ Implement one of these from the TODO list:
 | synology-csi | synology-csi | Storage driver | -30 | iSCSI to NAS |
 | unipoller | unipoller | UniFi metrics | -20 | Scrapes 10.0.1.1 |
 | kube-prometheus-stack | default | Monitoring | -15 | Prometheus/Grafana/AlertManager |
+| snmp-exporter | default | NAS monitoring | -15 | SNMPv3 to 10.0.1.204 |
 | cert-manager | cert-manager | TLS certs | -10 | Let's Encrypt via Cloudflare |
 | localstack | localstack | AWS mock | 0 | Dev/testing |
 
@@ -322,6 +353,16 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 # UniFi Poller (network metrics)
 - job_name: 'unpoller'
   targets: ['unifi-poller.unipoller:9130']
+
+# SNMP Exporter (Synology NAS monitoring)
+- job_name: 'snmp-nas'
+  targets: ['10.0.1.204']  # Synology DS1522+
+  metrics_path: /snmp
+  params:
+    module: [synology]
+  relabel_configs:
+    - target_label: __address__
+      replacement: snmp-exporter.default:9116
 
 # All K8s nodes (via node-exporter DaemonSet)
 # All K8s services (via kube-state-metrics)
