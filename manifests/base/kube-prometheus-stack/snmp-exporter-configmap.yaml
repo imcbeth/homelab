@@ -12,13 +12,15 @@ data:
     auths:
       synology_v3:
         version: 3
-        # TEMPORARY: Testing with hardcoded values
+        # IMPORTANT: Update snmp-exporter-secret.yaml with your actual credentials
+        # These values must match what you configure in Synology DSM:
+        # Control Panel -> Terminal & SNMP -> SNMP -> SNMPv3 Settings
         username: k8s_monitoring
         security_level: authPriv          # Requires both authentication and encryption
-        password: k8s_monitoring   # Pulled from secret via environment variable
-        auth_protocol: SHA # Pulled from secret via environment variable
-        priv_protocol: AES # Pulled from secret via environment variable
-        priv_password: k8s_monitoring # Pulled from secret via environment variable
+        password: k8s_monitoring      # Set this in snmp-exporter-secret.yaml
+        auth_protocol: SHA                # SHA (recommended) or MD5
+        priv_protocol: AES                # AES (recommended) or DES
+        priv_password: k8s_monitoring # Set this in snmp-exporter-secret.yaml
         context_name: ""
     
     modules:
