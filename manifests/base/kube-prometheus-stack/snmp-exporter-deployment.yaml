@@ -21,6 +21,33 @@ spec:
         image: prom/snmp-exporter:v0.26.0
         args:
           - "--config.file=/config/snmp.yml"
+          - "--config.expand-environment-variables"
+        env:
+        - name: SNMP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-username
+        - name: SNMP_AUTH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-auth-password
+        - name: SNMP_PRIV_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-priv-password
+        - name: SNMP_AUTH_PROTOCOL
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-auth-protocol
+        - name: SNMP_PRIV_PROTOCOL
+          valueFrom:
+            secretKeyRef:
+              name: snmp-exporter-credentials
+              key: snmp-priv-protocol
         ports:
         - name: http
           containerPort: 9116
