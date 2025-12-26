@@ -420,6 +420,7 @@ grafana:
   enabled: true
   deploymentStrategy:
     type: Recreate
+    rollingUpdate: null
   persistence:
     enabled: true
     storageClassName: synology-iscsi-retain
