@@ -1944,7 +1944,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "(\n  sum by(instance) (irate(node_cpu_seconds_total{mode=\"system\", job=\"node-exporter\"}[1m0s])) +\n  sum by(instance) (irate(node_cpu_seconds_total{mode=\"user\", job=\"node-exporter\"}[1m0s]))\n) * 100 / on(instance) group_left sum by (instance) (irate(node_cpu_seconds_total{job=\"nodeexporter\"}[1m0s]))",
+          "expr": "(\n  sum by(instance) (irate(node_cpu_seconds_total{mode=\"system\", job=\"node-exporter\"}[1m0s])) +\n  sum by(instance) (irate(node_cpu_seconds_total{mode=\"user\", job=\"node-exporter\"}[1m0s]))\n) * 100 / on(instance) group_left sum by (instance) (irate(node_cpu_seconds_total{job=\"node-exporter\"}[1m0s]))",
           "format": "time_series",
           "hide": false,
           "instant": true,
@@ -2870,7 +2870,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "irate(node_disk_io_time_seconds_total{job=\"nodeexporter\"}[1m])",
+          "expr": "irate(node_disk_io_time_seconds_total{job=\"node-exporter\"}[1m])",
           "format": "time_series",
           "hide": false,
           "instant": true,
@@ -3544,7 +3544,7 @@
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "node_hwmon_temp_celsius{job=\"nodeexporter\"}",
+              "expr": "node_hwmon_temp_celsius{job=\"node-exporter\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -3854,7 +3854,7 @@
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "irate(node_disk_read_bytes_total{job=\"nodeexporter\"}[$__rate_interval])",
+              "expr": "irate(node_disk_read_bytes_total{job=\"node-exporter\"}[$__rate_interval])",
               "legendFormat": "{{device}}",
               "range": true,
               "refId": "node_disk_read_bytes_total"
@@ -3959,7 +3959,7 @@
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "irate(node_disk_written_bytes_total{job=\"nodeexporter\"}[$__rate_interval])",
+              "expr": "irate(node_disk_written_bytes_total{job=\"node-exporter\"}[$__rate_interval])",
               "hide": false,
               "legendFormat": "{{device}}",
               "range": true,
@@ -4065,7 +4065,7 @@
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "irate(node_disk_reads_completed_total{job=\"nodeexporter\"}[$__rate_interval])",
+              "expr": "irate(node_disk_reads_completed_total{job=\"node-exporter\"}[$__rate_interval])",
               "legendFormat": "{{device}}",
               "range": true,
               "refId": "node_disk_reads_completed_total"
@@ -4170,7 +4170,7 @@
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "irate(node_disk_writes_completed_total{job=\"nodeexporter\"}[$__rate_interval])",
+              "expr": "irate(node_disk_writes_completed_total{job=\"node-exporter\"}[$__rate_interval])",
               "hide": false,
               "legendFormat": "{{device}}",
               "range": true,
@@ -4282,7 +4282,7 @@
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "irate(node_disk_io_time_seconds_total{job=\"nodeexporter\"}[$__rate_interval])",
+              "expr": "irate(node_disk_io_time_seconds_total{job=\"node-exporter\"}[$__rate_interval])",
               "hide": false,
               "legendFormat": "{{device}}",
               "range": true,
