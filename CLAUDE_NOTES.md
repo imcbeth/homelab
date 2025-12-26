@@ -10,7 +10,50 @@
 
 ## 📋 Recent Updates
 
-### 2025-12-26: Documentation Site Fixes and SNMP Documentation
+### 2025-12-26 (Afternoon): External-DNS Deployment
+
+**Completed Work:**
+- ✅ Deployed external-dns with dual provider support (Cloudflare + UniFi RFC2136)
+- ✅ Created comprehensive external-dns documentation
+- ✅ Updated k8s-docs-n37 TODO list with completed items
+- ✅ Deployed external-dns ArgoCD Application to cluster
+
+**Homelab Repository:**
+- Created `manifests/base/external-dns/` with all resources
+- Created `manifests/applications/external-dns.yaml` ArgoCD Application
+- Updated `CLAUDE_NOTES.md` with external-dns configuration notes
+- **PR #66:** [Merged] External-DNS dual provider implementation
+- **PR #67:** [Ready] Fix YAML parsing in Cloudflare secret
+
+**k8s-docs-n37 Repository:**
+- Created `docs/applications/external-dns.md` - Complete guide
+- Updated `docs/todo.md` - Marked SNMP, Node Exporter, External-DNS as completed
+- **PR #4:** [Ready] Update TODO and add external-dns documentation
+
+**Architecture:**
+- Two separate external-dns deployments for split-horizon DNS
+- Cloudflare provider: Public DNS for k8s.n37.ca (reuses cert-manager token)
+- RFC2136 provider: Internal DNS via UniFi UDR7 at 10.0.1.1
+- Policy: upsert-only (safe mode)
+- Watches: Ingress + LoadBalancer Service resources
+
+**Next Steps (User Action Required):**
+1. Merge PR #67 (homelab) - Fixes external-dns secret YAML
+2. Merge PR #4 (k8s-docs-n37) - Documentation updates
+3. Configure UniFi UDR7 RFC2136:
+   - Settings → System → Advanced → Enable RFC2136
+   - Create TSIG key: name=external-dns, algorithm=hmac-sha256
+   - Update secret: `kubectl edit secret rfc2136-credentials -n external-dns`
+   - Restart: `kubectl rollout restart deployment/external-dns-rfc2136 -n external-dns`
+
+**Current State:**
+- External-DNS Application created in ArgoCD (waiting for PR #67 merge to sync)
+- Cloudflare provider ready to auto-create DNS for all Ingresses
+- UniFi provider pending RFC2136 configuration on UDR7
+
+---
+
+### 2025-12-26 (Morning): Documentation Site Fixes and SNMP Documentation
 
 **Completed Work:**
 - ✅ Fixed broken documentation links preventing Docusaurus deployment
@@ -26,7 +69,7 @@
 **Files Updated:**
 - `docs/monitoring/overview.md` - Added SNMP exporter integration
 
-**Pull Request:** [#3](https://github.com/imcbeth/k8s-docs-n37/pull/3) - Fix broken documentation links
+**Pull Request:** [#3](https://github.com/imcbeth/k8s-docs-n37/pull/3) - [Merged] Fix broken documentation links
 
 **Build Status:** ✅ Documentation builds successfully without errors
 
