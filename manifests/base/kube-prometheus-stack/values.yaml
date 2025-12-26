@@ -418,6 +418,13 @@ alertmanager:
     data: {}
 grafana:
   enabled: true
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: synology-iscsi-retain
+    accessModes:
+      - ReadWriteOnce
+    size: 5Gi
   namespaceOverride: ""
   forceDeployDatasources: false
   forceDeployDashboards: false
