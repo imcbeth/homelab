@@ -418,6 +418,8 @@ alertmanager:
     data: {}
 grafana:
   enabled: true
+  deploymentStrategy:
+    type: Recreate
   persistence:
     enabled: true
     storageClassName: synology-iscsi-retain
