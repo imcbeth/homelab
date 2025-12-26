@@ -139,16 +139,34 @@ homelab/
 
 ## 🚀 GitOps Workflow
 
-### Branch Protection
+### Branch Protection & PR Workflow
 
 ⚠️ **IMPORTANT:** The `main` branch has protection rules requiring pull requests.
 
-**Workflow:**
-1. Create feature branch: `git checkout -b feature-name`
-2. Make changes and commit
-3. Push branch: `git push -u origin feature-name`
-4. Create PR: `gh pr create --title "..." --body "..." --base main`
-5. Merge PR: `gh pr merge <number> --squash --admin`
+**Workflow Division:**
+
+**Claude Can Do:**
+- ✅ Create feature branches
+- ✅ Make changes and commit to branches
+- ✅ Push branches to remote
+- ✅ Create pull requests using `gh pr create`
+
+**User Must Do:**
+- ⚠️ **MERGE pull requests** - Claude will create PRs but cannot merge them
+- ⚠️ Final approval and review of changes
+
+**Claude's Responsibility:**
+- Always prompt the user when a PR is ready for merge
+- Provide PR URL and summary of changes
+- Wait for user approval before proceeding with dependent work
+
+**Standard Workflow:**
+1. Claude creates feature branch: `git checkout -b feature-name`
+2. Claude makes changes and commits
+3. Claude pushes branch: `git push -u origin feature-name`
+4. Claude creates PR: `gh pr create --title "..." --body "..." --base main`
+5. **Claude prompts user:** "PR #X is ready for your review and merge"
+6. **User merges PR:** Via GitHub UI or `gh pr merge <number>`
 
 ### ArgoCD Auto-Sync
 
