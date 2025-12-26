@@ -10,6 +10,88 @@
 
 ## 📋 Recent Updates
 
+### 2025-12-26 (Evening): Prometheus Monitoring Stack Fixes
+
+**Completed Work:**
+- ✅ Fixed node-exporter scraping issue (all 5 nodes now monitored)
+- ✅ Fixed Grafana Multi-Attach PVC errors during ArgoCD updates
+- ✅ Disabled unreachable control plane component monitoring
+- ✅ Cleaned up Prometheus targets (removed error-prone ServiceMonitors)
+
+**Pull Requests:**
+- **PR #72:** [Merged] Disable hostNetwork for node-exporter to fix Prometheus scraping
+- **PR #73:** [Merged] Set Grafana deployment strategy to Recreate for RWO PVC
+- **PR #74:** [Ready] Explicitly set rollingUpdate to null for Grafana Recreate strategy
+- **PR #75:** [Ready] Disable unreachable control plane ServiceMonitors
+
+**Issues Resolved:**
+
+1. **Node-Exporter Scraping Failures**
+   - **Problem:** Prometheus could only scrape 1/5 node-exporters
+   - **Root Cause:** node-exporter using `hostNetwork: true` + Calico CNI routing limitation
+   - **Error:** `Get "http://10.0.10.211:9100/metrics": context deadline exceeded`
+   - **Solution:** Changed node-exporter to `hostNetwork: false`, kept `hostPID: true`
+   - **Result:** All 5 node-exporters now UP and scraping successfully via pod IPs (192.168.x.x)
+
+2. **Grafana Multi-Attach PVC Errors**
+   - **Problem:** ArgoCD updates failed with volume already attached errors
+   - **Root Cause:** `ReadWriteOnce` PVC + `RollingUpdate` strategy = conflict
+   - **Error:** `Multi-Attach error for volume... already used by pod`
+   - **Solution:** Changed Grafana deployment strategy to `Recreate` with `rollingUpdate: null`
+   - **Result:** Clean pod replacements with ~10-30s downtime (acceptable for Grafana)
+
+3. **Control Plane Component Scraping Failures**
+   - **Problem:** kube-controller-manager, kube-etcd, kube-proxy all failing to scrape
+   - **Root Cause:** Components bind to localhost (127.0.0.1) in kubeadm, unreachable via node IPs
+   - **Errors:**
+     - controller-manager: `connection refused on https://10.0.10.214:10257`
+     - etcd: `context deadline exceeded on http://10.0.10.214:2381`
+     - kube-proxy: `connection refused on http://10.0.10.x:10249`
+   - **Solution:** Disabled ServiceMonitors for these three components
+   - **Rationale:** Standard kubeadm security practice, sufficient monitoring via kubelet/API server
+
+**Technical Deep-Dives:**
+
+**Calico CNI + hostNetwork Issue:**
+- When pods try to connect to hostNetwork pods via node IPs, Calico routing fails
+- Reverse path filtering and CNI limitations cause timeouts
+- Solution: Use pod network (Calico) instead of host network where possible
+- node-exporter doesn't need hostNetwork (only needs hostPID for process metrics)
+
+**PVC Deployment Strategies:**
+- `ReadWriteOnce` PVCs can only attach to one pod at a time
+- `RollingUpdate` creates new pod before terminating old one → Multi-Attach error
+- `Recreate` terminates old pod first, then creates new one → Clean attachment
+- Trade-off: Small downtime during updates vs. deployment failures
+
+**Control Plane Monitoring in kubeadm:**
+- kubeadm binds control plane components to localhost for security
+- Making them reachable requires modifying kubeadm config (not recommended)
+- Sufficient monitoring from kubelet, API server, kube-state-metrics
+- Best practice for homelab: disable these ServiceMonitors
+
+**Files Modified:**
+- `manifests/base/kube-prometheus-stack/values.yaml`
+  - node-exporter: `hostNetwork: false`, `hostPID: true`
+  - grafana: `deploymentStrategy.type: Recreate`, `rollingUpdate: null`
+  - kubeControllerManager: `enabled: false`
+  - kubeEtcd: `enabled: false`
+  - kubeProxy: `enabled: false`
+
+**Current State:**
+- All node-exporters scraping successfully (5/5 UP)
+- Grafana updates work cleanly via Recreate strategy
+- Prometheus targets page clean (no unreachable control plane errors)
+- PR #74 and #75 ready for merge
+
+**Next Steps (User Action Required):**
+1. Merge PR #74 (homelab) - Fixes Grafana rollingUpdate conflict
+2. Merge PR #75 (homelab) - Removes control plane monitoring errors
+3. Verify Prometheus targets: all should show UP status
+4. Monitor Grafana updates to confirm no Multi-Attach errors
+
+---
+
 ### 2025-12-26 (Afternoon): External-DNS Deployment
 
 **Completed Work:**
