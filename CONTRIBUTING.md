@@ -48,6 +48,12 @@ wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-l
 tar xf kubeconform-linux-amd64.tar.gz
 sudo mv kubeconform /usr/local/bin/
 
+# Node.js and npm (for markdownlint-cli)
+# Ubuntu/Debian:
+sudo apt-get update && sudo apt-get install -y nodejs npm
+# RHEL/Fedora:
+# sudo dnf install nodejs npm
+
 # Markdown linting (via npm)
 npm install -g markdownlint-cli
 ```
