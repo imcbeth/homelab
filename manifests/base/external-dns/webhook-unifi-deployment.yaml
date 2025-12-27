@@ -25,6 +25,11 @@ spec:
         prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
     spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: webhook
         image: ghcr.io/lexfrei/external-dns-unifios-webhook:v0.2.0

@@ -141,7 +141,7 @@ git-crypt unlock
 | `UNIFI_HOST` | UniFi controller URL | `https://10.0.1.1` |
 | `UNIFI_API_KEY` | API key with DNS permissions | `abcd1234...` |
 | `UNIFI_SITE_NAME` | Site name in UniFi | `default` |
-| `UNIFI_TLS_INSECURE` | Skip TLS verification | `true` |
+| `UNIFI_TLS_INSECURE` | Skip TLS verification (NOT recommended; set to `true` only as a last resort, e.g. for testing/self-signed certs, with full understanding of the security risk) | `false` |
 | `LOG_LEVEL` | Logging level | `info` |
 | `LOG_FORMAT` | Log format | `json` |
 
@@ -218,7 +218,7 @@ kubectl describe pod -n external-dns -l app.kubernetes.io/name=external-dns-unif
 # Common issues:
 # - Invalid API key
 # - Network connectivity to UniFi controller
-# - TLS certificate issues (set UNIFI_TLS_INSECURE=true)
+# - TLS certificate issues (fix UniFi certificate/CA config; use UNIFI_TLS_INSECURE=true only as a temporary, insecure workaround for testing)
 ```
 
 ### DNS Records Not Created
@@ -246,15 +246,17 @@ kubectl get svc -A -o yaml | grep external-dns
 
 **Solutions**:
 ```bash
-# Test connectivity from cluster
+# Test connectivity from cluster (temporary debugging only)
+# In production, use a valid certificate and enable TLS verification
 kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
-  curl -k https://10.0.1.1
+  curl https://10.0.1.1
 
 # Check secret configuration
 kubectl get secret -n external-dns unifi-credentials -o yaml
 
 # Verify UNIFI_HOST includes https://
-# Verify UNIFI_TLS_INSECURE is set to "true" for self-signed certs
+# For production, keep TLS verification enabled with a trusted (public or internal) CA
+# Use UNIFI_TLS_INSECURE="true" only as a temporary workaround for debugging self-signed certs
 ```
 
 ### Duplicate or Invalid Records
@@ -301,15 +303,20 @@ kubectl exec -n external-dns deployment/external-dns-unifi-webhook -- \
 
 ## Migration from RFC2136
 
-If migrating from the previous RFC2136 setup:
+If you previously used the RFC2136-based External-DNS setup:
 
-1. **Keep RFC2136 deployment** alongside UniFi webhook initially
-2. **Test UniFi webhook** with new services/ingresses
-3. **Verify DNS resolution** works correctly
-4. **Remove RFC2136** deployment once confident:
+1. **Note**: In this repository, the RFC2136 manifests (including `deployment-rfc2136.yaml`) have already been removed and replaced by the UniFi webhook provider.
+2. **Remove any existing RFC2136 deployment** from your cluster (if still running).
+3. **Ensure your own manifests/kustomization** no longer reference the old RFC2136 resources.
+4. **Deploy the UniFi webhook-based External-DNS** as described above.
+5. **Verify DNS resolution** for your services/ingresses.
+
    ```bash
-   # Remove from kustomization.yaml
-   # Comment out or delete deployment-rfc2136.yaml
+   # Example: remove legacy RFC2136 External-DNS (adjust namespace/name as needed)
+   kubectl delete deployment external-dns-rfc2136 -n external-dns || true
+
+   # If you still have a local copy of the old manifests,
+   # remove any RFC2136 entries from your kustomization.yaml.
    ```
 
 ## References

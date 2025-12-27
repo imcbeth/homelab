@@ -22,6 +22,11 @@ spec:
         app.kubernetes.io/component: unifi
     spec:
       serviceAccountName: external-dns-unifi
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: external-dns
         image: registry.k8s.io/external-dns/external-dns:v0.20.0
