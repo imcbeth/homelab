@@ -37,7 +37,7 @@ spec:
         - name: http
           containerPort: 8080
           protocol: TCP
-        - name: health
+        - name: http-wh
           containerPort: 8888
           protocol: TCP
         envFrom:
@@ -48,17 +48,19 @@ spec:
           value: "info"
         - name: LOG_FORMAT
           value: "json"
+        - name: SERVER_HOST
+          value: "0.0.0.0"
         livenessProbe:
           httpGet:
             path: /healthz
-            port: health
+            port: http
           initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /readyz
-            port: health
+            port: http
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
