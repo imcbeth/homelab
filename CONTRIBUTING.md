@@ -255,14 +255,24 @@ pre-commit autoupdate
 
 **Solution:**
 ```bash
-# Run manually to see the same validation as the pre-commit hook
-kubeconform -summary -output json -ignore-missing-schemas manifests/base/<app>/*.yaml
+# Run the validation script manually (same as pre-commit hook)
+./scripts/validate-manifests.sh
+
+# Or run kubeconform directly on a specific file
+kubeconform -summary -output json -ignore-missing-schemas manifests/base/<app>/<file>.yaml
 
 # Common issues:
 # - Invalid API version: Check Kubernetes version compatibility
 # - Missing required fields: Add required spec fields
 # - Invalid resource type: Verify Kind is correct
+# - "missing 'kind' key": File is not a K8s manifest (e.g., values.yaml, config files)
 ```
+
+**Note:** The validation script automatically excludes:
+- `values.yaml` files (Helm chart values)
+- `*-config.yaml` files (configuration data)
+- Files in `*/configs/*` directories
+- Files in `secrets/*` directory (git-crypt encrypted)
 
 ### YAML Linting Fails
 
