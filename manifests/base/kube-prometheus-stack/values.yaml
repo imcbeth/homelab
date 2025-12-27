@@ -714,7 +714,7 @@ kubeDns:
     additionalLabels: {}
     targetLabels: []
 kubeEtcd:
-  enabled: true
+  enabled: false  # Disabled: Calico CNI cannot route to hostNetwork pods across nodes
   endpoints: []
   service:
     enabled: true
@@ -788,7 +788,7 @@ kubeScheduler:
     additionalLabels: {}
     targetLabels: []
 kubeProxy:
-  enabled: true
+  enabled: false  # Disabled: Calico CNI cannot route to hostNetwork pods across nodes
   jobNameOverride: ""
   endpoints: []
   service:
