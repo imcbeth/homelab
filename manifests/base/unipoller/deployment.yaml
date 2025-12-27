@@ -35,7 +35,6 @@ spec:
             cpu: 200m
             memory: 512Mi
         env:
-
         - name: UP_UNIFI_CONTROLLER_0_API_KEY
           valueFrom:
             secretKeyRef:
