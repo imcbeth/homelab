@@ -1,0 +1,14 @@
+# Gitleaks ignore patterns
+# These patterns are excluded from secret scanning
+
+# Git-crypt encrypted secrets directory
+secrets/**
+
+# Example secrets in documentation
+**/*.md:*example*
+**/*.md:*REPLACE_ME*
+**/*.md:*your-token-here*
+
+# Test/example values
+**/values.yaml:*changeme*
+**/values.yaml:*example.com*
