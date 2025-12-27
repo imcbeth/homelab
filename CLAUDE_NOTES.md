@@ -10,6 +10,253 @@
 
 ## 📋 Recent Updates
 
+### 2025-12-27 (Evening): Loki + Promtail Production Hardening and Fixes
+
+**Completed Work:**
+- ✅ Fixed persistent ArgoCD StatefulSet OutOfSync issues with jqPathExpressions
+- ✅ Enabled Prometheus metrics collection for Loki and Promtail
+- ✅ Added control-plane toleration for complete log coverage
+- ✅ Created comprehensive documentation in k8s-docs-n37
+
+**Pull Requests:**
+- **PR #85:** [Merged] Fix: Ignore creationTimestamp in Loki ArgoCD sync
+- **PR #86:** [Merged] Fix: Add StatefulSet-specific ignoreDifferences for Loki
+- **PR #87:** [Merged] Fix: Use jqPathExpressions for StatefulSet sync and enable metrics
+- **PR #89:** [Merged] Fix: Add control-plane toleration to Promtail DaemonSet
+- **k8s-docs-n37 PR #9:** [Merged] Add comprehensive Loki + Promtail application guide
+- **k8s-docs-n37 PR #10:** [Merged] Update Loki guide with control-plane and metrics details
+
+**Issue 1: ArgoCD StatefulSet Persistent OutOfSync**
+
+After initial deployment, Loki StatefulSet showed as OutOfSync with `creationTimestamp: null` differences.
+
+**Troubleshooting Journey:**
+
+**Attempt 1 (PR #85):** Added basic ignoreDifferences
+```yaml
+ignoreDifferences:
+  - group: "*"
+    kind: "*"
+    jsonPointers:
+      - /metadata/creationTimestamp
+```
+**Result:** Still OutOfSync - StatefulSet has additional fields
+
+**Attempt 2 (PR #86):** Added StatefulSet-specific jsonPointers
+```yaml
+- group: "apps"
+  kind: "StatefulSet"
+  jsonPointers:
+    - /spec/volumeClaimTemplates/0/metadata/creationTimestamp
+    - /spec/volumeClaimTemplates/0/status
+    - /status
+```
+**Result:** Still OutOfSync - only matches index 0
+
+**Root Cause Identified:**
+The volumeClaimTemplates has `status.phase: Pending` field that Kubernetes auto-generates. The `jsonPointers` approach with `/spec/volumeClaimTemplates/0/status` only matches the first array element (index 0), but StatefulSets can have dynamic indices.
+
+**Final Solution (PR #87):** Use jqPathExpressions with wildcards
+```yaml
+syncOptions:
+  - RespectIgnoreDifferences=true  # Honor ignore rules during auto-sync
+
+ignoreDifferences:
+  - group: "apps"
+    kind: "StatefulSet"
+    jqPathExpressions:
+      - .spec.volumeClaimTemplates[]?.status                      # ALL array elements
+      - .spec.volumeClaimTemplates[]?.metadata.creationTimestamp
+      - .status
+```
+
+**Why jqPathExpressions Works:**
+- `jsonPointers`: Only matches exact paths like `/spec/volumeClaimTemplates/0/status`
+- `jqPathExpressions`: Uses `[]?` wildcard to match ANY array index
+- Handles dynamic StatefulSet configurations
+
+**Verification:**
+```bash
+kubectl get application loki -n argocd -o jsonpath='{.status.sync.status}'
+# Returns: Synced
+```
+
+**Issue 2: No Metrics from Loki or Promtail**
+
+User reported logs were flowing but no metrics appeared in Prometheus.
+
+**Root Cause:**
+ServiceMonitors were disabled in both Loki and Promtail values.yaml files.
+
+**Solution (PR #87):**
+Enabled ServiceMonitor with proper labels for Prometheus auto-discovery:
+
+**Loki:**
+```yaml
+monitoring:
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack  # For ServiceMonitor discovery
+```
+
+**Promtail:**
+```yaml
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack
+```
+
+**Metrics Now Available:**
+
+**Loki Metrics:**
+```promql
+# Logs ingested per second
+rate(loki_distributor_lines_received_total[5m])
+
+# Active log streams
+loki_ingester_streams
+
+# Query performance (99th percentile)
+histogram_quantile(0.99, rate(loki_request_duration_seconds_bucket[5m]))
+
+# Storage usage
+loki_store_chunk_entries
+```
+
+**Promtail Metrics (per pod × 5):**
+```promql
+# Logs sent to Loki
+rate(promtail_sent_entries_total[5m])
+
+# Bytes read from log files
+rate(promtail_read_bytes_total[5m])
+
+# Active scrape targets (should show ~250 pods)
+promtail_targets_active_total
+```
+
+**Issue 3: Missing Control-Plane Logs**
+
+User noticed Promtail was only running on 4/5 nodes - missing the control-plane.
+
+**Investigation:**
+```bash
+kubectl get pods -n loki -l app.kubernetes.io/name=promtail -o wide
+# Showed: node01, node02, node03, node04
+# Missing: control-plane
+
+kubectl get nodes -o json | python3 -c "import sys, json; nodes = json.load(sys.stdin)['items']; [print(f\"{n['metadata']['name']}: {n['spec'].get('taints', [])}\") for n in nodes]"
+# control-plane: [{'effect': 'NoSchedule', 'key': 'node-role.kubernetes.io/control-plane'}]
+```
+
+**Root Cause:**
+Control-plane node has `node-role.kubernetes.io/control-plane:NoSchedule` taint that prevents regular DaemonSet pods from scheduling.
+
+**Solution (PR #89):**
+Added toleration to Promtail DaemonSet:
+```yaml
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+```
+
+**Benefits:**
+- Promtail now runs on ALL 5 nodes (4 workers + 1 control-plane)
+- Collects logs from critical control plane components:
+  - kube-apiserver
+  - kube-controller-manager
+  - kube-scheduler
+  - etcd
+  - CoreDNS
+
+**Query Control-Plane Logs:**
+```logql
+{node="control-plane"}               # All control-plane logs
+{pod=~"kube-apiserver.*"}           # API server
+{pod=~"etcd.*"}                     # etcd
+{pod=~"kube-controller-manager.*"}  # Controller manager
+{pod=~"kube-scheduler.*"}           # Scheduler
+```
+
+**Documentation Created:**
+
+**k8s-docs-n37 PR #9:** Comprehensive 568-line Loki + Promtail application guide
+- Architecture overview and component details
+- LogQL query examples (basic to advanced)
+- Common use cases and troubleshooting patterns
+- Performance tuning for Raspberry Pi cluster
+- Grafana dashboard recommendations
+- Security considerations and upgrade procedures
+
+**k8s-docs-n37 PR #10:** Updated guide with control-plane and metrics
+- Control-plane toleration documentation
+- ServiceMonitor enablement details
+- Complete Prometheus metrics reference
+- 5-node coverage verification
+
+**Files Modified:**
+- `manifests/applications/loki.yaml` - ignoreDifferences with jqPathExpressions
+- `manifests/base/loki/values.yaml` - Enabled ServiceMonitor
+- `manifests/base/promtail/values.yaml` - Enabled ServiceMonitor, added control-plane toleration
+
+**Current State:**
+- ✅ Loki StatefulSet: Synced in ArgoCD
+- ✅ Loki metrics: Available in Prometheus
+- ✅ Promtail metrics: Available in Prometheus (5 pods)
+- ✅ Log collection: All 5 nodes including control-plane
+- ✅ Grafana datasource: Working
+- ✅ Documentation: Complete in k8s-docs-n37
+
+**Key Lessons Learned:**
+
+1. **jsonPointers vs jqPathExpressions:**
+   - Use jsonPointers for simple, fixed paths
+   - Use jqPathExpressions for arrays or dynamic structures
+   - Always add RespectIgnoreDifferences=true with auto-sync
+
+2. **ServiceMonitor Labels Matter:**
+   - Must include `release: kube-prometheus-stack` label
+   - Prometheus Operator uses label selectors for discovery
+   - Check with: `kubectl get servicemonitor -n loki -o yaml`
+
+3. **DaemonSet Tolerations:**
+   - Control-plane nodes have standard taints
+   - System DaemonSets (node-exporter, Promtail) need tolerations
+   - Use `operator: Exists` for flexibility
+
+4. **ArgoCD Sync Troubleshooting:**
+   - Check: `kubectl get application <name> -n argocd -o yaml`
+   - Look at `.status.sync.status` and `.status.conditions`
+   - For StatefulSets, check volumeClaimTemplates and status fields
+
+**Verification Commands:**
+```bash
+# ArgoCD sync status
+kubectl get application loki -n argocd -o jsonpath='{.status.sync.status}'
+kubectl get application promtail -n argocd -o jsonpath='{.status.sync.status}'
+
+# ServiceMonitors
+kubectl get servicemonitor -n loki
+
+# Promtail distribution
+kubectl get pods -n loki -l app.kubernetes.io/name=promtail -o wide
+
+# Metrics in Prometheus
+# Port-forward: kubectl port-forward -n default svc/kube-prometheus-stack-prometheus 9090:9090
+# Navigate to: http://localhost:9090/targets
+# Look for: serviceMonitor/loki/loki and serviceMonitor/loki/promtail
+
+# Query logs in Grafana
+# Port-forward: kubectl port-forward -n default svc/kube-prometheus-stack-grafana 3000:80
+# Navigate to: http://localhost:3000 → Explore → Loki
+# Query: {namespace="default"}
+```
+
+---
+
 ### 2025-12-26 (Post-Midnight): Deploy Loki + Promtail Log Aggregation Stack
 
 **Completed Work:**
