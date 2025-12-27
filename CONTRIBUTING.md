@@ -55,7 +55,11 @@ sudo apt-get update && sudo apt-get install -y nodejs npm
 # sudo dnf install nodejs npm
 
 # Markdown linting (via npm)
-npm install -g markdownlint-cli
+# Option 1: Global install (may require sudo on some systems)
+sudo npm install -g markdownlint-cli
+
+# Option 2: Use npx without global install
+# npx markdownlint-cli --version
 ```
 
 ### 3. Install Pre-commit Hooks

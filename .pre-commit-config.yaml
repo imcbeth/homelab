@@ -37,15 +37,16 @@ repos:
         args:
           - '-d'
           - |
-            {
-              extends: default,
-              rules: {
-                line-length: {max: 200},
-                document-start: disable,
-                truthy: {check-keys: true},
-                indentation: {spaces: 2, indent-sequences: true}
-              }
-            }
+            extends: default
+            rules:
+              line-length:
+                max: 200
+              document-start: disable
+              truthy:
+                check-keys: true
+              indentation:
+                spaces: 2
+                indent-sequences: true
 
   # Kubernetes manifest validation using kubeconform
   - repo: local
