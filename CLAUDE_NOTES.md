@@ -10,6 +10,185 @@
 
 ## 📋 Recent Updates
 
+### 2025-12-26 (Late Night): Troubleshooting Calico CNI + hostNetwork Monitoring Issues
+
+**Completed Work:**
+- ✅ Identified Calico CNI routing limitation with hostNetwork pods across nodes
+- ✅ Disabled kube-etcd and kube-proxy monitoring (cannot work reliably)
+- ✅ Kept kube-scheduler monitoring (works via HTTPS/API server routing)
+- ✅ Documented extensive troubleshooting process and root cause
+
+**Pull Requests:**
+- **PR #80:** [Merged] Attempted fix with pod IP relabeling (unsuccessful)
+- **PR #81:** [Ready] Disable kube-etcd and kube-proxy monitoring
+
+**Problem Discovery:**
+After re-enabling control plane monitoring (PR #78), users reported scrape failures:
+```
+Error scraping target: Get "http://10.0.10.211:10249/metrics": context deadline exceeded
+```
+
+**Troubleshooting Process:**
+
+1. **Initial Diagnosis - Check ServiceMonitor Configuration:**
+   ```bash
+   kubectl get servicemonitor -n default -l app.kubernetes.io/name=kube-prometheus-stack -o name
+   kubectl get servicemonitor -n default kube-prometheus-stack-kube-proxy -o yaml
+   ```
+
+2. **Verify Services and Endpoints:**
+   ```bash
+   kubectl get service -n kube-system | grep -E "kube-proxy|etcd|scheduler"
+   kubectl get endpoints -n kube-system | grep -E "kube-proxy|etcd|scheduler"
+   # Showed node IPs (10.0.10.x) instead of pod IPs
+   ```
+
+3. **Check Pod Network Configuration:**
+   ```bash
+   kubectl get pods -n kube-system -o wide | grep -E "proxy|etcd|scheduler"
+   # Revealed pods use hostNetwork: true, pod IP = node IP
+   ```
+
+4. **Test Connectivity from Prometheus Pod:**
+   ```bash
+   # Test kube-proxy on different node (FAILS)
+   kubectl exec -n default prometheus-kube-prometheus-stack-prometheus-0 -c prometheus -- \
+     wget -qO- --timeout=2 http://10.0.10.211:10249/metrics
+   # Result: wget: download timed out
+
+   # Test etcd (FAILS)
+   kubectl exec -n default prometheus-kube-prometheus-stack-prometheus-0 -c prometheus -- \
+     wget -qO- --timeout=2 http://10.0.10.214:2381/metrics
+   # Result: wget: download timed out
+
+   # Test scheduler via HTTPS (WORKS - returns 403, endpoint reachable)
+   kubectl exec -n default prometheus-kube-prometheus-stack-prometheus-0 -c prometheus -- \
+     wget -qO- --timeout=2 --no-check-certificate https://10.0.10.214:10259/metrics
+   # Result: HTTP/1.1 403 Forbidden (reachable, needs auth)
+   ```
+
+5. **Test Connectivity from Host (Baseline):**
+   ```bash
+   curl http://10.0.10.214:2381/metrics  # Times out from outside pod network too
+   curl -k https://10.0.10.214:10259/metrics  # Works from host
+   ```
+
+6. **Identify Pattern - Check Which Node Prometheus is On:**
+   ```bash
+   kubectl get pod prometheus-kube-prometheus-stack-prometheus-0 -n default -o wide
+   # Result: Running on node04 (10.0.10.220)
+
+   kubectl get pod -n kube-system kube-proxy-86sxr -o wide
+   # Result: Also on node04 (10.0.10.220)
+   ```
+
+7. **Query Prometheus for Target Status:**
+   ```bash
+   kubectl exec -n default prometheus-kube-prometheus-stack-prometheus-0 -c prometheus -- \
+     wget -qO- 'http://localhost:9090/api/v1/query?query=up{job="kube-scheduler"}' | python3 -m json.tool
+   # Result: "value": "1" (UP)
+
+   kubectl exec -n default prometheus-kube-prometheus-stack-prometheus-0 -c prometheus -- \
+     wget -qO- 'http://localhost:9090/api/v1/query?query=up{job=~"kube-proxy|kube-etcd"}' | python3 -m json.tool
+   # Result: kube-etcd "value": "0" (DOWN)
+   #         kube-proxy on node04 "value": "1" (UP)
+   #         kube-proxy on other nodes "value": "0" (DOWN)
+   ```
+
+**Root Cause Identified:**
+
+**Calico CNI Routing Limitation with hostNetwork Pods:**
+- Control plane components use `hostNetwork: true` (required for their operation)
+- When using `hostNetwork: true`, pods don't get a pod IP in Calico network
+- Pod IP reported by Kubernetes = Node IP
+- Calico CNI **cannot route** from pod network to hostNetwork pods **on different nodes** via node IPs
+- Prometheus (running in pod network on node04) can ONLY reach:
+  - ✅ hostNetwork pods on the SAME node (local routing)
+  - ✅ kube-scheduler (via HTTPS, likely API server proxy)
+  - ❌ hostNetwork pods on OTHER nodes (Calico routing failure)
+
+**Attempted Solutions:**
+
+1. **Pod IP Relabeling (PR #80):**
+   - Attempted to use `__meta_kubernetes_pod_ip` in ServiceMonitor relabeling
+   - **Failed:** For hostNetwork pods, `__meta_kubernetes_pod_ip` IS the node IP
+   - No separate pod IP exists to relabel to
+
+2. **Manual Endpoints Configuration:**
+   - Considered manually specifying endpoints
+   - **Not viable:** Still would use node IPs, same routing issue
+
+**Final Solution:**
+
+Disabled unreliable ServiceMonitors:
+- **kube-etcd:** Always fails (runs only on control-plane node, different from Prometheus)
+- **kube-proxy:** Only 1/5 instances work (Prometheus can only reach local instance)
+
+Kept working ServiceMonitors:
+- **kube-scheduler:** Successfully scrapes via HTTPS (API server routing works)
+- **kube-controller-manager:** Kept enabled (to be verified)
+
+**Technical Deep-Dive:**
+
+**Why Calico CNI Has This Limitation:**
+- Calico uses BGP routing and IP-in-IP tunneling for pod network
+- hostNetwork pods bypass Calico entirely, use host's network namespace
+- Calico's routing rules don't handle pod→host traffic across nodes
+- Traffic from pod network to node IP on different node hits reverse path filtering issues
+- This is a known architectural constraint, not a bug
+
+**Why kube-scheduler Works:**
+- Uses HTTPS scheme with bearer token authentication
+- Likely routed through Kubernetes API server proxy
+- API server can forward requests to control plane components
+- Different code path than direct HTTP scraping
+
+**Alternative Solutions Considered:**
+
+1. **Run Prometheus as DaemonSet:**
+   - One Prometheus instance per node
+   - Each scrapes local hostNetwork pods
+   - Rejected: Too complex, metrics federation issues
+
+2. **Change CNI to one without this limitation:**
+   - Major infrastructure change
+   - Rejected: Not worth it for homelab
+
+3. **Deploy metrics proxy/relay on each node:**
+   - Over-engineered for this use case
+   - Rejected: Unnecessary complexity
+
+4. **Accept partial monitoring:**
+   - Only monitor pods on same node as Prometheus
+   - Rejected: Unreliable, confusing metrics
+
+**Files Modified:**
+- `manifests/base/kube-prometheus-stack/values.yaml`
+  - kubeEtcd: `enabled: false` (with comment explaining Calico limitation)
+  - kubeProxy: `enabled: false` (with comment explaining Calico limitation)
+
+**Current State:**
+- ✅ kube-scheduler monitoring: Working
+- ✅ kube-controller-manager monitoring: Enabled (to be verified)
+- ❌ kube-etcd monitoring: Disabled (Calico CNI limitation)
+- ❌ kube-proxy monitoring: Disabled (Calico CNI limitation)
+- PR #81 ready for merge
+
+**Lessons Learned:**
+- Calico CNI has known limitations with hostNetwork workloads
+- Pod IP relabeling doesn't work for hostNetwork pods (pod IP = node IP)
+- Some ServiceMonitors may work via different routing (HTTPS/API server)
+- Always test connectivity from the scraping pod, not just the host
+- Check which node Prometheus is running on when debugging partial failures
+
+**Next Steps (User Action Required):**
+1. Merge PR #81 (homelab) - Disables unreliable kube-etcd and kube-proxy monitoring
+2. Verify Prometheus targets page no longer shows failing kube-etcd and kube-proxy targets
+3. Confirm kube-scheduler continues to work
+4. Consider this limitation when planning future monitoring requirements
+
+---
+
 ### 2025-12-26 (Late Evening): Re-enable Control Plane Component Monitoring
 
 **Completed Work:**
