@@ -2,13 +2,163 @@
 
 ## Quick Reference for AI Assistants Working in This Repository
 
-**Last Updated:** 2025-12-26
+**Last Updated:** 2025-12-27
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
 ---
 
 ## 📋 Recent Updates
+
+### 2025-12-26 (Post-Midnight): Deploy Loki + Promtail Log Aggregation Stack
+
+**Completed Work:**
+- ✅ Deployed Grafana Loki in SingleBinary mode for centralized log aggregation
+- ✅ Deployed Promtail DaemonSet (5 pods, one per node) for log collection
+- ✅ Fixed initial deployment issue (Promtail not included in Loki chart v6.x)
+- ✅ Configured Grafana datasource auto-discovery
+- ✅ Implemented TODO.md Platform Enhancement #7: Log Aggregation
+
+**Pull Requests:**
+- **PR #83:** [Merged] Deploy Loki + Promtail logging stack
+- **PR #84:** [Ready] Fix: Add Promtail deployment for log collection
+
+**Architecture Deployed:**
+
+```
+┌─────────────────────────────────────────┐
+│  Promtail DaemonSet (5 pods)            │
+│  - One pod per Pi node                  │
+│  - Collects logs from /var/log/pods/    │
+│  - 50m/100m CPU, 64Mi/128Mi memory each │
+└────────────────┬────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│  Loki SingleBinary (1 pod)              │
+│  - Storage: 20Gi PVC on Synology        │
+│  - Retention: 7 days (168h)             │
+│  - 200m/500m CPU, 384Mi/768Mi memory    │
+└────────────────┬────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│  Grafana (auto-discovered datasource)   │
+│  - Query logs via LogQL                 │
+│  - Dashboards and exploration           │
+└─────────────────────────────────────────┘
+```
+
+**Configuration Details:**
+
+**Loki (SingleBinary Mode):**
+- Chart: `grafana/loki` version 6.49.0
+- Sync Wave: -12 (after kube-prometheus-stack -15)
+- Namespace: `loki`
+- Storage: 20Gi PVC on `synology-iscsi-retain`
+- Retention: 7 days with compaction every 10 minutes
+- Schema: v13 (TSDB store)
+- Resources: 200m/500m CPU, 384Mi/768Mi memory
+
+**Promtail (DaemonSet):**
+- Chart: `grafana/promtail` version 6.16.6
+- Sync Wave: -11 (after Loki -12)
+- Namespace: `loki`
+- Replicas: 5 (one pod per node)
+- Resources per pod: 50m/100m CPU, 64Mi/128Mi memory
+- hostNetwork: false (avoids Calico CNI issues)
+- hostPID: true (access to /var/log/pods/)
+
+**Log Collection:**
+- Scrapes all running Kubernetes pods
+- Log path: `/var/log/pods/`
+- Labels added: namespace, pod, container, node
+- Client URL: `http://loki.loki.svc.cluster.local:3100/loki/api/v1/push`
+
+**Issue Discovered During Deployment:**
+
+After initial deployment (PR #83), user reported only seeing loki-canary pod logs in Grafana:
+
+**Troubleshooting:**
+```bash
+# 1. Check pods in loki namespace
+kubectl get pods -n loki -o wide
+# Found: loki-0, loki-canary pods, caches - but NO Promtail pods
+
+# 2. Check for DaemonSet
+kubectl get daemonset -n loki
+# Found: Only loki-canary DaemonSet
+
+# 3. Identified root cause
+# Loki chart v6.x no longer includes Promtail - it's a separate chart
+```
+
+**Root Cause:**
+- The `grafana/loki` chart version 6.49.0 split Loki and Promtail into separate Helm charts
+- Older `loki-stack` chart included both, but is deprecated
+- The `promtail.enabled: true` setting in Loki values.yaml was ignored
+
+**Solution (PR #84):**
+- Deployed Promtail using separate `grafana/promtail` chart
+- Created new ArgoCD Application with sync-wave -11
+- Removed unused Promtail config from Loki values.yaml
+- Connected Promtail to Loki service endpoint
+
+**Files Created:**
+- `manifests/applications/loki.yaml` - Loki ArgoCD Application
+- `manifests/base/loki/values.yaml` - Loki configuration
+- `manifests/base/loki/loki-datasource.yaml` - Grafana datasource
+- `manifests/applications/promtail.yaml` - Promtail ArgoCD Application
+- `manifests/base/promtail/values.yaml` - Promtail configuration
+
+**Resource Impact:**
+- Total CPU Requests: 450m (2.25% of 20 cores)
+- Total Memory Requests: 704Mi (0.8% of 80GB)
+- Storage: 20Gi on Synology NAS
+
+**Verification Commands:**
+```bash
+# Check all pods
+kubectl get pods -n loki
+
+# Check Promtail DaemonSet
+kubectl get daemonset -n loki
+
+# Check PVC
+kubectl get pvc -n loki
+
+# Query logs in Grafana Explore
+{namespace="default"}                           # All default namespace logs
+{namespace="default"} |= "error"                # Filter for errors
+{pod=~"prometheus.*"}                          # Prometheus pod logs
+{namespace="kube-system"} |= "error" |= "fatal" # Critical system errors
+{node="node04"}                                 # All logs from node04
+```
+
+**Grafana Integration:**
+- Datasource auto-discovered via ConfigMap label `grafana_datasource: "1"`
+- Appears in Grafana → Explore → Loki datasource dropdown
+- No manual configuration needed
+
+**Current State:**
+- ✅ Loki pod running (loki-0)
+- ✅ 5 Promtail pods running (one per node)
+- ✅ 20Gi PVC bound
+- ✅ Grafana datasource configured
+- ⏳ Awaiting PR #84 merge for Promtail deployment
+
+**Next Steps (User Action Required):**
+1. Merge PR #84 to deploy Promtail
+2. Verify logs appear in Grafana Explore: `{namespace="default"}`
+3. Import community Grafana dashboards:
+   - Dashboard ID 12611 - Loki Dashboard
+   - Dashboard ID 13639 - Logs / App
+   - Dashboard ID 13407 - Kubernetes Logs
+
+**Lessons Learned:**
+- Loki chart v6.x requires separate Promtail deployment
+- Always verify all expected pods are running after ArgoCD sync
+- Chart architecture changes between major versions require careful review
+
+---
 
 ### 2025-12-26 (Late Night): Troubleshooting Calico CNI + hostNetwork Monitoring Issues
 
