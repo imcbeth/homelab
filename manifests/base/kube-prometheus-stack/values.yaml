@@ -650,7 +650,12 @@ kubeControllerManager:
     insecureSkipVerify: null
     serverName: null
     metricRelabelings: []
-    relabelings: []
+    relabelings:
+      # Use pod IP instead of node IP to avoid Calico CNI routing issues with hostNetwork pods
+      - sourceLabels: [__meta_kubernetes_pod_ip]
+        action: replace
+        targetLabel: __address__
+        replacement: $1:10257
     additionalLabels: {}
     targetLabels: []
 coreDns:
@@ -738,7 +743,12 @@ kubeEtcd:
     jobLabel: jobLabel
     selector: {}
     metricRelabelings: []
-    relabelings: []
+    relabelings:
+      # Use pod IP instead of node IP to avoid Calico CNI routing issues with hostNetwork pods
+      - sourceLabels: [__meta_kubernetes_pod_ip]
+        action: replace
+        targetLabel: __address__
+        replacement: $1:2381
     additionalLabels: {}
     targetLabels: []
 kubeScheduler:
@@ -769,7 +779,12 @@ kubeScheduler:
     insecureSkipVerify: null
     serverName: null
     metricRelabelings: []
-    relabelings: []
+    relabelings:
+      # Use pod IP instead of node IP to avoid Calico CNI routing issues with hostNetwork pods
+      - sourceLabels: [__meta_kubernetes_pod_ip]
+        action: replace
+        targetLabel: __address__
+        replacement: $1:10259
     additionalLabels: {}
     targetLabels: []
 kubeProxy:
@@ -798,7 +813,12 @@ kubeProxy:
     selector: {}
     https: false
     metricRelabelings: []
-    relabelings: []
+    relabelings:
+      # Use pod IP instead of node IP to avoid Calico CNI routing issues with hostNetwork pods
+      - sourceLabels: [__meta_kubernetes_pod_ip]
+        action: replace
+        targetLabel: __address__
+        replacement: $1:10249
     additionalLabels: {}
     targetLabels: []
 kubeStateMetrics:
