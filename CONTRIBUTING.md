@@ -34,8 +34,8 @@ brew install kubeconform
 # YAML tools
 brew install yamllint
 
-# Markdown linting
-brew install markdownlint-cli
+# Markdown linting (requires Node.js and npm)
+npm install -g markdownlint-cli
 ```
 
 **Linux:**

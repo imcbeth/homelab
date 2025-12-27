@@ -83,7 +83,7 @@ repos:
     hooks:
       - id: check-todos
         name: Check for TODO/FIXME markers
-        entry: bash -c 'if git diff --cached --diff-filter=d --name-only | xargs -r grep -nHE "TODO|FIXME"; then echo "⚠️  Warning: Found TODO/FIXME markers in staged files"; fi; exit 0'
+        entry: bash -c 'files=$(git diff --cached --diff-filter=d --name-only); if [ -n "$files" ]; then echo "$files" | xargs grep -nHE "TODO|FIXME" && echo "⚠️  Warning: Found TODO/FIXME markers in staged files"; fi; exit 0'
         language: system
         pass_filenames: false
         always_run: true
