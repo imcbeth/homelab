@@ -1,9 +1,13 @@
-# Gitleaks ignore patterns
-# These patterns are excluded from secret scanning
-
-# Git-crypt encrypted secrets directory
-secrets/
-
-# Example secrets in specific documentation files (safe to exclude)
-docs/**/example-*.md
-
+# Gitleaks ignore file
+# NOTE: This file only supports commit SHAs or finding fingerprints.
+#       Path-based patterns such as directories or globs are NOT
+#       respected by gitleaks when placed here.
+#
+# To exclude files or directories from scanning, use:
+#   - The "exclude" setting in the pre-commit gitleaks hook, or
+#   - A .gitleaks.toml configuration file with appropriate allowlists.
+#
+# Example (for future use) of ignoring a specific finding by fingerprint:
+# fp:abcdef1234567890deadbeefcafebabe00000000000000000000000000000000
+#
+# This file is intentionally empty of active ignore entries at present.

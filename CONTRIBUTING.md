@@ -216,12 +216,13 @@ docs: Add comprehensive network-info.md
 3. **YAML Syntax Check** - Basic YAML validation
 4. **Large File Check** - Prevents files > 1MB
 5. **Merge Conflict Check** - Detects unresolved conflicts
-6. **Private Key Detection** - Prevents committing keys
-7. **YAML Linting** - Advanced YAML validation
-8. **Kubeconform** - **Validates Kubernetes manifests!**
-9. **Gitleaks** - **Secret scanning**
-10. **Markdown Linting** - Enforces markdown style
-11. **TODO/FIXME Check** - Warns about markers
+6. **Line Ending Check** - Normalizes mixed line endings
+7. **Private Key Detection** - Prevents committing keys
+8. **YAML Linting** - Advanced YAML validation
+9. **Kubeconform** - **Validates Kubernetes manifests!**
+10. **Gitleaks** - **Secret scanning**
+11. **Markdown Linting** - Enforces markdown style
+12. **TODO/FIXME Check** - Warns about markers
 
 ### Bypassing Hooks (Not Recommended)
 
