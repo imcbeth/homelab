@@ -75,7 +75,7 @@ data:
         auth_protocol: SHA
         priv_protocol: AES
         priv_password: YOUR_PRIV_PASSWORD
-    
+
     modules:
       synology:
         walk: [...]

@@ -53,7 +53,7 @@ metadata:
   labels:
     app: unifi-poller
     type: poller
-spec: 
+spec:
   ports:
   - name: http
     port: 9130

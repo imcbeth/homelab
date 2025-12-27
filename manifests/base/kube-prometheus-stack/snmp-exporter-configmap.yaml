@@ -21,7 +21,7 @@ data:
         priv_protocol: ${SNMP_PRIV_PROTOCOL} # Pulled from secret via environment variable
         priv_password: ${SNMP_PRIV_PASSWORD} # Pulled from secret via environment variable
         context_name: ""
-    
+
     modules:
       synology:
         walk:

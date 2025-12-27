@@ -968,7 +968,7 @@ prometheusOperator:
       image:
         registry: registry.k8s.io
         repository: ingress-nginx/kube-webhook-certgen
-        tag: v1.6.4  
+        tag: v1.6.4
         sha: ""
         pullPolicy: IfNotPresent
       resources: {}
@@ -1006,10 +1006,10 @@ prometheusOperator:
     certManager:
       enabled: false
       rootCert:
-        duration: ""  
+        duration: ""
         revisionHistoryLimit:
       admissionCert:
-        duration: ""  
+        duration: ""
         revisionHistoryLimit:
   namespaces: {}
   denyNamespaces: []
@@ -1365,7 +1365,7 @@ prometheus:
     additionalRemoteWrite: []
     remoteWriteDashboards: false
     resources: {}
-    storageSpec: 
+    storageSpec:
       volumeClaimTemplate:
         spec:
           storageClassName: synology-iscsi-retain
