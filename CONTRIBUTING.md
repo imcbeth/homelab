@@ -174,7 +174,7 @@ Critical for proper startup sequence:
 
 ```
 -50: ArgoCD (self-management)
--35: MetalLB, Pi-hole (networking)
+-35: MetalLB (networking)
 -30: Synology CSI (storage)
 -20: UniFi Poller (metrics)
 -15: kube-prometheus-stack (monitoring)
