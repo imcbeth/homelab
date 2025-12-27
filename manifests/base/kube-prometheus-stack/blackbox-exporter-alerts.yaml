@@ -15,7 +15,7 @@ spec:
     rules:
     # Endpoint availability alerts
     - alert: EndpointDown
-      expr: probe_success == 0
+      expr: probe_success{job=~"blackbox-.*"} == 0
       for: 5m
       labels:
         severity: critical
@@ -24,7 +24,7 @@ spec:
         description: "The endpoint {{ $labels.instance }} has been unreachable for more than 5 minutes.\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
 
     - alert: EndpointDegraded
-      expr: probe_success == 0
+      expr: probe_success{job=~"blackbox-.*"} == 0
       for: 1m
       labels:
         severity: warning
@@ -34,7 +34,7 @@ spec:
 
     # SSL certificate expiry alerts
     - alert: SSLCertificateExpiresIn30Days
-      expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 30
+      expr: probe_ssl_earliest_cert_expiry{job="blackbox-https"} - time() < 86400 * 30
       for: 1h
       labels:
         severity: warning
@@ -43,7 +43,7 @@ spec:
         description: "SSL certificate for {{ $labels.instance }} will expire in {{ $value | humanizeDuration }}.\n  LABELS: {{ $labels }}"
 
     - alert: SSLCertificateExpiresIn7Days
-      expr: probe_ssl_earliest_cert_expiry > 0 and probe_ssl_earliest_cert_expiry - time() < 86400 * 7
+      expr: probe_ssl_earliest_cert_expiry{job="blackbox-https"} > 0 and probe_ssl_earliest_cert_expiry{job="blackbox-https"} - time() < 86400 * 7
       for: 1h
       labels:
         severity: critical
@@ -52,7 +52,7 @@ spec:
         description: "SSL certificate for {{ $labels.instance }} will expire in {{ $value | humanizeDuration }}. Immediate renewal required!\n  LABELS: {{ $labels }}"
 
     - alert: SSLCertificateExpired
-      expr: probe_ssl_earliest_cert_expiry - time() <= 0
+      expr: probe_ssl_earliest_cert_expiry{job="blackbox-https"} - time() <= 0
       for: 5m
       labels:
         severity: critical
@@ -62,7 +62,7 @@ spec:
 
     # HTTP response time alerts
     - alert: HighHTTPResponseTime
-      expr: probe_http_duration_seconds > 5
+      expr: probe_http_duration_seconds{job=~"blackbox-http|blackbox-https"} > 5
       for: 5m
       labels:
         severity: warning
@@ -71,7 +71,7 @@ spec:
         description: "HTTP response time for {{ $labels.instance }} is {{ $value }}s (>5s).\n  LABELS: {{ $labels }}"
 
     - alert: VeryHighHTTPResponseTime
-      expr: probe_http_duration_seconds > 10
+      expr: probe_http_duration_seconds{job=~"blackbox-http|blackbox-https"} > 10
       for: 2m
       labels:
         severity: critical
@@ -119,7 +119,7 @@ spec:
 
     # SSL/TLS version alerts
     - alert: TLSVersionTooOld
-      expr: probe_tls_version_info{version="TLS 1.0"} == 1 or probe_tls_version_info{version="TLS 1.1"} == 1
+      expr: probe_tls_version_info{job="blackbox-https",version="TLS 1.0"} == 1 or probe_tls_version_info{job="blackbox-https",version="TLS 1.1"} == 1
       for: 1h
       labels:
         severity: warning
