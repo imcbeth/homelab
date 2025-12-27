@@ -33,6 +33,9 @@ This setup uses [lexfrei/external-dns-unifios-webhook](https://github.com/lexfre
 Update the secret with your UniFi credentials:
 
 ```bash
+# Decrypt the secret file first (it's encrypted with git-crypt)
+git-crypt unlock
+
 # Edit the secret file
 vim manifests/base/external-dns/secret-unifi.yaml
 ```
@@ -47,12 +50,11 @@ stringData:
   UNIFI_TLS_INSECURE: "true"  # Set to "false" if using valid TLS cert
 ```
 
-**IMPORTANT**: After updating, encrypt the secret file:
+**IMPORTANT**: After updating, re-encrypt the secret file:
 
 ```bash
-# Encrypt with git-crypt (if using)
+# Re-encrypt with git-crypt
 git-crypt lock
-git-crypt unlock
 
 # Or use sealed-secrets/SOPS depending on your setup
 ```
