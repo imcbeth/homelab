@@ -6,8 +6,6 @@ namespace: external-dns
 resources:
   - namespace.yaml
   - rbac.yaml
-  - secret-cloudflare.yaml
-  - secret-unifi.yaml
   - deployment-cloudflare.yaml
   - deployment-unifi.yaml
   - webhook-unifi-deployment.yaml
