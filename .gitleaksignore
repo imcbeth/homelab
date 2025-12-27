@@ -7,5 +7,3 @@ secrets/**
 # Example secrets in specific documentation files (safe to exclude)
 docs/**/example-*.md
 
-# Test/example values
-**/values.yaml
