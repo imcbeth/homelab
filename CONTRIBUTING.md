@@ -89,7 +89,7 @@ git checkout -b docs/update-readme
 **Test Kubernetes Manifests:**
 ```bash
 # Validate with kubeconform
-kubeconform -summary manifests/base/<app>/*.yaml
+kubeconform -summary manifests/base/<app>/
 
 # Check YAML syntax
 yamllint manifests/
