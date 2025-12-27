@@ -6,8 +6,18 @@ set -e
 
 echo "Validating Kubernetes manifests with kubeconform..."
 
-# Find all YAML files in manifests directory (excluding secrets)
-manifests=$(find manifests -type f \( -name "*.yaml" -o -name "*.yml" \) ! -path "*/secrets/*" 2>/dev/null)
+# Find all YAML files in manifests directory (excluding secrets and non-manifests)
+# Exclude:
+# - secrets/* (git-crypt encrypted)
+# - */values.yaml (Helm chart values, not K8s manifests)
+# - */configs/* (ConfigMap data files)
+# - *-config.yaml (Configuration files, not K8s manifests)
+manifests=$(find manifests -type f \( -name "*.yaml" -o -name "*.yml" \) \
+  ! -path "*/secrets/*" \
+  ! -name "values.yaml" \
+  ! -path "*/configs/*" \
+  ! -name "*-config.yaml" \
+  2>/dev/null)
 
 if [ -z "$manifests" ]; then
   echo "No manifests found to validate"
