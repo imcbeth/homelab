@@ -344,7 +344,7 @@ helm template test <chart> -f manifests/base/<app>/values.yaml
 kubectl apply --dry-run=client -f manifests/base/<app>/
 
 # Check ArgoCD diff (without applying)
-kubectl apply -f manifests/applications/<app>.yaml
+kubectl diff -f manifests/applications/<app>.yaml
 argocd app diff <app-name> --grpc-web
 ```
 
