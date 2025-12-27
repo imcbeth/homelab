@@ -97,7 +97,7 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 | Service | Namespace | IP Address | Ports | Purpose |
 |---------|-----------|------------|-------|---------|
 | ingress-nginx-controller | ingress-nginx | 10.0.10.10 | 80, 443 | Main ingress controller |
-| pi-hole | pihole | 10.0.0.200 | 53, 80, 443 | DNS/DHCP (pending) |
+| pi-hole | pihole | 10.0.10.11 | 53, 80, 443 | DNS/DHCP (pending) |
 
 ### Ingress Configuration
 
