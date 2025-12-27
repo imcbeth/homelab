@@ -41,7 +41,7 @@ repos:
               rules: {
                 line-length: {max: 200},
                 document-start: disable,
-                truthy: {check-keys: false},
+                truthy: {check-keys: true},
                 indentation: {spaces: 2, indent-sequences: true}
               }
             }
