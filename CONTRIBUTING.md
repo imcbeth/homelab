@@ -33,6 +33,9 @@ brew install kubeconform
 
 # YAML tools
 brew install yamllint
+
+# Markdown linting
+brew install markdownlint-cli
 ```
 
 **Linux:**
@@ -44,6 +47,9 @@ pip install pre-commit
 wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
 tar xf kubeconform-linux-amd64.tar.gz
 sudo mv kubeconform /usr/local/bin/
+
+# Markdown linting (via npm)
+npm install -g markdownlint-cli
 ```
 
 ### 3. Install Pre-commit Hooks
