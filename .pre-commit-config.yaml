@@ -1,0 +1,91 @@
+# Pre-commit hooks for homelab Kubernetes repository
+# See https://pre-commit.com for more information
+# Installation: pip install pre-commit && pre-commit install
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+        exclude: '^secrets/.*'  # Exclude git-crypt encrypted files
+        args: ['--unsafe']  # Allow custom tags in Kubernetes manifests
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: mixed-line-ending
+        name: Check line endings
+        args: ['--fix=lf']
+      - id: detect-private-key
+        name: Detect private keys
+        exclude: '^secrets/.*'  # Exclude git-crypt encrypted files
+
+  # YAML linting with Kubernetes-friendly rules
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        name: Lint YAML files
+        exclude: '^secrets/.*'  # Exclude git-crypt encrypted files
+        args:
+          - '-d'
+          - |
+            extends: default
+            rules:
+              line-length:
+                max: 200
+              document-start: disable
+              truthy:
+                check-keys: true
+              indentation:
+                spaces: 2
+                indent-sequences: true
+
+  # Kubernetes manifest validation using kubeconform
+  - repo: local
+    hooks:
+      - id: kubeconform
+        name: Validate Kubernetes manifests
+        entry: scripts/validate-manifests.sh
+        language: system
+        pass_filenames: false
+        files: '^manifests/.*\.ya?ml$'
+        exclude: '^secrets/.*'
+        verbose: true
+        description: 'Validate Kubernetes manifests against schemas (manifests without available schemas are skipped due to -ignore-missing-schemas)'
+
+  # Secret scanning to prevent accidental commits
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+        name: Detect secrets and credentials
+        exclude: '^secrets/.*'  # Exclude git-crypt encrypted files
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.39.0
+    hooks:
+      - id: markdownlint
+        name: Lint Markdown files
+        args: ['--fix', '--disable', 'MD013', 'MD033']
+        # MD013: Line length
+        # MD033: Inline HTML
+
+  # Check for TODO/FIXME in all commits (warning only)
+  - repo: local
+    hooks:
+      - id: check-todos
+        name: Check for TODO/FIXME markers
+        entry: bash -c 'files=$(git diff --cached --diff-filter=d --name-only); if [ -n "$files" ]; then echo "$files" | xargs grep -nHE "TODO|FIXME" && echo "⚠️  Warning: Found TODO/FIXME markers in staged files"; fi; exit 0'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [commit]
