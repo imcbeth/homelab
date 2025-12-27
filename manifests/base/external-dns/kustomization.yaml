@@ -8,5 +8,9 @@ resources:
   - rbac.yaml
   - secret-cloudflare.yaml
   - secret-rfc2136.yaml
+  - secret-unifi.yaml
   - deployment-cloudflare.yaml
   - deployment-rfc2136.yaml
+  - deployment-unifi.yaml
+  - webhook-unifi-deployment.yaml
+  - webhook-unifi-service.yaml
