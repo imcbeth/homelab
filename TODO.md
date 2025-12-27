@@ -173,7 +173,7 @@
 - [ ] Create operational runbooks for common tasks (pod restarts, rollbacks, etc.)
 - [ ] Document disaster recovery procedures (node failure, control plane failure)
 - [ ] Capacity planning documentation with growth projections
-- [ ] Create network topology diagrams (current: network-info.md is sparse)
+- [ ] Create network topology diagrams to complement the existing network-info.md documentation
 - [ ] Performance baseline documentation
 - [ ] Document on-call procedures and escalation paths
 - [ ] Create k8s-docs-n37 guides for: cert-manager, metallb, ingress-nginx, localstack
