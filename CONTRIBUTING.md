@@ -150,7 +150,7 @@ gh pr create --title "feat: Your feature" --body "Description..."
 
 ### Important Notes
 
-- ⚠️ **Never direct kubectl apply** in production
+- ⚠️ **Never directly kubectl apply** in production
 - ✅ **Always use GitOps** - commit to repo, let ArgoCD sync
 - 🔒 **Secrets** - Encrypted with git-crypt, managed separately
 - 📝 **Document everything** - Update CLAUDE_NOTES.md with session details
