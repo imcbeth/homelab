@@ -161,7 +161,7 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 
 ### DNS Flow
 ```
-Client Query → Pi-hole (10.0.0.200) →
+Client Query → Pi-hole (10.0.10.200) →
   ├─ Internal: Returns 10.0.10.10 (MetalLB)
   ├─ External: Cloudflare public records
   └─ Upstream: Cloudflare 1.1.1.1/1.0.0.1
