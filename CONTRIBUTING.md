@@ -23,18 +23,23 @@ cd homelab
 
 ### 2. Install Development Tools
 
+**REQUIRED for pre-commit hooks:**
+
 **macOS:**
 ```bash
 # Pre-commit framework
 brew install pre-commit
 
-# Kubernetes manifest validation
+# Kubernetes manifest validation (REQUIRED)
 brew install kubeconform
+```
 
-# YAML tools
+**Optional tools:**
+```bash
+# YAML tools (optional - pre-commit includes yamllint)
 brew install yamllint
 
-# Markdown linting (requires Node.js and npm)
+# Markdown linting (optional - pre-commit includes markdownlint)
 npm install -g markdownlint-cli
 ```
 
@@ -43,7 +48,7 @@ npm install -g markdownlint-cli
 # Pre-commit framework
 pip install pre-commit
 
-# Kubeconform
+# Kubernetes manifest validation (REQUIRED)
 wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
 tar xf kubeconform-linux-amd64.tar.gz
 sudo mv kubeconform /usr/local/bin/
@@ -244,7 +249,7 @@ pre-commit autoupdate
 
 ## Troubleshooting
 
-### Kubeconform Fails
+### Kubernetes manifest validation (REQUIRED) Fails
 
 **Problem:** Manifest validation fails
 
