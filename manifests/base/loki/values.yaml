@@ -65,14 +65,16 @@ gateway:
 # Note: Promtail is deployed separately via its own ArgoCD application
 # See manifests/applications/promtail.yaml
 
-# Monitoring (optional)
+# Monitoring - Enable ServiceMonitor for Prometheus metrics collection
 monitoring:
   dashboards:
     enabled: false
   rules:
     enabled: false
   serviceMonitor:
-    enabled: false
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
   selfMonitoring:
     enabled: false
     grafanaAgent:
