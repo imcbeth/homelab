@@ -10,6 +10,50 @@
 
 ## 📋 Recent Updates
 
+### 2025-12-26 (Late Evening): Re-enable Control Plane Component Monitoring
+
+**Completed Work:**
+- ✅ Re-enabled ServiceMonitors for all control plane components
+- ✅ Updated documentation to reflect control plane monitoring changes
+
+**Pull Requests:**
+- **PR #78:** [Merged] Re-enable control plane component monitoring
+- **PR #7 (k8s-docs-n37):** [Ready] Update monitoring documentation
+
+**Background:**
+In the earlier evening session, control plane component monitoring was disabled because these components bound to localhost (127.0.0.1) in the default kubeadm configuration. The user has since updated the kubeadm configuration to bind these components to 0.0.0.0, making them accessible for Prometheus scraping.
+
+**Changes Made:**
+- `kubeControllerManager.enabled`: false → true
+- `kubeEtcd.enabled`: false → true
+- `kubeScheduler.enabled`: false → true
+- `kubeProxy.enabled`: false → true
+
+**Files Modified:**
+- `manifests/base/kube-prometheus-stack/values.yaml`
+  - Re-enabled all four control plane ServiceMonitors
+- `k8s-docs-n37/docs/monitoring/overview.md`
+  - Updated architecture diagram and scrape configuration table
+- `k8s-docs-n37/docs/troubleshooting/monitoring.md`
+  - Added control plane monitoring troubleshooting section
+
+**Current State:**
+- ✅ Control plane ServiceMonitors re-enabled (PR #78 merged)
+- ✅ Documentation updated in k8s-docs-n37 (PR #7 ready for merge)
+- ArgoCD will sync changes within ~3 minutes
+
+**Next Steps (User Action Required):**
+1. ✅ Merge PR #78 (homelab) - Re-enables control plane monitoring
+2. Merge PR #7 (k8s-docs-n37) - Documentation updates
+3. Verify Prometheus targets page shows all four components as UP
+4. Confirm metrics are being scraped successfully from:
+   - kube-controller-manager (https://node-ip:10257/metrics)
+   - etcd (http://node-ip:2381/metrics)
+   - kube-scheduler (https://node-ip:10259/metrics)
+   - kube-proxy (http://node-ip:10249/metrics)
+
+---
+
 ### 2025-12-26 (Evening): Prometheus Monitoring Stack Fixes
 
 **Completed Work:**
