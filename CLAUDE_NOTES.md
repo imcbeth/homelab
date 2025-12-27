@@ -21,7 +21,7 @@
 - ✅ Updated documentation in both repositories
 
 **Pull Requests:**
-- **PR #117-122:** [Merged] Initial external-dns deployment fixes
+- **PRs #117, #118, #119, #120, #121, #122:** [Merged] Initial external-dns deployment fixes
 - **PR #124:** [Merged] Fix: Add EndpointSlice RBAC permissions for external-dns
 - **PR #125:** [Merged] Fix: Correct webhook service port mapping for external-dns
 - **PR #123:** [Merged] docs: Mark external-dns as completed in TODO
@@ -52,7 +52,7 @@ Added EndpointSlice permissions to ClusterRole:
   verbs: ["get", "watch", "list"]
 ```
 
-**Issue 2: Webhook Service Port Mapping Incorrect**
+**Issue 2: Incorrect Webhook Service Port Mapping**
 
 After fixing RBAC, external-dns-unifi still crashed with:
 ```
@@ -86,9 +86,9 @@ But the service was mapping port 8888 to targetPort `health` (which doesn't exis
   targetPort: http-wh  # Correct!
 ```
 
-**Technical Deep-Dive: kashalls UniFi Webhook Provider**
+**Technical Deep-Dive: Kashalls UniFi webhook provider**
 
-After switching from lexfrei to kashalls webhook provider (v0.7.0):
+After switching from lexfrei to Kashalls webhook provider (v0.7.0):
 
 **Architecture:**
 ```
@@ -101,7 +101,7 @@ External-DNS → Webhook HTTP API (port 8888) → UniFi Controller API → DNS R
 ```yaml
 # Deployment (webhook container)
 ports:
-  - name: http          # Health endpoint
+  - name: http          # health endpoint
     containerPort: 8080
   - name: http-wh       # Webhook API
     containerPort: 8888
