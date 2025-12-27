@@ -48,7 +48,7 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 
 ### DNS Server
 - **Primary:** Pi-hole (deployed in Kubernetes)
-- **IP Address:** 10.0.0.200 (MetalLB LoadBalancer, pending deployment)
+- **IP Address:** 10.0.10.20 (MetalLB LoadBalancer, pending deployment)
 - **Upstream:** Cloudflare DNS (1.1.1.1, 1.0.0.1)
 - **Features:** Ad-blocking, DHCP, local DNS overrides
 
