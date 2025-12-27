@@ -1,0 +1,128 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: blackbox-exporter-alerts
+  namespace: default
+  labels:
+    app: blackbox-exporter
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: blackbox_exporter
+    interval: 30s
+    rules:
+    # Endpoint availability alerts
+    - alert: EndpointDown
+      expr: probe_success{job=~"blackbox-.*"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Endpoint {{ $labels.instance }} is down"
+        description: "The endpoint {{ $labels.instance }} has been unreachable for more than 5 minutes.\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+    - alert: EndpointDownWarning
+      expr: probe_success{job=~"blackbox-.*"} == 0
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Endpoint {{ $labels.instance }} is experiencing issues"
+        description: "The endpoint {{ $labels.instance }} has been unreachable for more than 1 minute.\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+    # SSL certificate expiry alerts
+    - alert: SSLCertificateExpiresIn30Days
+      expr: probe_ssl_earliest_cert_expiry{job="blackbox-https"} - time() < 86400 * 30
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "SSL certificate for {{ $labels.instance }} expires in less than 30 days"
+        description: "SSL certificate for {{ $labels.instance }} will expire in {{ $value | humanizeDuration }}.\n  LABELS: {{ $labels }}"
+
+    - alert: SSLCertificateExpiresIn7Days
+      expr: probe_ssl_earliest_cert_expiry{job="blackbox-https"} > 0 and probe_ssl_earliest_cert_expiry{job="blackbox-https"} - time() < 86400 * 7
+      for: 1h
+      labels:
+        severity: critical
+      annotations:
+        summary: "SSL certificate for {{ $labels.instance }} expires in less than 7 days"
+        description: "SSL certificate for {{ $labels.instance }} will expire in {{ $value | humanizeDuration }}. Immediate renewal required!\n  LABELS: {{ $labels }}"
+
+    - alert: SSLCertificateExpired
+      expr: probe_ssl_earliest_cert_expiry{job="blackbox-https"} - time() <= 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "SSL certificate for {{ $labels.instance }} has expired"
+        description: "SSL certificate for {{ $labels.instance }} has expired! Service may be inaccessible.\n  LABELS: {{ $labels }}"
+
+    # HTTP response time alerts
+    - alert: HighHTTPResponseTime
+      expr: probe_http_duration_seconds{job=~"blackbox-http|blackbox-https"} > 5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High HTTP response time for {{ $labels.instance }}"
+        description: "HTTP response time for {{ $labels.instance }} is {{ $value }}s (>5s).\n  LABELS: {{ $labels }}"
+
+    - alert: VeryHighHTTPResponseTime
+      expr: probe_http_duration_seconds{job=~"blackbox-http|blackbox-https"} > 10
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Very high HTTP response time for {{ $labels.instance }}"
+        description: "HTTP response time for {{ $labels.instance }} is {{ $value }}s (>10s). Service may be degraded.\n  LABELS: {{ $labels }}"
+
+    # DNS query alerts
+    - alert: DNSQueryFailed
+      expr: probe_success{job="blackbox-dns"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "DNS query failed for {{ $labels.instance }}"
+        description: "DNS server {{ $labels.instance }} is not responding to queries.\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+    - alert: HighDNSResponseTime
+      expr: probe_success{job="blackbox-dns"} == 1 and probe_dns_lookup_time_seconds > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High DNS response time for {{ $labels.instance }}"
+        description: "DNS response time for {{ $labels.instance }} is {{ $value }}s (>1s).\n  LABELS: {{ $labels }}"
+
+    # ICMP ping alerts
+    - alert: HostUnreachable
+      expr: probe_success{job="blackbox-icmp"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Host {{ $labels.instance }} is unreachable"
+        description: "Host {{ $labels.instance }} is not responding to ICMP pings for more than 5 minutes.\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+    - alert: HighICMPLatency
+      expr: probe_success{job="blackbox-icmp"} == 1 and probe_icmp_duration_seconds > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High ICMP latency to {{ $labels.instance }}"
+        description: "ICMP latency to {{ $labels.instance }} is {{ $value }}s (>100ms).\n  LABELS: {{ $labels }}"
+
+    # SSL/TLS version alerts
+    - alert: TLSVersionTooOld
+      expr: probe_tls_version_info{job="blackbox-https",version="TLS 1.0"} == 1 or probe_tls_version_info{job="blackbox-https",version="TLS 1.1"} == 1
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "{{ $labels.instance }} is using an outdated TLS version"
+        description: "{{ $labels.instance }} is using {{ $labels.version }}, which is deprecated. Upgrade to TLS 1.2 or higher.\n  LABELS: {{ $labels }}"
