@@ -52,7 +52,7 @@ spec:
         description: "SSL certificate for {{ $labels.instance }} will expire in {{ $value | humanizeDuration }}. Immediate renewal required!\n  LABELS: {{ $labels }}"
 
     - alert: SSLCertificateExpired
-      expr: probe_ssl_earliest_cert_expiry{job="blackbox-https"} - time() <= 0
+      expr: probe_ssl_earliest_cert_expiry{job="blackbox-https"} > 0 and probe_ssl_earliest_cert_expiry{job="blackbox-https"} - time() <= 0
       for: 5m
       labels:
         severity: critical
