@@ -1,0 +1,23 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-dns-unifi-webhook
+  namespace: external-dns
+  labels:
+    app.kubernetes.io/name: external-dns-unifi-webhook
+    app.kubernetes.io/component: webhook
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
+  - name: health
+    port: 8888
+    targetPort: health
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: external-dns-unifi-webhook
+    app.kubernetes.io/component: webhook
