@@ -30,10 +30,6 @@ spec:
       - ServerSideApply=true
       - RespectIgnoreDifferences=true
   ignoreDifferences:
-    - group: "*"
-      kind: "*"
-      jsonPointers:
-        - /metadata/creationTimestamp
     - group: "apps"
       kind: "StatefulSet"
       jqPathExpressions:
