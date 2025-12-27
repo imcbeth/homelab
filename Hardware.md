@@ -5,4 +5,8 @@
 - 5 Raspberry Pi Active cooler - https://www.raspberrypi.com/products/active-cooler/
 - 5 NVMe Drive (256G) -  https://www.raspberrypi.com/products/ssd/
 # Networking 
-- POE Switch - https://www.tp-link.com/ca/business-networking/unmanaged-switch/tl-sg1008mp/
+- Tp-Link POE Switch - https://www.tp-link.com/ca/business-networking/unmanaged-switch/tl-sg1008mp/
+Replaced with 
+- USW-Pro-24-POE - https://ca.store.ui.com/ca/en/products/usw-pro-24-poe
+# Gateway
+- Udr7 - https://ca.store.ui.com/ca/en/category/all-cloud-gateways/products/udr7
