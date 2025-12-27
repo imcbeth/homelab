@@ -23,7 +23,7 @@ spec:
         summary: "Endpoint {{ $labels.instance }} is down"
         description: "The endpoint {{ $labels.instance }} has been unreachable for more than 5 minutes.\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
 
-    - alert: EndpointDegraded
+    - alert: EndpointDownWarning
       expr: probe_success{job=~"blackbox-.*"} == 0
       for: 1m
       labels:
