@@ -4,8 +4,8 @@
 # Git-crypt encrypted secrets directory
 secrets/**
 
-# Example secrets in documentation
-**/*.md
+# Example secrets in specific documentation files (safe to exclude)
+docs/**/example-*.md
 
 # Test/example values
 **/values.yaml
