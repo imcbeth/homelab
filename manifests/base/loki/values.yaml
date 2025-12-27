@@ -1,0 +1,134 @@
+# Loki configuration for Raspberry Pi cluster
+# Deployment mode: SingleBinary (monolithic)
+# Storage: 20Gi PVC on Synology iSCSI
+# Retention: 7 days (168h)
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+
+  commonConfig:
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+
+  schemaConfig:
+    configs:
+      - from: 2025-01-01
+        store: tsdb        # Modern index store
+        object_store: filesystem
+        schema: v13        # Latest schema
+        index:
+          prefix: loki_index_
+          period: 24h      # Required for retention
+
+  limits_config:
+    retention_period: 168h  # 7 days
+    max_query_series: 500
+    max_query_parallelism: 32
+
+  compactor:
+    retention_enabled: true
+    compaction_interval: 10m
+    delete_request_store: filesystem
+
+singleBinary:
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
+
+  persistence:
+    enabled: true
+    storageClass: synology-iscsi-retain
+    size: 20Gi
+    accessModes:
+      - ReadWriteOnce
+
+# Backend and read/write/gateway disabled (using singleBinary)
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+gateway:
+  enabled: false
+
+# Promtail configuration
+promtail:
+  enabled: true
+
+  # Resource limits per pod (5 pods total, one per node)
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+  # Use pod network to avoid Calico CNI issues
+  hostNetwork: false
+  hostPID: true
+
+  config:
+    clients:
+      - url: http://loki-gateway.loki.svc.cluster.local/loki/api/v1/push
+
+    snippets:
+      scrapeConfigs: |
+        # Kubernetes pods
+        - job_name: kubernetes-pods
+          kubernetes_sd_configs:
+            - role: pod
+          pipeline_stages:
+            - cri: {}
+          relabel_configs:
+            # Add namespace label
+            - source_labels:
+                - __meta_kubernetes_namespace
+              target_label: namespace
+            # Add pod name label
+            - source_labels:
+                - __meta_kubernetes_pod_name
+              target_label: pod
+            # Add container name label
+            - source_labels:
+                - __meta_kubernetes_pod_container_name
+              target_label: container
+            # Add node name label (useful for Pi cluster debugging)
+            - source_labels:
+                - __meta_kubernetes_pod_node_name
+              target_label: node
+            # Set log path
+            - source_labels:
+                - __meta_kubernetes_pod_uid
+                - __meta_kubernetes_pod_container_name
+              target_label: __path__
+              separator: /
+              replacement: /var/log/pods/*$1/*.log
+
+# Monitoring (optional)
+monitoring:
+  dashboards:
+    enabled: false
+  rules:
+    enabled: false
+  serviceMonitor:
+    enabled: false
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+
+# Test configuration
+test:
+  enabled: false
