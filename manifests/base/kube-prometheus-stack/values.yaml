@@ -623,7 +623,7 @@ kubelet:
     additionalLabels: {}
     targetLabels: []
 kubeControllerManager:
-  enabled: false  # Disabled: binds to localhost in kubeadm, unreachable via node IP
+  enabled: true
   jobNameOverride: ""
   endpoints: []
   service:
@@ -709,7 +709,7 @@ kubeDns:
     additionalLabels: {}
     targetLabels: []
 kubeEtcd:
-  enabled: false  # Disabled: binds to localhost in kubeadm, unreachable via node IP
+  enabled: true
   endpoints: []
   service:
     enabled: true
@@ -742,7 +742,7 @@ kubeEtcd:
     additionalLabels: {}
     targetLabels: []
 kubeScheduler:
-  enabled: false  # Disabled: binds to localhost in kubeadm, unreachable via node IP
+  enabled: true
   jobNameOverride: ""
   endpoints: []
   service:
@@ -773,7 +773,7 @@ kubeScheduler:
     additionalLabels: {}
     targetLabels: []
 kubeProxy:
-  enabled: false  # Disabled: binds to localhost in kubeadm, unreachable via node IP
+  enabled: true
   jobNameOverride: ""
   endpoints: []
   service:
