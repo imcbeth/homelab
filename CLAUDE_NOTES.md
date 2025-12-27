@@ -10,6 +10,168 @@
 
 ## 📋 Recent Updates
 
+### 2025-12-27 (Late Evening): External-DNS Deployment and Troubleshooting
+
+**Completed Work:**
+- ✅ Deployed external-dns with dual provider support (Cloudflare + UniFi webhook)
+- ✅ Fixed missing EndpointSlice RBAC permissions
+- ✅ Fixed webhook service port mapping configuration
+- ✅ Added external-dns annotations to ArgoCD, Grafana, and Localstack ingresses
+- ✅ Verified DNS record creation in both Cloudflare and UniFi
+- ✅ Updated documentation in both repositories
+
+**Pull Requests:**
+- **PR #117-122:** [Merged] Initial external-dns deployment fixes
+- **PR #124:** [Merged] Fix: Add EndpointSlice RBAC permissions for external-dns
+- **PR #125:** [Merged] Fix: Correct webhook service port mapping for external-dns
+- **PR #123:** [Merged] docs: Mark external-dns as completed in TODO
+- **k8s-docs-n37 PR #29:** [Merged] docs: Update external-dns completion status and troubleshooting
+
+**Issue 1: Missing EndpointSlice RBAC Permissions**
+
+After initial deployment, external-dns-unifi pod crashed with:
+```
+level=fatal msg="failed to sync *v1.EndpointSlice: context deadline exceeded with timeout 1m0s"
+```
+
+**Investigation:**
+```bash
+kubectl describe clusterrole external-dns
+# Showed permissions for: endpoints, pods, services, ingresses, nodes
+# Missing: endpointslices (discovery.k8s.io/v1)
+```
+
+**Root Cause:**
+External-DNS v0.20.0 watches EndpointSlice resources (newer Kubernetes API), but the ClusterRole only had permissions for the older Endpoints API.
+
+**Solution (PR #124):**
+Added EndpointSlice permissions to ClusterRole:
+```yaml
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "watch", "list"]
+```
+
+**Issue 2: Webhook Service Port Mapping Incorrect**
+
+After fixing RBAC, external-dns-unifi still crashed with:
+```
+level=fatal msg="failed to connect to webhook: Get \"http://external-dns-unifi-webhook:8888\": dial tcp 10.106.73.112:8888: connect: connection refused"
+```
+
+**Investigation:**
+```bash
+kubectl describe svc -n external-dns external-dns-unifi-webhook
+# Port 8888: targetPort "health" → Endpoints: <empty>
+# Port 8080: targetPort "http" → Endpoints: 192.168.248.237:8080
+```
+
+**Root Cause:**
+Service had incorrect port mappings. The webhook container exposes:
+- Port **8080** named **http** (health endpoint)
+- Port **8888** named **http-wh** (webhook API)
+
+But the service was mapping port 8888 to targetPort `health` (which doesn't exist).
+
+**Solution (PR #125):**
+```yaml
+# Before:
+- name: health
+  port: 8888
+  targetPort: health  # Wrong!
+
+# After:
+- name: http-wh
+  port: 8888
+  targetPort: http-wh  # Correct!
+```
+
+**Technical Deep-Dive: kashalls UniFi Webhook Provider**
+
+After switching from lexfrei to kashalls webhook provider (v0.7.0):
+
+**Architecture:**
+```
+External-DNS → Webhook HTTP API (port 8888) → UniFi Controller API → DNS Records
+                     ↓
+              Health Probes (port 8080)
+```
+
+**Key Configuration:**
+```yaml
+# Deployment (webhook container)
+ports:
+  - name: http          # Health endpoint
+    containerPort: 8080
+  - name: http-wh       # Webhook API
+    containerPort: 8888
+
+# Service
+ports:
+  - name: http
+    port: 8080
+    targetPort: http    # Maps to 8080 (health)
+  - name: http-wh
+    port: 8888
+    targetPort: http-wh # Maps to 8888 (webhook API)
+
+# External-DNS (UniFi provider)
+args:
+  - --provider=webhook
+  - --webhook-provider-url=http://external-dns-unifi-webhook:8888  # Must be 8888!
+```
+
+**Split-Horizon DNS Configuration:**
+
+Successfully deployed dual-provider external-dns:
+
+**Cloudflare Provider (Public DNS):**
+- Domain: k8s.n37.ca
+- Records: A records pointing to public IP
+- Hosts: argocd.k8s.n37.ca, grafana.k8s.n37.ca, localstack.k8s.n37.ca
+- TXT Owner: external-dns-cloudflare
+
+**UniFi Provider (Internal DNS):**
+- Domain: k8s.n37.ca
+- Records: A records pointing to MetalLB IPs (10.0.50.x)
+- Hosts: Same as Cloudflare (split-horizon)
+- TXT Owner: external-dns-unifi
+- Webhook: kashalls/external-dns-unifi-webhook:v0.7.0
+
+**Verification:**
+```bash
+# External (Cloudflare)
+dig @1.1.1.1 argocd.k8s.n37.ca +short
+# Returns: Public IP
+
+# Internal (UniFi)
+dig @10.0.1.1 argocd.k8s.n37.ca +short
+# Returns: 10.0.50.x (MetalLB)
+```
+
+**Current State:**
+- All 3 external-dns pods running healthy ✅
+- DNS records automatically created in both providers ✅
+- Split-horizon DNS working (public + internal) ✅
+- TXT registry tracking ownership ✅
+
+**Next Steps (User Action Required):**
+- Monitor DNS record propagation
+- Test accessing services via DNS names
+- Consider adding more ingresses with external-dns annotations
+
+**Files Modified:**
+- `manifests/base/external-dns/rbac.yaml` - Added EndpointSlice permissions
+- `manifests/base/external-dns/webhook-unifi-service.yaml` - Fixed port mapping
+- `manifests/base/argocd/argo-nginx-ingress.yaml` - Added external-dns annotations
+- `manifests/base/kube-prometheus-stack/values.yaml` - Added external-dns annotations
+- `manifests/base/localstack/localstack-nginx-ingress.yaml` - Added external-dns annotations
+- `TODO.md` - Marked external-dns as completed
+- `k8s-docs-n37/docs/todo.md` - Updated completion status
+- `k8s-docs-n37/docs/applications/external-dns.md` - Updated provider and added troubleshooting
+
+---
+
 ### 2025-12-27 (Evening): Loki + Promtail Production Hardening and Fixes
 
 **Completed Work:**
