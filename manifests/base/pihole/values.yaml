@@ -56,8 +56,8 @@ serviceWeb:
   loadBalancerIPv6: ""
   loadBalancerClass: ""
   annotations: {
-      metallb.universe.tf/allow-shared-ip: pihole-svc
-    }
+    metallb.universe.tf/allow-shared-ip: pihole-svc
+  }
   extraLabels:
     {}
 
@@ -75,7 +75,7 @@ ingress:
   tls:
     - secretName: pihole-k8s-n37-ca-nginx-tls
       hosts:
-       - pihole.k8s.n37.ca
+        - pihole.k8s.n37.ca
 
 probes:
   liveness:

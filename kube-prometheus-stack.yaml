@@ -254,13 +254,13 @@ alertmanager:
       repeat_interval: 12h
       receiver: 'null'
       routes:
-      - receiver: 'null'
-        matchers:
-          - alertname = "Watchdog"
+        - receiver: 'null'
+          matchers:
+            - alertname = "Watchdog"
     receivers:
-    - name: 'null'
+      - name: 'null'
     templates:
-    - '/etc/alertmanager/config/*.tmpl'
+      - '/etc/alertmanager/config/*.tmpl'
   stringConfig: ""
   tplConfig: false
   templateFiles: {}
@@ -995,14 +995,14 @@ prometheusOperator:
         readOnlyRootFilesystem: true
         capabilities:
           drop:
-          - ALL
+            - ALL
     patchWebhookJob:
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true
         capabilities:
           drop:
-          - ALL
+            - ALL
     certManager:
       enabled: false
       rootCert:
@@ -1091,7 +1091,7 @@ prometheusOperator:
     readOnlyRootFilesystem: true
     capabilities:
       drop:
-      - ALL
+        - ALL
   verticalPodAutoscaler:
     enabled: false
     controlledResources: []
@@ -1379,7 +1379,7 @@ prometheus:
     additionalScrapeConfigs:
       - job_name: 'unpoller'
         static_configs:
-        - targets: ['unifi-poller.unipoller:9130']
+          - targets: ['unifi-poller.unipoller:9130']
         scrape_interval: 20s
         scrape_timeout: 10s
     additionalScrapeConfigsSecret: {}

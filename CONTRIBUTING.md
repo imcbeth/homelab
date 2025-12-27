@@ -23,18 +23,23 @@ cd homelab
 
 ### 2. Install Development Tools
 
+**REQUIRED for pre-commit hooks:**
+
 **macOS:**
 ```bash
 # Pre-commit framework
 brew install pre-commit
 
-# Kubernetes manifest validation
+# Kubernetes manifest validation (REQUIRED)
 brew install kubeconform
+```
 
-# YAML tools
+**Optional tools:**
+```bash
+# YAML tools (optional - pre-commit includes yamllint)
 brew install yamllint
 
-# Markdown linting (requires Node.js and npm)
+# Markdown linting (optional - pre-commit includes markdownlint)
 npm install -g markdownlint-cli
 ```
 
@@ -43,7 +48,7 @@ npm install -g markdownlint-cli
 # Pre-commit framework
 pip install pre-commit
 
-# Kubeconform
+# Kubernetes manifest validation (REQUIRED)
 wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
 tar xf kubeconform-linux-amd64.tar.gz
 sudo mv kubeconform /usr/local/bin/
@@ -244,20 +249,30 @@ pre-commit autoupdate
 
 ## Troubleshooting
 
-### Kubeconform Fails
+### Kubernetes manifest validation (REQUIRED) Fails
 
 **Problem:** Manifest validation fails
 
 **Solution:**
 ```bash
-# Run manually to see the same validation as the pre-commit hook
-kubeconform -summary -output json -ignore-missing-schemas manifests/base/<app>/*.yaml
+# Run the validation script manually (same as pre-commit hook)
+./scripts/validate-manifests.sh
+
+# Or run kubeconform directly on a specific file
+kubeconform -summary -output json -ignore-missing-schemas manifests/base/<app>/<file>.yaml
 
 # Common issues:
 # - Invalid API version: Check Kubernetes version compatibility
 # - Missing required fields: Add required spec fields
 # - Invalid resource type: Verify Kind is correct
+# - "missing 'kind' key": File is not a K8s manifest (e.g., values.yaml, config files)
 ```
+
+**Note:** The validation script automatically excludes:
+- `values.yaml` files (Helm chart values)
+- `*-config.yaml` files (configuration data)
+- Files in `*/configs/*` directories
+- Files in `secrets/*` directory (git-crypt encrypted)
 
 ### YAML Linting Fails
 

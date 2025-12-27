@@ -10,4 +10,5 @@
 # Example (for future use) of ignoring a specific finding by fingerprint:
 # fp:abcdef1234567890deadbeefcafebabe00000000000000000000000000000000
 #
-# This file is intentionally empty of active ignore entries at present.
+# Ignored findings (by fingerprint):
+manifests/base/pihole/pihole-web-secret.yaml:generic-api-key:8

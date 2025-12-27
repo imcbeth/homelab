@@ -35,14 +35,14 @@ spec:
             cpu: 200m
             memory: 512Mi
         env:
-          - name: UP_UNIFI_CONTROLLER_0_PASS
-            valueFrom:
-              secretKeyRef:
-                name: unipoller-secret
-                key: password
+        - name: UP_UNIFI_CONTROLLER_0_PASS
+          valueFrom:
+            secretKeyRef:
+              name: unipoller-secret
+              key: password
         envFrom:
-          - configMapRef:
-              name: uni-poller-config
+        - configMapRef:
+            name: uni-poller-config
       restartPolicy: Always
 ---
 apiVersion: v1

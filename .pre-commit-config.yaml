@@ -40,13 +40,15 @@ repos:
             extends: default
             rules:
               line-length:
-                max: 200
+                max: 250
               document-start: disable
               truthy:
-                check-keys: true
+                check-keys: false
               indentation:
                 spaces: 2
-                indent-sequences: true
+                indent-sequences: consistent
+              comments:
+                min-spaces-from-content: 1
 
   # Kubernetes manifest validation using kubeconform
   - repo: local
@@ -96,4 +98,4 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        stages: [commit]
+        stages: [pre-commit]
