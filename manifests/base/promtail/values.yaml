@@ -73,8 +73,11 @@ serviceMonitor:
   labels:
     release: kube-prometheus-stack
 
-# Tolerations to run on all nodes
-tolerations: []
+# Tolerations to run on all nodes including control-plane
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
 
 # Node selector (run on all nodes)
 nodeSelector: {}
