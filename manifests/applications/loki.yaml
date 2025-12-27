@@ -28,6 +28,7 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
   ignoreDifferences:
     - group: "*"
       kind: "*"
@@ -35,7 +36,7 @@ spec:
         - /metadata/creationTimestamp
     - group: "apps"
       kind: "StatefulSet"
-      jsonPointers:
-        - /spec/volumeClaimTemplates/0/metadata/creationTimestamp
-        - /spec/volumeClaimTemplates/0/status
-        - /status
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates[]?.status
+        - .spec.volumeClaimTemplates[]?.metadata.creationTimestamp
+        - .status

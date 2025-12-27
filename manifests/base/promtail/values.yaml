@@ -67,9 +67,11 @@ config:
             separator: /
             replacement: /var/log/pods/*$1/*.log
 
-# ServiceMonitor for Prometheus (optional)
+# ServiceMonitor for Prometheus - Enable metrics collection
 serviceMonitor:
-  enabled: false
+  enabled: true
+  labels:
+    release: kube-prometheus-stack
 
 # Tolerations to run on all nodes
 tolerations: []
