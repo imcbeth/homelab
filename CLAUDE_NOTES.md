@@ -154,11 +154,20 @@ dig @10.0.1.1 argocd.k8s.n37.ca +short
 - DNS records automatically created in both providers ✅
 - Split-horizon DNS working (public + internal) ✅
 - TXT registry tracking ownership ✅
+- User confirmed: "I see all the records now" ✅
 
-**Next Steps (User Action Required):**
-- Monitor DNS record propagation
-- Test accessing services via DNS names
-- Consider adding more ingresses with external-dns annotations
+**What Works:**
+- Automatic DNS record creation for any Ingress with `external-dns.alpha.kubernetes.io/hostname` annotation
+- Cloudflare: Public A records (argocd.k8s.n37.ca, grafana.k8s.n37.ca, localstack.k8s.n37.ca)
+- UniFi: Internal A records pointing to MetalLB IPs (same hostnames)
+- TXT records for ownership tracking (prevents conflicts)
+
+**For Next Session:**
+- External-DNS is fully operational and requires no further action
+- Check TODO.md (homelab and k8s-docs-n37) for next priorities:
+  - Phase 1: Backup strategy (Velero), Enhanced alerting, Blackbox exporter
+  - Phase 2: Security scanning (Trivy), Secrets management
+- All documentation PRs merged except PR #126 (this session's notes)
 
 **Files Modified:**
 - `manifests/base/external-dns/rbac.yaml` - Added EndpointSlice permissions
