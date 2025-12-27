@@ -233,8 +233,8 @@ pre-commit autoupdate
 
 **Solution:**
 ```bash
-# Run manually to see detailed error
-kubeconform -summary -verbose manifests/base/<app>/*.yaml
+# Run manually to see the same validation as the pre-commit hook
+kubeconform -summary -output json -ignore-missing-schemas manifests/base/<app>/*.yaml
 
 # Common issues:
 # - Invalid API version: Check Kubernetes version compatibility
