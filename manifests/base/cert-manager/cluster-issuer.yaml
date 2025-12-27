@@ -11,7 +11,7 @@ spec:
     solvers:
       - dns01:
           cloudflare:
-            email: imcbeth1980@gmail.com 
+            email: imcbeth1980@gmail.com
             apiTokenSecretRef:
               name: cloudflare-api-token-secret
               key: api-token
@@ -31,7 +31,7 @@ spec:
     solvers:
       - dns01:
           cloudflare:
-            email: imcbeth1980@gmail.com 
+            email: imcbeth1980@gmail.com
             apiTokenSecretRef:
               name: cloudflare-api-token-secret
               key: api-token

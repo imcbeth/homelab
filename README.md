@@ -44,4 +44,3 @@ Containerized applications:
 ### Network Monitoring
 - **UniFi Poller**: Collects metrics from UniFi network infrastructure
 - **Prometheus Integration**: Scrapes UniFi metrics for network observability
-
