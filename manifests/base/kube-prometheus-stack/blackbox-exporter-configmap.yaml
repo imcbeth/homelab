@@ -71,5 +71,5 @@ data:
         timeout: 5s
         dns:
           preferred_ip_protocol: "ip4"
-          query_name: "kubernetes.default.svc.cluster.local"
+          query_name: "google.com"
           query_type: "A"
