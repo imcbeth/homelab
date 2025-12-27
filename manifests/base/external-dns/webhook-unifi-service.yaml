@@ -14,9 +14,9 @@ spec:
     port: 8080
     targetPort: http
     protocol: TCP
-  - name: health
+  - name: http-wh
     port: 8888
-    targetPort: health
+    targetPort: http-wh
     protocol: TCP
   selector:
     app.kubernetes.io/name: external-dns-unifi-webhook
