@@ -89,7 +89,7 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 - **IP Pool Name:** first-pool
 - **Auto-assign:** Enabled
 - **Status:**
-  - Assigned IPv4: 1
+  - Assigned IPv4: 1 (only ingress-nginx-controller; pi-hole LoadBalancer is still pending and not yet assigned from this pool)
   - Available IPv4: 89
 
 #### Allocated LoadBalancer IPs
