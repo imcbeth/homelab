@@ -5,10 +5,7 @@
 secrets/**
 
 # Example secrets in documentation
-**/*.md:*example*
-**/*.md:*REPLACE_ME*
-**/*.md:*your-token-here*
+**/*.md
 
 # Test/example values
-**/values.yaml:*changeme*
-**/values.yaml:*example.com*
+**/values.yaml
