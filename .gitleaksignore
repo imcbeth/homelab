@@ -2,7 +2,7 @@
 # These patterns are excluded from secret scanning
 
 # Git-crypt encrypted secrets directory
-secrets/**
+secrets/
 
 # Example secrets in specific documentation files (safe to exclude)
 docs/**/example-*.md

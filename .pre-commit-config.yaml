@@ -52,7 +52,7 @@ repos:
     hooks:
       - id: kubeconform
         name: Validate Kubernetes manifests
-        entry: bash -c 'files=(); while IFS= read -r -d "" file; do files+=("$file"); done < <(find manifests -type f \( -name "*.yaml" -o -name "*.yml" \) ! -path "*/secrets/*" -print0 || true); if ((${#files[@]})); then kubeconform -summary -output json -ignore-missing-schemas "${files[@]}"; fi'
+        entry: scripts/validate-manifests.sh
         language: system
         pass_filenames: false
         files: '^manifests/.*\.ya?ml$'
