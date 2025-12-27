@@ -1479,7 +1479,7 @@ prometheus:
           module: [dns_query]
         static_configs:
           - targets:
-              - 10.0.0.200:53  # UniFi DNS (CyberSecure Enhanced)
+              - 10.0.1.1:53  # UniFi DNS (CyberSecure Enhanced)
               - 1.1.1.1:53  # Cloudflare DNS
               - 8.8.8.8:53  # Google DNS
         relabel_configs:
