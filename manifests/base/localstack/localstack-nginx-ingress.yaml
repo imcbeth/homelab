@@ -6,6 +6,8 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod # Or your chosen issuer
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP" # LocalStack uses HTTP internally
+    external-dns.alpha.kubernetes.io/hostname: localstack.k8s.n37.ca
+    external-dns.alpha.kubernetes.io/ttl: "300"
 spec:
   ingressClassName: nginx
   tls:
