@@ -10,8 +10,16 @@
 - **Control Plane Monitoring** - Re-enabled kube-scheduler and kube-controller-manager monitoring
 - **ServiceMonitor Enablement** - Enabled metrics collection for Loki and Promtail
 
+### DNS & Service Discovery
+- **External-DNS Deployment** - Dual provider setup (Cloudflare + UniFi webhook) for split-horizon DNS (2025-12-27)
+  - Cloudflare provider for public DNS records
+  - kashalls/external-dns-unifi-webhook v0.7.0 for internal DNS
+  - Automatic DNS record creation for Ingresses (argocd.k8s.n37.ca, grafana.k8s.n37.ca, localstack.k8s.n37.ca)
+  - TXT registry for ownership tracking
+
 ### Documentation
 - **Comprehensive Docs Site** - k8s-docs-n37 Docusaurus site with application guides
+- **External-DNS Guide** - Complete documentation with dual provider setup and troubleshooting
 - **Loki Application Guide** - Complete documentation for Loki + Promtail deployment
 - **SNMP Exporter Guide** - Synology monitoring documentation
 - **Troubleshooting Guides** - Monitoring stack and common issues documented
@@ -20,19 +28,7 @@
 
 ## 🎯 **High Priority**
 
-### 1. **External-DNS Deployment**
-> **Status:** Manifest exists but not deployed to cluster
-> **Blocker:** Needs UniFi RFC2136 configuration
-
-- [ ] Complete UniFi UDR7 RFC2136 setup (TSIG key generation)
-- [ ] Apply external-dns ArgoCD Application to cluster
-- [ ] Verify Cloudflare provider creating DNS records
-- [ ] Verify UniFi RFC2136 provider creating internal DNS
-- [ ] Test automatic DNS creation for new Ingresses
-
-**Note:** See CLAUDE_NOTES.md 2025-12-26 Afternoon session for deployment details.
-
-### 2. **Blackbox Exporter**
+### 1. **Blackbox Exporter**
 - [ ] Deploy blackbox exporter for endpoint monitoring
 - [ ] Monitor external services availability (DNS, HTTP/HTTPS)
 - [ ] SSL certificate expiry monitoring for k8s.n37.ca domain
@@ -40,7 +36,7 @@
 - [ ] Add alerts for service downtime
 - [ ] Monitor Synology NAS web interface availability
 
-### 3. **Enhanced Alerting**
+### 2. **Enhanced Alerting**
 - [ ] Configure AlertManager webhook to Discord/Slack/Telegram
 - [ ] Implement tiered alerting (warning → critical)
 - [ ] Set up predictive alerts for disk space (Prometheus, Loki, Synology)
@@ -48,7 +44,7 @@
 - [ ] Create runbooks for common alert scenarios
 - [ ] Test alert routing and escalation
 
-### 4. **Backup Strategy** ⭐ Critical
+### 3. **Backup Strategy** ⭐ Critical
 - [ ] **Velero** - Deploy for Kubernetes cluster backup to Synology
 - [ ] **Restic** or **Kopia** - Application data backup
 - [ ] Backup critical PVCs (Prometheus 50Gi, Grafana 5Gi, Loki 20Gi)
@@ -61,7 +57,7 @@
 
 ## 🔍 **Monitoring & Observability Enhancements**
 
-### 5. **Custom Dashboards**
+### 4. **Custom Dashboards**
 - [ ] Pi cluster temperature monitoring dashboard (per-node CPU temps)
 - [ ] Node resource utilization dashboard (CPU, memory, disk per node)
 - [ ] Network utilization by VLAN/segment
@@ -70,12 +66,12 @@
 - [ ] Application performance monitoring (APM) dashboard
 - [ ] Create unified "cluster health" dashboard
 
-### 6. **Metrics Server Deployment**
+### 5. **Metrics Server Deployment**
 - [ ] Deploy metrics-server for kubectl top commands
 - [ ] Enable Horizontal Pod Autoscaling (HPA) capabilities
 - [ ] Configure for resource-constrained Pi environment
 
-### 7. **Log-Based Alerting**
+### 6. **Log-Based Alerting**
 - [ ] Set up Loki alerting rules for error patterns
 - [ ] Alert on CrashLoopBackOff events
 - [ ] Alert on OOMKilled events
@@ -86,7 +82,7 @@
 
 ## 🛡️ **Security & Compliance**
 
-### 8. **Security Scanning & Runtime Protection**
+### 7. **Security Scanning & Runtime Protection**
 - [ ] **Trivy Operator** - Container vulnerability scanning
 - [ ] **Falco** - Runtime security monitoring and threat detection
 - [ ] **OPA Gatekeeper** - Policy enforcement and admission control
@@ -94,7 +90,7 @@
 - [ ] Compliance reporting and alerting
 - [ ] Scan existing images for vulnerabilities
 
-### 9. **Secrets Management**
+### 8. **Secrets Management**
 - [ ] Evaluate **External Secrets Operator** vs **Sealed Secrets**
 - [ ] Deploy chosen secrets management solution
 - [ ] Migrate existing git-crypt secrets to managed solution
@@ -102,7 +98,7 @@
 - [ ] Document secrets management procedures
 - [ ] Integrate with ArgoCD for automated secret sync
 
-### 10. **Network Policies**
+### 9. **Network Policies**
 - [ ] Define NetworkPolicies for namespace isolation
 - [ ] Implement ingress/egress rules for sensitive workloads
 - [ ] Document network segmentation strategy
@@ -112,7 +108,7 @@
 
 ## 🚀 **Platform Enhancements**
 
-### 11. **Service Mesh Evaluation**
+### 10. **Service Mesh Evaluation**
 - [ ] Research lightweight service mesh options for Pi cluster
 - [ ] Evaluate **Linkerd** (lightweight, Pi-friendly)
 - [ ] Evaluate **Istio** (full-featured but resource-intensive)
@@ -120,7 +116,7 @@
 - [ ] Performance impact analysis on Pi 5 cluster
 - [ ] Document decision and implementation plan
 
-### 12. **Ingress Enhancements**
+### 11. **Ingress Enhancements**
 - [ ] Document current nginx-ingress configuration
 - [ ] Implement rate limiting for public endpoints
 - [ ] Add ModSecurity WAF rules
@@ -131,14 +127,14 @@
 
 ## 🏗️ **Infrastructure & DevOps**
 
-### 13. **GitOps Enhancements**
+### 12. **GitOps Enhancements**
 - [ ] **Renovate** - Automated dependency updates for Helm charts
 - [ ] Pre-commit hooks for Kubernetes manifest validation (kubeval, kustomize)
 - [ ] Automated testing pipeline for infrastructure changes
 - [ ] Expand GitOps workflow documentation
 - [ ] Consider multi-cluster ArgoCD setup for dev/staging
 
-### 14. **Development & CI/CD Tools**
+### 13. **Development & CI/CD Tools**
 - [ ] Evaluate **Gitea** vs **GitLab** for self-hosted git
 - [ ] **Harbor** - Container registry with vulnerability scanning
 - [ ] **Tekton** or **Argo Workflows** - CI/CD pipeline automation
@@ -150,14 +146,14 @@
 
 ## 🌐 **Network & Access Management**
 
-### 15. **CoreDNS Customization**
+### 14. **CoreDNS Customization**
 - [ ] Document current CoreDNS configuration
 - [ ] Custom DNS records for internal services
 - [ ] DNS-based service discovery patterns
 - [ ] DNS monitoring and troubleshooting tools
 - [ ] Consider DNS caching optimizations
 
-### 16. **VPN & Remote Access**
+### 15. **VPN & Remote Access**
 - [ ] Evaluate **Tailscale** vs **WireGuard** for cluster access
 - [ ] Deploy chosen VPN solution
 - [ ] **oauth2-proxy** - Single Sign-On (SSO) integration
@@ -169,7 +165,7 @@
 
 ## 🔧 **Operational Improvements**
 
-### 17. **Documentation Enhancements**
+### 16. **Documentation Enhancements**
 - [ ] Create operational runbooks for common tasks (pod restarts, rollbacks, etc.)
 - [ ] Document disaster recovery procedures (node failure, control plane failure)
 - [ ] Capacity planning documentation with growth projections
@@ -178,7 +174,7 @@
 - [ ] Document on-call procedures and escalation paths
 - [ ] Create k8s-docs-n37 guides for: cert-manager, metallb, ingress-nginx, localstack
 
-### 18. **Testing & Validation**
+### 17. **Testing & Validation**
 - [ ] Chaos engineering with **Litmus** (lighter than Chaos Monkey)
 - [ ] Load testing framework for applications
 - [ ] Backup and restore testing automation (monthly validation)
@@ -186,7 +182,7 @@
 - [ ] Performance regression testing
 - [ ] Test node drain and pod eviction scenarios
 
-### 19. **Resource Optimization**
+### 18. **Resource Optimization**
 - [ ] Audit resource requests/limits across all workloads
 - [ ] Identify over-provisioned pods
 - [ ] Implement pod resource quotas per namespace
@@ -198,14 +194,14 @@
 
 ## 🌟 **Nice to Have**
 
-### 20. **Pi Cluster Specific Monitoring**
+### 19. **Pi Cluster Specific Monitoring**
 - [ ] Power consumption tracking (requires PoE monitoring or UPS integration)
 - [ ] Track PoE power draw per node
 - [ ] NVMe thermal throttling detection
 - [ ] Track undervoltage events
 - [ ] ARM64-specific performance optimizations
 
-### 21. **Application Deployments**
+### 20. **Application Deployments**
 - [ ] Home Assistant integration
 - [ ] Private container registry (Harbor or similar)
 - [ ] Internal wiki or knowledge base
@@ -219,10 +215,10 @@
 Items are organized by priority, not by timeline. Focus on:
 
 ### **Phase 1: Foundation & Reliability**
-1. External-DNS deployment (unblock pending work)
-2. Backup strategy (Velero + critical PVC backups)
-3. Enhanced alerting (AlertManager notifications)
-4. Metrics server deployment
+1. Backup strategy (Velero + critical PVC backups)
+2. Enhanced alerting (AlertManager notifications)
+3. Metrics server deployment
+4. Blackbox exporter for endpoint monitoring
 
 ### **Phase 2: Security & Observability**
 1. Security scanning (Trivy Operator)
