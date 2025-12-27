@@ -66,6 +66,7 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 | node03 | 10.0.10.213 | - | Worker | - |
 | node04 | 10.0.10.220 | - | Worker | - |
 
+**Note:** MAC Address and PoE Port values marked as `-` are not yet documented and will be updated when these details are recorded for troubleshooting and physical port mapping.
 **Note:** All nodes are Raspberry Pi 5 (16GB) running Ubuntu 24.04.3 LTS with Kubernetes v1.35.0
 
 ### Kubernetes Networking
