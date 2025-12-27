@@ -335,7 +335,7 @@ resources:
 
 ```bash
 # Validate manifests
-kubeconform -summary manifests/base/<app>/*.yaml
+kubeconform -summary -output json -ignore-missing-schemas manifests/base/<app>/*.yaml
 
 # Test Helm template
 helm template test <chart> -f manifests/base/<app>/values.yaml
