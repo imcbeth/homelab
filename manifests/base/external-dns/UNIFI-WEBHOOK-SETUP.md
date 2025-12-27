@@ -105,7 +105,7 @@ git-crypt unlock
 
 ### 2. External-DNS
 
-- **Image**: `registry.k8s.io/external-dns/external-dns:v0.15.0`
+- **Image**: `registry.k8s.io/external-dns/external-dns:v0.20.0`
 - **Provider**: webhook
 - **Webhook URL**: `http://external-dns-unifi-webhook:8080`
 - **Sources**: Ingress, Service (LoadBalancer)

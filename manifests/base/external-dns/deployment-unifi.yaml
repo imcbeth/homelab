@@ -24,7 +24,7 @@ spec:
       serviceAccountName: external-dns-unifi
       containers:
       - name: external-dns
-        image: registry.k8s.io/external-dns/external-dns:v0.15.0
+        image: registry.k8s.io/external-dns/external-dns:v0.20.0
         args:
         # Webhook provider configuration
         - --provider=webhook
