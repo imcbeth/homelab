@@ -91,7 +91,7 @@ git checkout -b docs/update-readme
 # Validate with kubeconform
 kubeconform -summary manifests/base/<app>/
 
-# Check YAML syntax
+# (Optional) Manually check YAML syntax outside the pre-commit workflow
 yamllint manifests/
 
 # Dry-run with kubectl (requires cluster access)
