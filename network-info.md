@@ -36,7 +36,8 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 - **Management:** UniFi Network Application
 - **Features:**
   - VLAN routing between subnets
-  - DNS forwarding to Pi-hole
+  - DNS forwarding to Cloudflare (1.1.1.1, 1.0.0.1)
+  - CyberSecure Enhanced by Proofpoint (IDS, ad-blocking, threat prevention)
   - RFC2136 support for dynamic DNS (to be configured)
   - DHCP server for all VLANs
 
@@ -46,11 +47,15 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 - **Power:** Powers all 5 Raspberry Pi nodes via PoE
 - **Previous:** TP-Link TL-SG1008MP (replaced December 2025)
 
-### DNS Server
-- **Primary:** Pi-hole (deployed in Kubernetes)
-- **IP Address:** 10.0.10.20 (MetalLB LoadBalancer, pending deployment)
-- **Upstream:** Cloudflare DNS (1.1.1.1, 1.0.0.1)
-- **Features:** Ad-blocking, DHCP, local DNS overrides
+### DNS & Security
+- **Primary DNS:** Cloudflare (1.1.1.1, 1.0.0.1)
+- **Security Services:** UniFi CyberSecure Enhanced by Proofpoint
+  - Intrusion Detection System (IDS)
+  - Ad-blocking and malware prevention
+  - Threat intelligence and reputation filtering
+  - Content filtering
+- **Status:** Integrated into UniFi OS, active across all VLANs
+- **Previous Solution:** Pi-hole (deprecated, migrated to CyberSecure Enhanced)
 
 ---
 
@@ -90,7 +95,7 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 - **IP Pool Name:** first-pool
 - **Auto-assign:** Enabled
 - **Status:**
-  - Assigned IPv4: 1 (only ingress-nginx-controller; pi-hole LoadBalancer is still pending and not yet assigned from this pool)
+  - Assigned IPv4: 1 (ingress-nginx-controller)
   - Available IPv4: 89
 
 #### Allocated LoadBalancer IPs
@@ -98,7 +103,6 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 | Service | Namespace | IP Address | Ports | Purpose |
 |---------|-----------|------------|-------|---------|
 | ingress-nginx-controller | ingress-nginx | 10.0.10.10 | 80, 443 | Main ingress controller |
-| pi-hole | pihole | 10.0.10.11 | 53, 80, 443 | DNS/DHCP (pending) |
 
 ### Ingress Configuration
 
@@ -145,7 +149,7 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 - **Service:** CoreDNS
 - **ClusterIP:** 10.96.0.10
 - **Zone:** cluster.local
-- **Upstream:** Host DNS (10.0.1.1 → Pi-hole)
+- **Upstream:** Host DNS (10.0.1.1 → Cloudflare)
 
 ### External DNS (Planned)
 
@@ -161,9 +165,9 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 
 ### DNS Flow
 ```
-Client Query → Pi-hole (10.0.10.200) →
-  ├─ Internal: Returns 10.0.10.10 (MetalLB)
-  ├─ External: Cloudflare public records
+Client Query → UniFi Gateway (10.0.1.1) →
+  ├─ CyberSecure Enhanced: Filters threats/ads
+  ├─ Internal: Local DNS overrides
   └─ Upstream: Cloudflare 1.1.1.1/1.0.0.1
 ```
 
@@ -305,7 +309,6 @@ kubectl get endpoints <service-name> -n <namespace>
 
 ## Future Enhancements
 
-- [ ] Deploy Pi-hole as primary DNS (LoadBalancer IP 10.0.0.200)
 - [ ] Configure External-DNS for automatic DNS record creation
 - [ ] Implement NetworkPolicies for namespace isolation
 - [ ] Set up VPN for secure remote cluster access (Tailscale or WireGuard)

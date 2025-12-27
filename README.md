@@ -7,7 +7,7 @@ Outline of setup / repo framework / bits of helpful code for my k8s cluster
   - Added iSCSI storage class configuration: `synology-iscsi-retain`
   - Integrated with Synology NAS at `10.0.1.204` for block storage
   - Configured retention policies for persistent volume claims
-  - Storage now used for Pi-hole data persistence and Prometheus monitoring stack
+  - Storage now used for Prometheus monitoring stack and application data
 
 ### Network Migration to UniFi
 - **UniFi Network Migration**: Migrated infrastructure monitoring to UniFi network stack
@@ -38,7 +38,6 @@ Containerized applications:
 
 ### Storage Configuration
 - **Synology CSI**: Provides persistent storage via iSCSI from Synology NAS
-- **Pi-hole**: Now uses persistent volume claims for data retention
 - **Prometheus**: Configured with 50Gi persistent storage for metrics retention
 
 ### Network Monitoring
