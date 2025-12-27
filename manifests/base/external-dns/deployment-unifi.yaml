@@ -33,7 +33,7 @@ spec:
         args:
         # Webhook provider configuration
         - --provider=webhook
-        - --webhook-provider-url=http://external-dns-unifi-webhook:8080
+        - --webhook-provider-url=http://external-dns-unifi-webhook:8888
 
         # Source configuration - watch both Ingress and LoadBalancer services
         - --source=ingress
