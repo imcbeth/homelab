@@ -52,7 +52,7 @@ spec:
         - --interval=1m
 
         # Cloudflare-specific settings
-        - --cloudflare-proxied=false  # Don't proxy through Cloudflare (direct to MetalLB IPs)
+        # Note: cloudflare-proxied defaults to false (direct to MetalLB IPs, not proxied)
 
         env:
         - name: CF_API_TOKEN
