@@ -62,59 +62,8 @@ write:
 gateway:
   enabled: false
 
-# Promtail configuration
-promtail:
-  enabled: true
-
-  # Resource limits per pod (5 pods total, one per node)
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      cpu: 100m
-      memory: 128Mi
-
-  # Use pod network to avoid Calico CNI issues
-  hostNetwork: false
-  hostPID: true
-
-  config:
-    clients:
-      - url: http://loki-gateway.loki.svc.cluster.local/loki/api/v1/push
-
-    snippets:
-      scrapeConfigs: |
-        # Kubernetes pods
-        - job_name: kubernetes-pods
-          kubernetes_sd_configs:
-            - role: pod
-          pipeline_stages:
-            - cri: {}
-          relabel_configs:
-            # Add namespace label
-            - source_labels:
-                - __meta_kubernetes_namespace
-              target_label: namespace
-            # Add pod name label
-            - source_labels:
-                - __meta_kubernetes_pod_name
-              target_label: pod
-            # Add container name label
-            - source_labels:
-                - __meta_kubernetes_pod_container_name
-              target_label: container
-            # Add node name label (useful for Pi cluster debugging)
-            - source_labels:
-                - __meta_kubernetes_pod_node_name
-              target_label: node
-            # Set log path
-            - source_labels:
-                - __meta_kubernetes_pod_uid
-                - __meta_kubernetes_pod_container_name
-              target_label: __path__
-              separator: /
-              replacement: /var/log/pods/*$1/*.log
+# Note: Promtail is deployed separately via its own ArgoCD application
+# See manifests/applications/promtail.yaml
 
 # Monitoring (optional)
 monitoring:
