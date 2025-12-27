@@ -1432,6 +1432,87 @@ prometheus:
             replacement: snmp-exporter:9116
         scrape_interval: 60s
         scrape_timeout: 30s
+
+      # Blackbox exporter - HTTP/HTTPS endpoint monitoring
+      - job_name: 'blackbox-http'
+        metrics_path: /probe
+        params:
+          module: [http_2xx]
+        static_configs:
+          - targets:
+              - http://pihole.pihole:80  # Pi-hole web interface
+              - http://argocd-server.argocd:80  # ArgoCD (HTTP redirect)
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter:9115
+        scrape_interval: 30s
+        scrape_timeout: 10s
+
+      # Blackbox exporter - HTTPS with cert expiry monitoring
+      - job_name: 'blackbox-https'
+        metrics_path: /probe
+        params:
+          module: [https_cert_expiry]
+        static_configs:
+          - targets:
+              - https://argocd.k8s.n37.ca  # ArgoCD external
+              - https://grafana.k8s.n37.ca  # Grafana external
+              - https://pihole.k8s.n37.ca  # Pi-hole external
+              - https://google.com  # External connectivity test
+              - https://cloudflare.com  # External connectivity test
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter:9115
+        scrape_interval: 60s
+        scrape_timeout: 15s
+
+      # Blackbox exporter - DNS query monitoring
+      - job_name: 'blackbox-dns'
+        metrics_path: /probe
+        params:
+          module: [dns_query]
+        static_configs:
+          - targets:
+              - 10.0.0.200:53  # Pi-hole DNS
+              - 1.1.1.1:53  # Cloudflare DNS
+              - 8.8.8.8:53  # Google DNS
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter:9115
+        scrape_interval: 30s
+        scrape_timeout: 10s
+
+      # Blackbox exporter - ICMP ping monitoring
+      - job_name: 'blackbox-icmp'
+        metrics_path: /probe
+        params:
+          module: [icmp_ping]
+        static_configs:
+          - targets:
+              - 10.0.1.204  # Synology NAS
+              - 10.0.1.1  # Gateway
+              - 8.8.8.8  # Google DNS (connectivity)
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter:9115
+        scrape_interval: 30s
+        scrape_timeout: 10s
     additionalScrapeConfigsSecret: {}
     additionalPrometheusSecretsAnnotations: {}
     additionalAlertManagerConfigs: []

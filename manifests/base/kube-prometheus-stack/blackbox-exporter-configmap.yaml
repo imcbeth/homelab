@@ -1,0 +1,75 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blackbox-exporter-config
+  namespace: default
+  labels:
+    app: blackbox-exporter
+data:
+  blackbox.yml: |
+    modules:
+      http_2xx:
+        prober: http
+        timeout: 5s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: []  # Defaults to 2xx
+          method: GET
+          preferred_ip_protocol: "ip4"
+          follow_redirects: true
+          fail_if_ssl: false
+          fail_if_not_ssl: false
+
+      http_post_2xx:
+        prober: http
+        timeout: 5s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          method: POST
+          preferred_ip_protocol: "ip4"
+
+      https_2xx:
+        prober: http
+        timeout: 5s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: []
+          method: GET
+          preferred_ip_protocol: "ip4"
+          follow_redirects: true
+          fail_if_not_ssl: true
+          tls_config:
+            insecure_skip_verify: false
+
+      https_cert_expiry:
+        prober: http
+        timeout: 5s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          method: GET
+          preferred_ip_protocol: "ip4"
+          follow_redirects: true
+          fail_if_not_ssl: true
+          tls_config:
+            insecure_skip_verify: false
+
+      tcp_connect:
+        prober: tcp
+        timeout: 5s
+        tcp:
+          preferred_ip_protocol: "ip4"
+
+      icmp_ping:
+        prober: icmp
+        timeout: 5s
+        icmp:
+          preferred_ip_protocol: "ip4"
+
+      dns_query:
+        prober: dns
+        timeout: 5s
+        dns:
+          preferred_ip_protocol: "ip4"
+          query_name: "kubernetes.default.svc.cluster.local"
+          query_type: "A"
