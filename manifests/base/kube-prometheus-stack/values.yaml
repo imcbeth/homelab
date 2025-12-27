@@ -1450,7 +1450,7 @@ prometheus:
           - target_label: __address__
             replacement: blackbox-exporter:9115
         scrape_interval: 30s
-        scrape_timeout: 10s
+        scrape_timeout: 5s
 
       # Blackbox exporter - HTTPS with cert expiry monitoring
       - job_name: 'blackbox-https'
@@ -1472,7 +1472,7 @@ prometheus:
           - target_label: __address__
             replacement: blackbox-exporter:9115
         scrape_interval: 60s
-        scrape_timeout: 15s
+        scrape_timeout: 10s
 
       # Blackbox exporter - DNS query monitoring
       - job_name: 'blackbox-dns'
