@@ -140,9 +140,10 @@ nodeAgent:
     allowPrivilegeEscalation: false
     capabilities:
       add:
-        # DAC_READ_SEARCH allows the node-agent (kopia) to read files regardless of
-        # their ownership or permissions. This is necessary for backing up PVC data
-        # from /var/lib/kubelet/pods where files may be owned by different users.
+        # DAC_READ_SEARCH (Discretionary Access Control - Read Search) allows the
+        # node-agent (kopia) to read files regardless of their ownership or permissions.
+        # This is necessary for backing up PVC data from /var/lib/kubelet/pods where
+        # files may be owned by different users.
         #
         # Note: SYS_ADMIN was previously included but has been removed as it provides
         # unnecessarily broad privileges. Kopia file-system backups only need to read

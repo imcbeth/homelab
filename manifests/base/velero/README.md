@@ -611,7 +611,7 @@ containerSecurityContext:
 
 **Why This Configuration?**
 
-- **DAC_READ_SEARCH**: Allows the node-agent (Kopia) to read files from `/var/lib/kubelet/pods` regardless of their ownership or permissions. This is essential for backing up PVC data that may belong to different users.
+- **DAC_READ_SEARCH (Discretionary Access Control - Read Search)**: Allows the node-agent (Kopia) to read files from `/var/lib/kubelet/pods` regardless of their ownership or permissions. This is essential for backing up PVC data that may belong to different users.
 
 - **SYS_ADMIN Removed**: Previous versions included `SYS_ADMIN`, but this provides unnecessarily broad system administration privileges. Kopia file-system backups only need to read already-mounted volumes, which `DAC_READ_SEARCH` enables without the security risks of `SYS_ADMIN`.
 
