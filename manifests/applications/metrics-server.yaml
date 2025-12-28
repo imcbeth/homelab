@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metrics-server
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"  # Same wave as cert-manager, external-dns
+spec:
+  project: infrastructure
+  sources:
+    - repoURL: https://kubernetes-sigs.github.io/metrics-server/
+      chart: metrics-server
+      targetRevision: 3.13.0
+      helm:
+        releaseName: metrics-server
+        valueFiles:
+          - $values/manifests/base/metrics-server/values.yaml
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/metrics-server
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false  # kube-system already exists
+      - ServerSideApply=false
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
