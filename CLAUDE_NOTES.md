@@ -1775,11 +1775,7 @@ In the earlier evening session, control plane component monitoring was disabled 
 **Files Updated:**
 - `docs/monitoring/overview.md` - Added SNMP exporter integration
 
-<<<<<<< HEAD
-**Pull Request:** [#3](https://github.com/imcbeth/k8s-docs-n37/pull/3) - Fix broken documentation links
-=======
 **Pull Request:** [#3](https://github.com/imcbeth/k8s-docs-n37/pull/3) - [Merged] Fix broken documentation links
->>>>>>> main
 
 **Build Status:** ✅ Documentation builds successfully without errors
 
