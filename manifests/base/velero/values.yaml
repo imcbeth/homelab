@@ -175,9 +175,9 @@ schedules:
         - loki         # Loki
         - pihole       # Pi-hole
       includeClusterResources: false
-      defaultVolumesToFsBackup: true  # Use kopia for all PVCs
-      snapshotVolumes: true           # Also create CSI snapshots
-      storageLocation: default
+      defaultVolumesToFsBackup: true  # INTENTIONAL: enable Kopia file-level backups for all PVCs to support granular / cross-cluster restores.
+      snapshotVolumes: true           # INTENTIONAL: also create CSI volume snapshots (synology-snapshots) for fast, same-cluster PVC restores.
+      storageLocation: default        # Restore strategy: prefer CSI snapshots for full-PVC, same-cluster recovery; fall back to Kopia for file-level or cross-cluster restores.
       volumeSnapshotLocations:
         - synology-snapshots
 
