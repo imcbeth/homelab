@@ -1,0 +1,152 @@
+# Metrics Server configuration for Raspberry Pi 5 Kubernetes Homelab
+# Chart: metrics-server v3.13.0
+# App: v0.8.0
+
+# Image configuration
+image:
+  repository: registry.k8s.io/metrics-server/metrics-server
+  pullPolicy: IfNotPresent
+
+# Resource limits for Pi cluster
+resources:
+  requests:
+    cpu: 50m
+    memory: 100Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Metrics Server arguments
+args:
+  - --kubelet-insecure-tls
+  # Required for clusters with self-signed kubelet certificates
+  # Allows metrics-server to scrape metrics from kubelets without TLS verification
+
+  - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+  # Prefer internal IP for kubelet communication
+  # Ensures metrics-server can reach kubelets on the Pi cluster
+
+# API Service configuration
+apiService:
+  create: true
+  insecureSkipTLSVerify: true
+  annotations: {}
+
+# RBAC configuration
+rbac:
+  create: true
+  pspEnabled: false  # PodSecurityPolicy deprecated in Kubernetes 1.25+
+
+# Service Account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Replicas
+replicas: 1
+# Single replica sufficient for homelab
+# HA not required for metrics collection
+
+# Security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  seccompProfile:
+    type: RuntimeDefault
+  capabilities:
+    drop:
+      - ALL
+
+# Pod priority
+priorityClassName: system-cluster-critical
+# Ensures metrics-server pods are not evicted under resource pressure
+
+# Host networking
+hostNetwork:
+  enabled: false
+# Not required for this cluster
+# Calico CNI provides pod-to-kubelet connectivity
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 443
+  annotations: {}
+  labels: {}
+
+# Prometheus ServiceMonitor
+serviceMonitor:
+  enabled: true
+  # Enable Prometheus scraping of metrics-server metrics
+  additionalLabels:
+    release: kube-prometheus-stack
+  interval: 1m
+  scrapeTimeout: 10s
+
+# Liveness probe
+livenessProbe:
+  httpGet:
+    path: /livez
+    port: https
+    scheme: HTTPS
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  failureThreshold: 3
+
+# Readiness probe
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: https
+    scheme: HTTPS
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  failureThreshold: 3
+
+# Node selector
+nodeSelector: {}
+# Deploy on any node
+
+# Tolerations
+tolerations: []
+# No special tolerations needed
+
+# Affinity
+affinity: {}
+# No affinity constraints
+
+# Common labels
+commonLabels:
+  app.kubernetes.io/component: metrics
+  app.kubernetes.io/part-of: kubernetes
+
+# Pod labels
+podLabels: {}
+
+# Pod annotations
+podAnnotations: {}
+
+# Update strategy
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+# Revision history
+revisionHistoryLimit: 10
+
+# Extra arguments (if needed)
+# args:
+#   - --metric-resolution=15s
+#   # Default is 60s, can be reduced for faster updates
+
+# Notes:
+# - Metrics Server collects resource metrics from Kubelets
+# - Provides metrics for kubectl top nodes/pods commands
+# - Required for Horizontal Pod Autoscaler (HPA)
+# - Metrics available via metrics.k8s.io API
+# - Resource overhead: ~50m CPU, ~100Mi RAM (minimal impact on Pi cluster)
