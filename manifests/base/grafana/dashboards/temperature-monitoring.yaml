@@ -470,11 +470,11 @@ data:
                   },
                   {
                     "color": "yellow",
-                    "value": 10
+                    "value": 5
                   },
                   {
                     "color": "red",
-                    "value": 15
+                    "value": 10
                   }
                 ]
               },
