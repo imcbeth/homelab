@@ -420,6 +420,12 @@ alertmanager:
       sha: ""
       pullPolicy: IfNotPresent
     useExistingSecret: false
+    # NOTE: The `alertmanager-smtp-credentials` Secret is stored in the `secrets/` directory
+    # and encrypted with git-crypt. It is not part of the ArgoCD Application source path
+    # (`manifests/base/kube-prometheus-stack`), and ArgoCD cannot decrypt/apply it
+    # automatically. After unlocking the repository with git-crypt, you MUST manually run:
+    #   kubectl apply -f secrets/alertmanager-smtp-credentials.yaml
+    # Ensure this manual step is documented in the PR description or testing plan.
     secrets:
       - alertmanager-smtp-credentials
     automountServiceAccountToken: true

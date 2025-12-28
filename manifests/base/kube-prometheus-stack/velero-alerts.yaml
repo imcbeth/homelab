@@ -3,7 +3,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: velero-alerts
-  namespace: default
+  namespace: velero
   labels:
     app: velero
     prometheus: kube-prometheus
@@ -63,7 +63,7 @@ spec:
         summary: "No successful Velero backup in 24 hours"
         description: |
           No successful backup for schedule {{ $labels.schedule }} in 24+ hours.
-          Last successful backup was {{ $value | humanizeDuration }} ago
+          Last successful backup was more than 24 hours ago.
 
           NOTE: This alert only fires when at least one successful backup has occurred.
           If the metric is absent (no backups configured or completed), see VeleroBackupMetricAbsent alert.
@@ -74,7 +74,7 @@ spec:
           3. kubectl get pods -n velero
 
     - alert: VeleroBackupDurationHigh
-      expr: velero_backup_duration_seconds > 1800 and rate(velero_backup_duration_seconds[5m]) > 0
+      expr: velero_backup_duration_seconds > 1800
       for: 5m
       labels:
         severity: warning
