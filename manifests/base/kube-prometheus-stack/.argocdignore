@@ -1,0 +1,3 @@
+# Exclude Helm values file from being treated as a Kubernetes manifest
+# This file is used by the Helm chart source, not the path source
+values.yaml
