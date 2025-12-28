@@ -29,7 +29,10 @@ data:
       "links": [],
       "panels": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -110,7 +113,10 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -191,7 +197,10 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -243,7 +252,10 @@ data:
           "type": "stat"
         },
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -295,7 +307,10 @@ data:
           "type": "stat"
         },
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -311,11 +326,11 @@ data:
                   },
                   {
                     "color": "yellow",
-                    "value": 1073741824
+                    "value": 268435456
                   },
                   {
                     "color": "red",
-                    "value": 2147483648
+                    "value": 536870912
                   }
                 ]
               },
@@ -355,7 +370,10 @@ data:
           "type": "stat"
         },
         {
-          "datasource": "Loki",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -425,7 +443,7 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "sum by (namespace) (count_over_time({namespace=~\".+\"}[5m]))",
+              "expr": "sum by (namespace) (count_over_time({namespace!=\"\"}[5m]))",
               "legendFormat": "{{namespace}}",
               "refId": "A"
             }
@@ -434,7 +452,10 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -520,7 +541,10 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": "Loki",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -590,7 +614,7 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "sum by (pod) (count_over_time({namespace=~\".+\"} |~ \"(?i)(error|ERROR|err|ERR)\" [5m]))",
+              "expr": "sum by (pod) (count_over_time({namespace!=\"\"} |~ \"(?i)(error|err|failed|fatal)\" [5m]))",
               "legendFormat": "{{pod}}",
               "refId": "A"
             }
@@ -599,7 +623,10 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": "Loki",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "gridPos": {
             "h": 12,
             "w": 24,
@@ -620,7 +647,7 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "{namespace=~\".+\"} |~ \"(?i)(error|ERROR|err|failed|FAILED|fatal|FATAL)\"",
+              "expr": "{namespace!=\"\"} |~ \"(?i)(error|err|failed|fatal)\"",
               "refId": "A"
             }
           ],
@@ -628,7 +655,10 @@ data:
           "type": "logs"
         },
         {
-          "datasource": "Loki",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -698,7 +728,7 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "topk(20, sum by (pod) (count_over_time({namespace=~\".+\"}[5m])))",
+              "expr": "topk(20, sum by (pod) (count_over_time({namespace!=\"\"}[5m])))",
               "legendFormat": "{{pod}}",
               "refId": "A"
             }
