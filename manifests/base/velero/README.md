@@ -14,7 +14,7 @@ Velero provides backup and disaster recovery for the Raspberry Pi 5 Kubernetes h
 ┌─────────────────────────────────────────────────────────┐
 │ Node-Agent DaemonSet (5 pods, one per node)            │
 │ - 100m CPU / 256Mi RAM per pod                          │
-│ - Restic file-level backup                             │
+│ - Kopia file-level backup                              │
 │ - Tolerates control-plane taint                        │
 └─────────────────────────────────────────────────────────┘
                           ↓
@@ -29,7 +29,7 @@ Velero provides backup and disaster recovery for the Raspberry Pi 5 Kubernetes h
 
 **Components:**
 - **Velero Server**: Manages backup/restore operations, schedules
-- **Node-Agent (Restic)**: DaemonSet on all 5 nodes for file-level PVC backup
+- **Node-Agent (Kopia)**: DaemonSet on all 5 nodes for file-level PVC backup
 - **CSI Snapshots**: Storage-native snapshots via Synology CSI
 - **S3 Storage**: Object storage for backup data (LocalStack for testing)
 
@@ -39,7 +39,7 @@ Velero provides backup and disaster recovery for the Raspberry Pi 5 Kubernetes h
 - **Schedule**: Every day at 2:00 AM
 - **Retention**: 30 days
 - **Namespaces**: default (Prometheus, Grafana), loki, pihole
-- **Method**: Restic file-level + CSI snapshots
+- **Method**: Kopia file-level + CSI snapshots
 - **Total Data**: ~80Gi (Prometheus 50Gi, Loki 20Gi, Grafana 5Gi, Pi-hole 5Gi)
 
 ### Weekly Cluster Resource Backup (3 AM Sunday)
@@ -298,7 +298,7 @@ spec:
     persistentVolumeClaim:
       claimName: test-pvc
 EOF
-# Backup with restic
+# Backup with kopia file-level backup
 velero backup create test-pvc-backup \
   --include-namespaces velero-test \
   --default-volumes-to-fs-backup \
@@ -412,7 +412,7 @@ velero backup logs <backup-name>
 # Common issues:
 # 1. S3 connectivity - check s3Url and credentials
 # 2. CSI snapshot issues - check VolumeSnapshot CRDs
-# 3. Restic timeout - check node-agent logs and resource limits
+# 3. Kopia timeout - check node-agent logs and resource limits
 ```
 
 ### S3 Connection Issues
@@ -448,7 +448,7 @@ kubectl get pods -n synology-csi
 kubectl get volumesnapshotclass
 ```
 
-### Node-Agent (Restic) Issues
+### Node-Agent (Kopia) Issues
 
 ```bash
 # Check node-agent pods
@@ -591,6 +591,6 @@ velero backup describe test-production-s3
 
 - [Velero Documentation](https://velero.io/docs/)
 - [Velero CSI Snapshot Support](https://velero.io/docs/main/csi/)
-- [Velero Restic Integration](https://velero.io/docs/v1.15/file-system-backup/)
+- [Velero File System Backup (Kopia)](https://velero.io/docs/v1.15/file-system-backup/)
 - [Backblaze B2 with Velero](https://www.backblaze.com/blog/kubernetes-backups-with-backblaze-b2-and-velero/)
 - [Kubernetes Backup on Raspberry Pi](https://picluster.ricsanfre.com/docs/backup/)

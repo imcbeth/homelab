@@ -98,7 +98,7 @@ credentials:
   # For production, consider using sealed-secrets, external-secrets, or another external secret manager.
   # Do not commit real or test credentials to version control.
 
-# Node-agent (restic/kopia) configuration for file-level backups
+# Node-agent (kopia) configuration for file-level backups
 nodeAgent:
   enabled: true
 
@@ -158,7 +158,7 @@ schedules:
         - loki         # Loki
         - pihole       # Pi-hole
       includeClusterResources: false
-      defaultVolumesToFsBackup: true  # Use restic for all PVCs
+      defaultVolumesToFsBackup: true  # Use kopia for all PVCs
       snapshotVolumes: true           # Also create CSI snapshots
       storageLocation: default
       volumeSnapshotLocations:
