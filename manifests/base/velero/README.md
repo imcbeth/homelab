@@ -184,16 +184,19 @@ kubectl -n default scale deployment kube-prometheus-stack-grafana --replicas=0
 # 2. Delete PVC
 kubectl -n default delete pvc kube-prometheus-stack-grafana
 
-# 3. Restore from backup
+# 3. Find latest backup from the daily-critical-pvcs schedule
+LATEST_BACKUP=$(velero backup get | awk '/^daily-critical-pvcs-/ {print $1}' | sort | tail -n 1)
+
+# 4. Restore from backup
 velero restore create grafana-pvc-restore \
-  --from-backup daily-critical-pvcs-latest \
+  --from-backup "$LATEST_BACKUP" \
   --include-namespaces default \
   --include-resources pvc,pv
 
-# 4. Wait for restore
+# 5. Wait for restore
 velero restore describe grafana-pvc-restore --details
 
-# 5. Scale up deployment
+# 6. Scale up deployment
 kubectl -n default scale deployment kube-prometheus-stack-grafana --replicas=1
 
 # Time to recovery: < 15 minutes
@@ -220,7 +223,7 @@ kubectl get pods -n loki -w
 # 4. Restore all namespaces
 
 velero restore create cluster-restore \
-  --from-backup weekly-cluster-resources-latest
+  --from-backup weekly-cluster-resources-2024-12-01-000000
 
 # Time to recovery: < 4 hours
 ```

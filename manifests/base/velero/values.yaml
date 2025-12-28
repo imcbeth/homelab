@@ -43,6 +43,13 @@ configuration:
       bucket: velero-backups
       config:
         # For LocalStack (testing):
+        # Prerequisite:
+        #   - LocalStack must be deployed in the "localstack" namespace.
+        #   - A Kubernetes Service named "localstack" must exist in that namespace,
+        #     exposing port 4566 (the LocalStack edge port).
+        # If your LocalStack deployment uses a different namespace, service name, or port,
+        # update the s3Url below accordingly. Ensure LocalStack is deployed and reachable
+        # before installing/applying Velero with this values file.
         region: us-east-1
         s3ForcePathStyle: "true"
         s3Url: http://localstack.localstack:4566
