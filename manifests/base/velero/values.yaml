@@ -1,0 +1,290 @@
+# Velero Configuration for Raspberry Pi 5 Kubernetes Homelab
+# Cluster: 5x Pi 5 nodes (16GB each, 80GB total)
+# Storage: Synology DS925+ via CSI
+# Backup Target: S3-compatible storage (LocalStack for testing, external S3 for production)
+
+# Image configuration - ARM64 compatible
+image:
+  repository: velero/velero
+  tag: v1.16.0
+  pullPolicy: IfNotPresent
+
+# Resource limits for Pi cluster - Velero server pod
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 200m
+    memory: 512Mi
+
+# Init containers for backup plugins - ARM64 versions
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.11.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+  - name: velero-plugin-for-csi
+    image: velero/velero-plugin-for-csi:v0.10.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+
+# S3-compatible backup storage configuration
+configuration:
+  # S3 storage provider (works with AWS S3, Backblaze B2, Wasabi, MinIO, LocalStack)
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      default: true
+      bucket: velero-backups
+      config:
+        # For LocalStack (testing):
+        # Prerequisite:
+        #   - LocalStack must be deployed in the "localstack" namespace.
+        #   - A Kubernetes Service named "localstack" must exist in that namespace,
+        #     exposing port 4566 (the LocalStack edge port).
+        #   - The cloud-credentials Secret must be created with matching credentials
+        #     (e.g., aws_access_key_id=test, aws_secret_access_key=test).
+        #
+        # Before installing/applying Velero with this values file, verify that:
+        #   - the LocalStack service is running and reachable at the URL below
+        #   - the cloud-credentials Secret exists with credentials matching LocalStack
+        #   - otherwise, the backup storage location will show as "Unavailable"
+        #     and Velero backups to this S3 target will fail.
+        #
+        # If your LocalStack deployment uses a different namespace, service name, or port,
+        # update the s3Url below accordingly.
+        region: us-east-1
+        s3ForcePathStyle: "true"
+        s3Url: http://localstack.localstack:4566
+        insecureSkipTLSVerify: "true"
+
+        # For Backblaze B2 (production) - Uncomment when migrating:
+        # region: us-west-004
+        # s3Url: https://s3.us-west-004.backblazeb2.com
+
+        # For AWS S3 (production) - Uncomment when migrating:
+        # region: us-east-1
+
+        # For Wasabi (production) - Uncomment when migrating:
+        # region: us-east-1
+        # s3Url: https://s3.wasabisys.com
+
+        # For MinIO on Synology (self-hosted) - Uncomment when migrating:
+        # region: us-east-1
+        # s3ForcePathStyle: "true"
+        # s3Url: http://minio.synology.local:9000
+        # insecureSkipTLSVerify: "true"
+
+  # Volume snapshot configuration - Synology CSI
+  volumeSnapshotLocation:
+    - name: synology-snapshots
+      provider: csi
+
+  # Enable CSI snapshot support
+  features: "EnableCSI"
+
+  # Default backup TTL (30 days)
+  defaultBackupTTL: 720h
+
+  # Upload progress monitoring - Kopia is the default uploader since Velero 1.10+
+  uploaderType: kopia
+
+  # Kopia-specific configuration for repository maintenance
+  # Repository maintenance jobs run periodically to optimize backup storage
+  repositoryMaintenanceJob:
+    repositoryConfigData:
+      name: "velero-repo-maintenance"
+      global:
+        # Keep last 3 maintenance job pods for debugging
+        keepLatestMaintenanceJobs: 3
+        # Resource limits for repository maintenance jobs
+        # These jobs perform compaction, garbage collection, and deduplication
+        podResources:
+          cpuRequest: "100m"
+          cpuLimit: "500m"
+          memoryRequest: "256Mi"
+          memoryLimit: "1Gi"
+
+  # Default volumes to backup (opt-in model; volumes must be explicitly annotated for backup)
+  defaultVolumesToFsBackup: false
+
+# Credentials for S3 storage (stored in a Kubernetes Secret created by the Helm chart)
+credentials:
+  # When true, Velero reads cloud provider credentials from a Kubernetes Secret.
+  useSecret: true
+
+  # The Velero Helm chart supports creating the cloud-credentials Secret directly from
+  # these values via `secretContents`, but defining credentials inline in a committed
+  # values file is insecure and strongly discouraged.
+  #
+  # RECOMMENDED SECURE PATTERN:
+  # - Manage the `cloud-credentials` Secret outside of this base manifest, for example:
+  #   - Use Sealed Secrets, External Secrets Operator, or another external secret manager
+  #     to create a Secret named `cloud-credentials` in the Velero namespace.
+  #   - Reference that Secret here via `credentials.existingSecret` in a separate,
+  #     private values file that is NOT committed to version control.
+  #
+  # OPTIONAL (USE ONLY IN PRIVATE, UNTRACKED VALUES FILES):
+  # - If you choose to let the chart create the Secret from values, define
+  #   `credentials.secretContents.cloud` in a private values file. The content must look like:
+  #   # secretContents:
+  #   #   cloud: |
+  #   #     [default]
+  #   #     aws_access_key_id=<YOUR_KEY_ID>
+  #   #     aws_secret_access_key=<YOUR_SECRET_KEY>
+  #
+  # Never define real credentials directly in this base values.yaml or any file
+  # that is committed to version control.
+  #
+  # Name of an existing Kubernetes Secret containing cloud provider credentials.
+  # The Secret must exist in the Velero namespace and contain a `cloud` key whose
+  # value is the credentials file content in the following format:
+  #   [default]
+  #   aws_access_key_id=<YOUR_KEY_ID>
+  #   aws_secret_access_key=<YOUR_SECRET_KEY>
+  #
+  # For LocalStack testing, create a Secret with test credentials:
+  #   kubectl create secret generic cloud-credentials -n velero \
+  #     --from-literal=cloud=$'[default]\naws_access_key_id=test\naws_secret_access_key=test'
+  #
+  # Override this value in a private, untracked values file to point to your Secret.
+  # Leaving this as an empty string means no existing Secret is referenced here.
+  existingSecret: ""
+# Node-agent (kopia) configuration for file-level backups
+nodeAgent:
+  enabled: true
+
+  # Resource limits for node-agent DaemonSet (runs on ALL nodes)
+  # Conservatively tuned for backing up larger PVCs (e.g., 50Gi Prometheus volume)
+  # on the Pi cluster. Monitor memory usage/OOMKilled events during backups and
+  # adjust requests/limits if needed based on real-world usage.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Tolerations to run on all nodes including control-plane
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+  # Pod volume path for node-agent state
+  podVolumePath: /var/lib/kubelet/pods
+
+  # Kopia-specific environment variables for node-agent
+  # These control caching, compression, and logging behavior
+  # Note: /scratch is automatically mounted as emptyDir by the Velero helm chart (useScratchEmptyDir: true)
+  extraEnvVars:
+    - name: KOPIA_CACHE_DIRECTORY
+      value: /scratch/.cache/kopia
+    - name: KOPIA_LOG_LEVEL
+      value: info
+    # Compression algorithm: s2-default (balanced speed/ratio)
+    # Other options: s2-better, s2-best, zstd, zstd-fastest, zstd-better-compression
+    # s2-default is recommended for ARM64 Raspberry Pi 5 (good balance of CPU/compression)
+    - name: KOPIA_COMPRESSION
+      value: s2-default
+
+  # File system access using minimal required capabilities instead of full privileged mode
+  containerSecurityContext:
+    privileged: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      add:
+        # DAC_READ_SEARCH (Discretionary Access Control - Read Search) allows the
+        # node-agent (kopia) to read files regardless of their ownership or permissions.
+        # This is necessary for backing up PVC data from /var/lib/kubelet/pods where
+        # files may be owned by different users.
+        #
+        # Note: SYS_ADMIN was previously included but has been removed as it provides
+        # unnecessarily broad privileges. Kopia file-system backups only need to read
+        # already-mounted volumes via hostPath, which DAC_READ_SEARCH enables.
+        #
+        # CSI snapshot operations (if enabled via snapshotVolumes: true) are handled
+        # by the Velero server and CSI driver, not by the node-agent, so they do not
+        # require additional node-agent capabilities.
+        #
+        # If you encounter permission issues during backups, verify:
+        # 1. The node-agent has access to /var/lib/kubelet/pods via hostPath
+        # 2. SELinux/AppArmor policies are compatible with this configuration
+        # 3. Your cluster's PodSecurityPolicy/PodSecurityStandards allow DAC_READ_SEARCH
+        #
+        # Only add SYS_ADMIN as a last resort if DAC_READ_SEARCH proves insufficient
+        # in your specific environment.
+        - DAC_READ_SEARCH
+
+
+# ServiceMonitor for Prometheus metrics
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+  prometheusRule:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+
+# Backup schedules (automated backups)
+schedules:
+  # Daily backup of critical PVCs at 2 AM
+  daily-critical-pvcs:
+    disabled: false
+    schedule: "0 2 * * *"
+    useOwnerReferencesInBackup: false
+    template:
+      ttl: "720h"  # 30 days retention
+      includedNamespaces:
+        - default      # Prometheus, Grafana
+        - loki         # Loki
+        - pihole       # Pi-hole
+      includeClusterResources: false
+      defaultVolumesToFsBackup: true  # INTENTIONAL: enable Kopia file-level backups for all PVCs to support granular / cross-cluster restores.
+      snapshotVolumes: true           # INTENTIONAL: also create CSI volume snapshots (synology-snapshots) for fast, same-cluster PVC restores.
+      storageLocation: default        # Backup storage: both CSI snapshots and Kopia backups stored in 'default' location; restores automatically prefer CSI snapshots with Kopia as fallback.
+      volumeSnapshotLocations:
+        - synology-snapshots
+
+  # Weekly full cluster backup on Sunday at 3 AM
+  weekly-cluster-resources:
+    disabled: false
+    schedule: "0 3 * * 0"
+    useOwnerReferencesInBackup: false
+    template:
+      ttl: "2160h"  # 90 days retention
+      includeClusterResources: true
+      includedNamespaces:
+        - '*'
+      excludedResources:
+        - events
+        - events.events.k8s.io
+      defaultVolumesToFsBackup: false  # Cluster resources only
+      snapshotVolumes: false
+      storageLocation: default
+
+# RBAC configuration
+rbac:
+  create: true
+  clusterAdministrator: true
+
+# ServiceAccount configuration
+serviceAccount:
+  server:
+    create: true
+    name: velero
+
+# Configure cleanup jobs
+cleanUpCRDs: false
+
+# Volume snapshot class for CSI snapshots
+snapshotsEnabled: true

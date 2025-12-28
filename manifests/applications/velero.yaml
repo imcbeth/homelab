@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: velero
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  project: infrastructure
+  sources:
+    - repoURL: https://vmware-tanzu.github.io/helm-charts
+      chart: velero
+      # Helm chart version 8.2.0 is the current stable release that supports Velero v1.16.0
+      # according to the official Velero Helm chart documentation in the vmware-tanzu/helm-charts repository.
+      targetRevision: 8.2.0
+      helm:
+        releaseName: velero
+        valueFiles:
+          - $values/manifests/base/velero/values.yaml
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/velero
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: velero
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
