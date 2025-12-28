@@ -19,23 +19,43 @@ resources:
 # Metrics Server arguments
 args:
   - --kubelet-insecure-tls
-  # Required for clusters with self-signed kubelet certificates
-  # Allows metrics-server to scrape metrics from kubelets without TLS verification
+  # ⚠️  SECURITY TRADE-OFF: Disables TLS certificate validation for kubelet connections
+  # This is necessary for homelab environments where kubelets use self-signed certificates
+  # that are not signed by a trusted CA. This introduces a security risk by allowing
+  # potential man-in-the-middle attacks on kubelet → metrics-server communication.
+  #
+  # Production alternative: Use proper kubelet certificates signed by a trusted CA
+  # (e.g., via kubeadm --certificate-key or external PKI). For homelab use, the risk
+  # is acceptable given the isolated network environment and lack of sensitive workloads.
 
   - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
   # Prefer internal IP for kubelet communication
-  # Ensures metrics-server can reach kubelets on the Pi cluster
+  # Ensures metrics-server can reach kubelets on the Pi cluster network (10.0.50.x)
 
 # API Service configuration
 apiService:
   create: true
+  # ⚠️  SECURITY TRADE-OFF: Bypasses TLS verification for the metrics API endpoint
+  # This disables TLS certificate validation when kube-aggregator communicates with
+  # the metrics-server API. This introduces a security risk by allowing potential
+  # man-in-the-middle attacks on API server → metrics-server communication.
+  #
+  # Production alternative: Generate proper TLS certificates using cert-manager
+  # (already deployed at wave -10) and configure metrics-server to use them:
+  #   1. Create Certificate resource for metrics-server.kube-system.svc
+  #   2. Mount certificate secret in metrics-server pod
+  #   3. Configure --tls-cert-file and --tls-private-key-file args
+  #   4. Set insecureSkipTLSVerify: false
+  #
+  # For homelab use with self-signed certificates where distributing a CA bundle is
+  # not feasible, this setting is acceptable given the isolated network environment.
   insecureSkipTLSVerify: true
   annotations: {}
 
 # RBAC configuration
 rbac:
   create: true
-  pspEnabled: false  # PodSecurityPolicy deprecated in Kubernetes 1.25+
+  pspEnabled: false  # PodSecurityPolicy removed in Kubernetes 1.25 (replaced by Pod Security Standards)
 
 # Service Account
 serviceAccount:
@@ -139,14 +159,15 @@ updateStrategy:
 # Revision history
 revisionHistoryLimit: 10
 
-# Extra arguments (if needed)
-# args:
-#   - --metric-resolution=15s
-#   # Default is 60s, can be reduced for faster updates
-
 # Notes:
 # - Metrics Server collects resource metrics from Kubelets
 # - Provides metrics for kubectl top nodes/pods commands
 # - Required for Horizontal Pod Autoscaler (HPA)
 # - Metrics available via metrics.k8s.io API
 # - Resource overhead: ~50m CPU, ~100Mi RAM (minimal impact on Pi cluster)
+#
+# Optional configuration:
+# - Metric resolution can be reduced from default 60s to 15s for faster updates:
+#   args:
+#     - --metric-resolution=15s
+#   (Note: This increases CPU usage and is generally unnecessary for homelab use)
