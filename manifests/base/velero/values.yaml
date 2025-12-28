@@ -23,15 +23,10 @@ resources:
     memory: 512Mi
 
 # Init containers for backup plugins - ARM64 versions
+# Note: CSI plugin is integrated into Velero v1.14+, no separate plugin needed
 initContainers:
   - name: velero-plugin-for-aws
     image: velero/velero-plugin-for-aws:v1.11.0
-    imagePullPolicy: IfNotPresent
-    volumeMounts:
-      - mountPath: /target
-        name: plugins
-  - name: velero-plugin-for-csi
-    image: velero/velero-plugin-for-csi:v0.10.0
     imagePullPolicy: IfNotPresent
     volumeMounts:
       - mountPath: /target
