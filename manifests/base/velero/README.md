@@ -87,7 +87,7 @@ credentials:
 
 **Setup Steps:**
 1. Sign up at https://www.backblaze.com/b2/
-2. Create bucket: `velero-backups-homelab-n37`
+2. Create bucket: `velero-backups-<YOUR-IDENTIFIER>` (e.g., `velero-backups-homelab-n37`)
 3. Generate application key with read/write permissions
 4. Update `values.yaml`:
    ```yaml
@@ -503,7 +503,7 @@ velero restore logs <restore-name>
 1. ✅ LocalStack testing completed successfully
 2. ✅ At least 3 successful backup/restore cycles
 3. ✅ External S3 account created (Backblaze B2, AWS S3, Wasabi, etc.)
-4. ✅ S3 bucket created: `velero-backups-homelab-n37`
+4. ✅ S3 bucket created: `velero-backups-<YOUR-IDENTIFIER>` (e.g., `velero-backups-homelab-n37`)
 
 ### Migration Steps
 
@@ -516,7 +516,7 @@ configuration:
   backupStorageLocation:
     - name: default
       provider: aws
-      bucket: velero-backups-homelab-n37
+      bucket: velero-backups-<YOUR-IDENTIFIER>  # Replace with your bucket name
       config:
         # For Backblaze B2:
         region: us-west-004
