@@ -13,7 +13,7 @@ image:
 kubectl:
   image:
     repository: docker.io/bitnami/kubectl
-    tag: 1.31  # Use stable version (1.35 not available yet)
+    tag: 1.30  # Use stable version (ARM64-compatible)
 
 # Resource limits for Pi cluster - Velero server pod
 resources:
