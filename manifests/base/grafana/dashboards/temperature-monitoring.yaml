@@ -113,7 +113,7 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "node_hwmon_temp_celsius{chip=\"cpu_thermal\",sensor=\"temp1\"}",
+              "expr": "node_hwmon_temp_celsius{chip=\"thermal_thermal_zone0\",sensor=\"temp1\"}",
               "legendFormat": "{{instance}}",
               "refId": "A"
             }
@@ -450,7 +450,7 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "node_hwmon_temp_celsius{chip=\"cpu_thermal\",sensor=\"temp1\"}",
+              "expr": "node_hwmon_temp_celsius{chip=\"thermal_thermal_zone0\",sensor=\"temp1\"}",
               "format": "time_series",
               "legendFormat": "{{instance}}",
               "refId": "A"
@@ -601,7 +601,7 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "node_hwmon_temp_celsius{chip=\"cpu_thermal\",sensor=\"temp1\"}",
+              "expr": "node_hwmon_temp_celsius{chip=\"thermal_thermal_zone0\",sensor=\"temp1\"}",
               "format": "table",
               "instant": true,
               "refId": "A"
