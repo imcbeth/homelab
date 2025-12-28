@@ -276,18 +276,28 @@ spec:
       storage: 1Gi
 EOF
 
-# Create test pod with data
-kubectl -n velero-test run test-pod \
-  --image=busybox \
-  --restart=Never \
-  --command -- sh -c "echo 'test data' > /data/test.txt && sleep 3600"
-
-kubectl -n velero-test set volume pod/test-pod \
-  --add --name=test-volume \
-  --type=persistentVolumeClaim \
-  --claim-name=test-pvc \
-  --mount-path=/data
-
+# Create test pod with data (PVC mounted at /data)
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+  namespace: velero-test
+spec:
+  restartPolicy: Never
+  containers:
+  - name: busybox
+    image: busybox
+    command: ["/bin/sh", "-c"]
+    args: ["echo 'test data' > /data/test.txt && sleep 3600"]
+    volumeMounts:
+    - name: test-volume
+      mountPath: /data
+  volumes:
+  - name: test-volume
+    persistentVolumeClaim:
+      claimName: test-pvc
+EOF
 # Backup with restic
 velero backup create test-pvc-backup \
   --include-namespaces velero-test \

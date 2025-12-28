@@ -27,7 +27,7 @@ initContainers:
       - mountPath: /target
         name: plugins
   - name: velero-plugin-for-csi
-    image: velero/velero-plugin-for-csi:v0.9.0
+    image: velero/velero-plugin-for-csi:v0.10.0
     imagePullPolicy: IfNotPresent
     volumeMounts:
       - mountPath: /target
@@ -71,13 +71,13 @@ configuration:
       provider: csi
 
   # Enable CSI snapshot support
-  features: EnableCSI
+  features: "EnableCSI"
 
   # Default backup TTL (30 days)
   defaultBackupTTL: 720h
 
   # Upload progress monitoring
-  uploaderType: restic
+  uploaderType: kopia
 
   # Default volumes to backup (opt-out model)
   defaultVolumesToFsBackup: false
@@ -85,14 +85,18 @@ configuration:
 # Credentials for S3 storage (stored in secret)
 credentials:
   useSecret: true
-  secretContents:
-    cloud: |
-      [default]
-      aws_access_key_id=test
-      aws_secret_access_key=test
-  # For production, update with real credentials:
+  # Reference an existing Kubernetes Secret that contains the Velero cloud credentials.
+  # This Secret must define a key named "cloud" with contents like:
+  # [default]
   # aws_access_key_id=<YOUR_KEY_ID>
   # aws_secret_access_key=<YOUR_SECRET_KEY>
+  existingSecret: velero-s3-credentials
+  # Create the Secret manually or via a secret management solution, for example:
+  # kubectl create secret generic velero-s3-credentials \
+  #   -n velero \
+  #   --from-literal=cloud='[default]\naws_access_key_id=<YOUR_KEY_ID>\naws_secret_access_key=<YOUR_SECRET_KEY>'
+  # For production, consider using sealed-secrets, external-secrets, or another external secret manager.
+  # Do not commit real or test credentials to version control.
 
 # Node-agent (restic/kopia) configuration for file-level backups
 nodeAgent:
@@ -117,12 +121,16 @@ nodeAgent:
   # Pod volume path for node-agent state
   podVolumePath: /var/lib/kubelet/pods
 
-  # Privileged mode required for file system access
+  # File system access using minimal required capabilities instead of full privileged mode
   containerSecurityContext:
-    privileged: true
+    privileged: false
+    allowPrivilegeEscalation: false
+    capabilities:
+      add:
+        - DAC_READ_SEARCH
+        - SYS_ADMIN
 
   # Upload progress monitoring
-  uploaderType: restic
 
 # ServiceMonitor for Prometheus metrics
 metrics:
