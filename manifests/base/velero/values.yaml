@@ -150,9 +150,7 @@ credentials:
   #
   # For LocalStack testing, create a Secret with test credentials:
   #   kubectl create secret generic cloud-credentials -n velero \
-  #     --from-literal=cloud="[default]
-  #   aws_access_key_id=test
-  #   aws_secret_access_key=test"
+  #     --from-literal=cloud=$'[default]\naws_access_key_id=test\naws_secret_access_key=test'
   #
   # Override this value in a private, untracked values file to point to your Secret.
   # Leaving this as an empty string means no existing Secret is referenced here.

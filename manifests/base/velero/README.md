@@ -739,11 +739,8 @@ credentials:
   useSecret: true
   existingSecret: velero-b2-credentials        # Pre-created Kubernetes Secret
   # Note: Create the Secret manually before deploying:
-  #   kubectl create secret generic velero-b2-credentials \
-  #     -n velero \
-  #     --from-literal=cloud="[default]
-  #   aws_access_key_id=<YOUR_B2_KEY_ID>
-  #   aws_secret_access_key=<YOUR_B2_APPLICATION_KEY>"
+  #   kubectl create secret generic velero-b2-credentials -n velero \
+  #     --from-literal=cloud=$'[default]\naws_access_key_id=<YOUR_B2_KEY_ID>\naws_secret_access_key=<YOUR_B2_APPLICATION_KEY>'
 ```
 
 **Step 2: Deploy Changes**
