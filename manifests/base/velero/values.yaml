@@ -95,29 +95,30 @@ credentials:
   useSecret: true
 
   # The Velero Helm chart supports creating the cloud-credentials Secret directly from
-  # these values via `secretContents`. This avoids referencing a Secret that does not
-  # exist in the manifests and keeps the deployment self-contained.
+  # these values via `secretContents`, but defining credentials inline in a committed
+  # values file is insecure and strongly discouraged.
   #
-  # WARNING:
-  # - The values below are placeholders. They MUST be overridden with real credentials
-  #   via a secure mechanism (e.g., a private values file, CI/CD secret injection,
-  #   or an external secret manager).
-  # - Never commit real credentials to version control.
+  # RECOMMENDED SECURE PATTERN:
+  # - Manage the `cloud-credentials` Secret outside of this base manifest, for example:
+  #   - Use Sealed Secrets, External Secrets Operator, or another external secret manager
+  #     to create a Secret named `cloud-credentials` in the Velero namespace.
+  #   - Reference that Secret here via `credentials.existingSecret` in a separate,
+  #     private values file that is NOT committed to version control.
   #
-  # The chart will create a Secret with a key named "cloud" whose contents must look like:
-  # [default]
-  # aws_access_key_id=<YOUR_KEY_ID>
-  # aws_secret_access_key=<YOUR_SECRET_KEY>
-  secretContents:
-    cloud: |
-      [default]
-      aws_access_key_id=<YOUR_KEY_ID>
-      aws_secret_access_key=<YOUR_SECRET_KEY>
-
-  # Advanced: If you prefer to manage the Secret yourself (e.g., via sealed-secrets or
-  # external-secrets), you can instead set `credentials.existingSecret` in your own
-  # values file and omit `secretContents`. That pattern is not used in this base
-  # manifest to avoid referencing a Secret that is not defined here.
+  # OPTIONAL (USE ONLY IN PRIVATE, UNTRACKED VALUES FILES):
+  # - If you choose to let the chart create the Secret from values, define
+  #   `credentials.secretContents.cloud` in a private values file. The content must look like:
+  #   # secretContents:
+  #   #   cloud: |
+  #   #     [default]
+  #   #     aws_access_key_id=<YOUR_KEY_ID>
+  #   #     aws_secret_access_key=<YOUR_SECRET_KEY>
+  #
+  # Never define real credentials directly in this base values.yaml or any file
+  # that is committed to version control.
+  #
+  # Example of referencing an externally managed Secret (set in your own values file):
+  # existingSecret: cloud-credentials
 # Node-agent (kopia) configuration for file-level backups
 nodeAgent:
   enabled: true
