@@ -185,16 +185,11 @@ nodeAgent:
   # Kopia-specific environment variables for node-agent
   # These control caching, compression, and logging behavior
   # Note: /scratch is automatically mounted as emptyDir by the Velero helm chart (useScratchEmptyDir: true)
-  extraEnvVars:
-    - name: KOPIA_CACHE_DIRECTORY
-      value: /scratch/.cache/kopia
-    - name: KOPIA_LOG_LEVEL
-      value: info
-    # Compression algorithm: s2-default (balanced speed/ratio)
-    # Other options: s2-better, s2-best, zstd, zstd-fastest, zstd-better-compression
-    # s2-default is recommended for ARM64 Raspberry Pi 5 (good balance of CPU/compression)
-    - name: KOPIA_COMPRESSION
-      value: s2-default
+  # TODO: Re-add after verifying correct Helm chart format for extraEnvVars
+  # extraEnvVars:
+  #   KOPIA_CACHE_DIRECTORY: /scratch/.cache/kopia
+  #   KOPIA_LOG_LEVEL: info
+  #   KOPIA_COMPRESSION: s2-default
 
   # File system access using minimal required capabilities instead of full privileged mode
   containerSecurityContext:
