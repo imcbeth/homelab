@@ -143,8 +143,8 @@ spec:
 
 If you want to skip LocalStack testing and go directly to production S3 (Backblaze B2, AWS S3, etc.), update `values.yaml` before deployment:
 
-1. Comment out the LocalStack configuration (lines 45-56)
-2. Uncomment your production S3 provider configuration (lines 58-73)
+1. Comment out the LocalStack configuration in the `backupStorageLocation` section
+2. Uncomment your production S3 provider configuration (e.g., Backblaze B2, AWS S3, Wasabi, or MinIO)
 3. Update credentials to match your production S3 provider
 4. See the "Migration from LocalStack to Production S3" section below for detailed steps
 
@@ -175,7 +175,11 @@ credentials:
   aws_secret_access_key: test
 ```
 
-> **Note:** The `aws_access_key_id` and `aws_secret_access_key` values shown here (`test` / `test`) must match both the credentials configured in your `values.yaml` (for example under `credentials.secretContents`) and the credentials expected by your LocalStack deployment. If these values are not consistent, Velero will fail to connect to the S3 endpoint.
+> **Note:** The credentials shown above (`test` / `test`) are for LocalStack testing only. These values must be consistent across:
+> - Your Velero `values.yaml` configuration (under `credentials.secretContents`)
+> - Your LocalStack deployment settings
+>
+> If these credentials don't match, Velero will fail to connect to the S3 endpoint.
 
 **Limitations:**
 - ⚠️ Ephemeral storage - backups lost on LocalStack pod restart
@@ -586,12 +590,22 @@ Choose one of the following:
    ```
 
 2. Update credentials:
+   
+   Create a file named `cloud-credentials.txt`:
+   ```
+   [default]
+   aws_access_key_id=YOUR_KEY_ID
+   aws_secret_access_key=YOUR_SECRET_KEY
+   ```
+   
+   Then create the secret:
    ```bash
    kubectl create secret generic cloud-credentials \
      -n velero \
-     --from-literal=cloud="[default]
-aws_access_key_id=YOUR_KEY_ID
-aws_secret_access_key=YOUR_SECRET_KEY"
+     --from-file=cloud=cloud-credentials.txt
+   
+   # Clean up the credentials file
+   rm cloud-credentials.txt
    ```
 
 3. Restart Velero:
@@ -809,7 +823,7 @@ velero backup describe test-production-s3
    # This file should be kept out of Git or encrypted with git-crypt/sops.
    credentials:
      useExistingSecret: true
-     existingSecretName: velero-s3-credentials
+     existingSecretName: cloud-credentials
      # secretContents in the base values are for example only and should be disabled/overridden
 ## Security Considerations
 
