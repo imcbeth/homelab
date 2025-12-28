@@ -9,11 +9,9 @@ image:
   tag: v1.16.0
   pullPolicy: IfNotPresent
 
-# kubectl image for CRD upgrade job
-kubectl:
-  image:
-    repository: docker.io/bitnami/kubectl
-    tag: latest  # Use latest tag (always available, ARM64-compatible)
+# Disable CRD upgrade job (CRDs installed directly by Helm chart)
+# This avoids kubectl image version compatibility issues
+upgradeCRDs: false
 
 # Resource limits for Pi cluster - Velero server pod
 resources:
