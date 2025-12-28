@@ -330,8 +330,8 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "(1 - avg by (node) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))) * 100",
-              "legendFormat": "{{node}}",
+              "expr": "(1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))) * 100",
+              "legendFormat": "{{instance}}",
               "refId": "A"
             }
           ],
