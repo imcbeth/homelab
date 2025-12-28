@@ -162,6 +162,7 @@ nodeAgent:
 
   # Kopia-specific environment variables for node-agent
   # These control caching, compression, and logging behavior
+  # Note: /scratch is automatically mounted as emptyDir by the Velero helm chart (useScratchEmptyDir: true)
   extraEnvVars:
     - name: KOPIA_CACHE_DIRECTORY
       value: /scratch/.cache/kopia
