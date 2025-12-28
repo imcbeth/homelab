@@ -460,9 +460,13 @@ kubectl -n velero logs daemonset/node-agent -c node-agent --tail=100
 # Common issues:
 # 1. Memory limits too low - increase from 1Gi to 1.5Gi
 # 2. Backup timeout - increase timeout in backup spec
-# 3. Permission issues - verify node-agent securityContext matches values.yaml
-#    (privileged: false with required capabilities). Only consider privileged: true
-#    as a last resort if capability-based access is insufficient in your environment.
+# 3. Permission issues - verify node-agent securityContext in values.yaml
+#    Current config: privileged: false, capabilities: [DAC_READ_SEARCH]
+#    If backups fail with permission errors:
+#    a) Check node-agent logs for specific error messages
+#    b) Verify /var/lib/kubelet/pods is accessible via hostPath
+#    c) Consider adding SYS_ADMIN capability if DAC_READ_SEARCH is insufficient
+#    d) Only use privileged: true as absolute last resort
 ```
 
 ### Restore Failing
@@ -588,6 +592,46 @@ velero backup describe test-production-s3
 6. **Plan for Growth**: Monitor backup sizes and adjust resources
 7. **Secure Credentials**: Use git-crypt or external secret management
 8. **Test Production Migration**: Validate S3 migration before relying on it
+
+## Security Considerations
+
+### Node-Agent Capabilities
+
+The Velero node-agent runs with **minimal Linux capabilities** instead of full privileged mode:
+
+**Current Configuration:**
+```yaml
+containerSecurityContext:
+  privileged: false
+  allowPrivilegeEscalation: false
+  capabilities:
+    add:
+      - DAC_READ_SEARCH  # Bypass file read permission checks
+```
+
+**Why This Configuration?**
+
+- **DAC_READ_SEARCH**: Allows the node-agent (Kopia) to read files from `/var/lib/kubelet/pods` regardless of their ownership or permissions. This is essential for backing up PVC data that may belong to different users.
+
+- **SYS_ADMIN Removed**: Previous versions included `SYS_ADMIN`, but this provides unnecessarily broad system administration privileges. Kopia file-system backups only need to read already-mounted volumes, which `DAC_READ_SEARCH` enables without the security risks of `SYS_ADMIN`.
+
+- **CSI Snapshots**: The CSI snapshot operations (if enabled) are handled by the Velero server and CSI driver via the Kubernetes API, not by the node-agent, so they don't require additional node-agent capabilities.
+
+**If You Experience Permission Issues:**
+
+1. Check node-agent logs: `kubectl -n velero logs daemonset/node-agent -c node-agent`
+2. Verify hostPath access to `/var/lib/kubelet/pods` is working
+3. Check SELinux/AppArmor policies for compatibility
+4. Verify PodSecurityPolicy/PodSecurityStandards allow `DAC_READ_SEARCH`
+5. As a last resort, you may add `SYS_ADMIN` capability, but be aware of the security implications
+
+**Comparison with Privileged Mode:**
+
+| Configuration | Privileges | Security Risk | Recommendation |
+|--------------|------------|---------------|----------------|
+| `privileged: true` | All capabilities + host access | Very High | ❌ Avoid |
+| `capabilities: [SYS_ADMIN]` | Broad system admin | High | ⚠️ Only if necessary |
+| `capabilities: [DAC_READ_SEARCH]` | File read bypass only | Low | ✅ Recommended |
 
 ## References
 
