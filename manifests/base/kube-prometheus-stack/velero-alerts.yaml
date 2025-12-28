@@ -40,7 +40,7 @@ spec:
         summary: "No successful Velero backup in 24 hours"
         description: |
           No successful backup for schedule {{ $labels.schedule }} in 24+ hours.
-          Last backup: {{ $value | humanizeDuration }} ago
+          Last successful backup was {{ $value | humanizeDuration }} ago
 
           Troubleshooting:
           1. kubectl get schedule {{ $labels.schedule }} -n velero
