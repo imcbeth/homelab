@@ -2,7 +2,27 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # Custom Pi Cluster Dashboards
   - loki-log-analytics.yaml
   - node-resource-monitoring.yaml
   - pi-cluster-overview.yaml
   - temperature-monitoring.yaml
+
+  # Loki Dashboards
+  - logging-dashboard-via-loki.yaml
+  - loki-dashboard.yaml
+  - loki-stack-monitoring.yaml
+  - loki2-global-metrics.yaml
+
+  # Synology Dashboards
+  - synology-dashboard.yaml
+  - synology-dashboard2.yaml
+
+  # UniFi Dashboards
+  - unifi-access-points.yaml
+  - unifi-clients.yaml
+  - unifi-dpi.yaml
+  - unifi-gateway.yaml
+  - unifi-pdu.yaml
+  - unifi-sites.yaml
+  - unifi-switches.yaml
