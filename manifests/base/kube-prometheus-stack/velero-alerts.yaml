@@ -1,0 +1,100 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: velero-alerts
+  namespace: default
+  labels:
+    app: velero
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: velero_backup
+    interval: 60s
+    rules:
+    - alert: VeleroBackupFailed
+      expr: increase(velero_backup_failure_total[1h]) > 0
+      for: 5m
+      labels:
+        severity: critical
+        component: backup
+      annotations:
+        summary: "Velero backup failed for schedule {{ $labels.schedule }}"
+        description: |
+          Velero backup has failed for schedule {{ $labels.schedule }}.
+          Failed backups in last hour: {{ $value }}
+
+          Troubleshooting:
+          1. kubectl get backups -n velero
+          2. kubectl logs -n velero -l app.kubernetes.io/name=velero
+          3. kubectl get backupstoragelocation -n velero
+
+    - alert: VeleroBackupDelayed
+      expr: time() - velero_backup_last_successful_timestamp > 86400
+      for: 1h
+      labels:
+        severity: critical
+        component: backup
+      annotations:
+        summary: "No successful Velero backup in 24 hours"
+        description: |
+          No successful backup for schedule {{ $labels.schedule }} in 24+ hours.
+          Last backup: {{ $value | humanizeDuration }} ago
+
+          Troubleshooting:
+          1. kubectl get schedule {{ $labels.schedule }} -n velero
+          2. kubectl get backups -n velero
+          3. kubectl get pods -n velero
+
+    - alert: VeleroBackupDurationHigh
+      expr: velero_backup_duration_seconds > 1800
+      for: 5m
+      labels:
+        severity: warning
+        component: backup
+      annotations:
+        summary: "Velero backup duration >30 minutes"
+        description: |
+          Backup took {{ $value | humanizeDuration }} for {{ $labels.schedule }}
+          May indicate large data volumes or resource constraints.
+
+    - alert: VeleroBackupStorageLocationUnavailable
+      expr: velero_backup_storage_location_available == 0
+      for: 10m
+      labels:
+        severity: critical
+        component: backup
+      annotations:
+        summary: "Velero backup storage unavailable"
+        description: |
+          Storage location {{ $labels.backup_storage_location }} unavailable.
+
+          Troubleshooting:
+          1. kubectl get backupstoragelocation -n velero
+          2. kubectl get secret cloud-credentials -n velero
+          3. Check LocalStack/S3 service availability
+
+    - alert: VeleroVolumeSnapshotLocationUnavailable
+      expr: velero_volume_snapshot_location_available == 0
+      for: 10m
+      labels:
+        severity: warning
+        component: backup
+      annotations:
+        summary: "Velero snapshot location unavailable"
+        description: |
+          Snapshot location {{ $labels.volume_snapshot_location }} unavailable.
+          Kopia file-level backups continue, but CSI snapshots will fail.
+
+    - alert: VeleroPartialBackupFailure
+      expr: increase(velero_backup_partial_failure_total[1h]) > 0
+      for: 10m
+      labels:
+        severity: warning
+        component: backup
+      annotations:
+        summary: "Velero partial backup failure"
+        description: |
+          Partial failures detected: {{ $value }}
+          Some resources may not have been backed up.
