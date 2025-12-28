@@ -1,0 +1,191 @@
+# Velero Configuration for Raspberry Pi 5 Kubernetes Homelab
+# Cluster: 5x Pi 5 nodes (16GB each, 80GB total)
+# Storage: Synology DS925+ via CSI
+# Backup Target: S3-compatible storage (LocalStack for testing, external S3 for production)
+
+# Image configuration - ARM64 compatible
+image:
+  repository: velero/velero
+  tag: v1.16.0
+  pullPolicy: IfNotPresent
+
+# Resource limits for Pi cluster - Velero server pod
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 200m
+    memory: 512Mi
+
+# Init containers for backup plugins - ARM64 versions
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.11.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+  - name: velero-plugin-for-csi
+    image: velero/velero-plugin-for-csi:v0.9.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+
+# S3-compatible backup storage configuration
+configuration:
+  # S3 storage provider (works with AWS S3, Backblaze B2, Wasabi, MinIO, LocalStack)
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      default: true
+      bucket: velero-backups
+      config:
+        # For LocalStack (testing):
+        region: us-east-1
+        s3ForcePathStyle: "true"
+        s3Url: http://localstack.localstack:4566
+        insecureSkipTLSVerify: "true"
+
+        # For Backblaze B2 (production) - Uncomment when migrating:
+        # region: us-west-004
+        # s3Url: https://s3.us-west-004.backblazeb2.com
+
+        # For AWS S3 (production) - Uncomment when migrating:
+        # region: us-east-1
+
+        # For Wasabi (production) - Uncomment when migrating:
+        # region: us-east-1
+        # s3Url: https://s3.wasabisys.com
+
+        # For MinIO on Synology (self-hosted) - Uncomment when migrating:
+        # region: us-east-1
+        # s3ForcePathStyle: "true"
+        # s3Url: http://minio.synology.local:9000
+        # insecureSkipTLSVerify: "true"
+
+  # Volume snapshot configuration - Synology CSI
+  volumeSnapshotLocation:
+    - name: synology-snapshots
+      provider: csi
+
+  # Enable CSI snapshot support
+  features: EnableCSI
+
+  # Default backup TTL (30 days)
+  defaultBackupTTL: 720h
+
+  # Upload progress monitoring
+  uploaderType: restic
+
+  # Default volumes to backup (opt-out model)
+  defaultVolumesToFsBackup: false
+
+# Credentials for S3 storage (stored in secret)
+credentials:
+  useSecret: true
+  secretContents:
+    cloud: |
+      [default]
+      aws_access_key_id=test
+      aws_secret_access_key=test
+  # For production, update with real credentials:
+  # aws_access_key_id=<YOUR_KEY_ID>
+  # aws_secret_access_key=<YOUR_SECRET_KEY>
+
+# Node-agent (restic/kopia) configuration for file-level backups
+nodeAgent:
+  enabled: true
+
+  # Resource limits for node-agent DaemonSet (runs on ALL nodes)
+  # Conservative for Pi cluster - adjust based on backup size
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Tolerations to run on all nodes including control-plane
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+  # Pod volume path for node-agent state
+  podVolumePath: /var/lib/kubelet/pods
+
+  # Privileged mode required for file system access
+  containerSecurityContext:
+    privileged: true
+
+  # Upload progress monitoring
+  uploaderType: restic
+
+# ServiceMonitor for Prometheus metrics
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+  prometheusRule:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+
+# Backup schedules (automated backups)
+schedules:
+  # Daily backup of critical PVCs at 2 AM
+  daily-critical-pvcs:
+    disabled: false
+    schedule: "0 2 * * *"
+    useOwnerReferencesInBackup: false
+    template:
+      ttl: "720h"  # 30 days retention
+      includedNamespaces:
+        - default      # Prometheus, Grafana
+        - loki         # Loki
+        - pihole       # Pi-hole
+      includeClusterResources: false
+      defaultVolumesToFsBackup: true  # Use restic for all PVCs
+      snapshotVolumes: true           # Also create CSI snapshots
+      storageLocation: default
+      volumeSnapshotLocations:
+        - synology-snapshots
+
+  # Weekly full cluster backup on Sunday at 3 AM
+  weekly-cluster-resources:
+    disabled: false
+    schedule: "0 3 * * 0"
+    useOwnerReferencesInBackup: false
+    template:
+      ttl: "2160h"  # 90 days retention
+      includeClusterResources: true
+      includedNamespaces:
+        - '*'
+      excludedResources:
+        - events
+        - events.events.k8s.io
+      defaultVolumesToFsBackup: false  # Cluster resources only
+      snapshotVolumes: false
+      storageLocation: default
+
+# RBAC configuration
+rbac:
+  create: true
+  clusterAdministrator: true
+
+# ServiceAccount configuration
+serviceAccount:
+  server:
+    create: true
+    name: velero
+
+# Configure cleanup jobs
+cleanUpCRDs: false
+
+# Volume snapshot class for CSI snapshots
+snapshotsEnabled: true
