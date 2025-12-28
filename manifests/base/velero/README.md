@@ -419,7 +419,7 @@ velero backup logs <backup-name>
 
 ```bash
 # Verify S3 credentials
-kubectl -n velero get secret velero-credentials -o yaml
+kubectl -n velero get secret velero-s3-credentials -o yaml
 
 # Test S3 connectivity from Velero pod
 kubectl -n velero exec deployment/velero -- velero backup-location get
@@ -460,7 +460,9 @@ kubectl -n velero logs daemonset/node-agent -c node-agent --tail=100
 # Common issues:
 # 1. Memory limits too low - increase from 1Gi to 1.5Gi
 # 2. Backup timeout - increase timeout in backup spec
-# 3. Permission issues - check securityContext.privileged: true
+# 3. Permission issues - verify node-agent securityContext matches values.yaml
+#    (privileged: false with required capabilities). Only consider privileged: true
+#    as a last resort if capability-based access is insufficient in your environment.
 ```
 
 ### Restore Failing

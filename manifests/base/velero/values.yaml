@@ -82,22 +82,35 @@ configuration:
   # Default volumes to backup (opt-out model)
   defaultVolumesToFsBackup: false
 
-# Credentials for S3 storage (stored in secret)
+# Credentials for S3 storage (stored in a Kubernetes Secret created by the Helm chart)
 credentials:
+  # When true, Velero reads cloud provider credentials from a Kubernetes Secret.
   useSecret: true
-  # Reference an existing Kubernetes Secret that contains the Velero cloud credentials.
-  # This Secret must define a key named "cloud" with contents like:
+
+  # The Velero Helm chart supports creating the cloud-credentials Secret directly from
+  # these values via `secretContents`. This avoids referencing a Secret that does not
+  # exist in the manifests and keeps the deployment self-contained.
+  #
+  # WARNING:
+  # - The values below are placeholders. They MUST be overridden with real credentials
+  #   via a secure mechanism (e.g., a private values file, CI/CD secret injection,
+  #   or an external secret manager).
+  # - Never commit real credentials to version control.
+  #
+  # The chart will create a Secret with a key named "cloud" whose contents must look like:
   # [default]
   # aws_access_key_id=<YOUR_KEY_ID>
   # aws_secret_access_key=<YOUR_SECRET_KEY>
-  existingSecret: velero-s3-credentials
-  # Create the Secret manually or via a secret management solution, for example:
-  # kubectl create secret generic velero-s3-credentials \
-  #   -n velero \
-  #   --from-literal=cloud='[default]\naws_access_key_id=<YOUR_KEY_ID>\naws_secret_access_key=<YOUR_SECRET_KEY>'
-  # For production, consider using sealed-secrets, external-secrets, or another external secret manager.
-  # Do not commit real or test credentials to version control.
+  secretContents:
+    cloud: |
+      [default]
+      aws_access_key_id=<YOUR_KEY_ID>
+      aws_secret_access_key=<YOUR_SECRET_KEY>
 
+  # Advanced: If you prefer to manage the Secret yourself (e.g., via sealed-secrets or
+  # external-secrets), you can instead set `credentials.existingSecret` in your own
+  # values file and omit `secretContents`. That pattern is not used in this base
+  # manifest to avoid referencing a Secret that is not defined here.
 # Node-agent (kopia) configuration for file-level backups
 nodeAgent:
   enabled: true
@@ -128,9 +141,13 @@ nodeAgent:
     capabilities:
       add:
         - DAC_READ_SEARCH
+        # SYS_ADMIN is required by the Velero node-agent (restic/kopia) to perform
+        # host-level filesystem operations needed for file-level backups, including
+        # mounting volumes / snapshots provided by the CSI driver. This is an intentional
+        # alternative to using privileged: true, and should be reviewed against cluster
+        # security policies before enabling in production.
         - SYS_ADMIN
 
-  # Upload progress monitoring
 
 # ServiceMonitor for Prometheus metrics
 metrics:

@@ -10,8 +10,8 @@ spec:
   sources:
     - repoURL: https://vmware-tanzu.github.io/helm-charts
       chart: velero
-      # Helm chart version 8.2.0 verified compatible with Velero v1.16.0
-      # per official Velero Helm chart documentation in the vmware-tanzu/helm-charts repository.
+      # Helm chart version 8.2.0 is the current stable release that supports Velero v1.16.0
+      # according to the official Velero Helm chart documentation in the vmware-tanzu/helm-charts repository.
       targetRevision: 8.2.0
       helm:
         releaseName: velero
