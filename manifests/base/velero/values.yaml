@@ -140,13 +140,27 @@ nodeAgent:
     allowPrivilegeEscalation: false
     capabilities:
       add:
+        # DAC_READ_SEARCH (Discretionary Access Control - Read Search) allows the
+        # node-agent (kopia) to read files regardless of their ownership or permissions.
+        # This is necessary for backing up PVC data from /var/lib/kubelet/pods where
+        # files may be owned by different users.
+        #
+        # Note: SYS_ADMIN was previously included but has been removed as it provides
+        # unnecessarily broad privileges. Kopia file-system backups only need to read
+        # already-mounted volumes via hostPath, which DAC_READ_SEARCH enables.
+        #
+        # CSI snapshot operations (if enabled via snapshotVolumes: true) are handled
+        # by the Velero server and CSI driver, not by the node-agent, so they do not
+        # require additional node-agent capabilities.
+        #
+        # If you encounter permission issues during backups, verify:
+        # 1. The node-agent has access to /var/lib/kubelet/pods via hostPath
+        # 2. SELinux/AppArmor policies are compatible with this configuration
+        # 3. Your cluster's PodSecurityPolicy/PodSecurityStandards allow DAC_READ_SEARCH
+        #
+        # Only add SYS_ADMIN as a last resort if DAC_READ_SEARCH proves insufficient
+        # in your specific environment.
         - DAC_READ_SEARCH
-        # SYS_ADMIN is required by the Velero node-agent (restic/kopia) to perform
-        # host-level filesystem operations needed for file-level backups, including
-        # mounting volumes / snapshots provided by the CSI driver. This is an intentional
-        # alternative to using privileged: true, and should be reviewed against cluster
-        # security policies before enabling in production.
-        - SYS_ADMIN
 
 
 # ServiceMonitor for Prometheus metrics
