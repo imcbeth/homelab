@@ -638,8 +638,6 @@ containerSecurityContext:
 
 - **SYS_ADMIN Removed**: Previous versions included `SYS_ADMIN`, but this provides unnecessarily broad system administration privileges. Kopia file-system backups only need to read already-mounted volumes, which `DAC_READ_SEARCH` enables without the security risks of `SYS_ADMIN`.
 
-8. **Test Production Migration**: Validate S3 migration before relying on it for disaster recovery
-
 - **CSI Snapshots**: The CSI snapshot operations (if enabled) are handled by the Velero server and CSI driver via the Kubernetes API, not by the node-agent, so they don't require additional node-agent capabilities.
 
 **If You Experience Permission Issues:**
@@ -657,6 +655,8 @@ containerSecurityContext:
 | `privileged: true` | All capabilities + host access | Very High | ❌ Avoid |
 | `capabilities: [SYS_ADMIN]` | Broad system admin | High | ⚠️ Only if necessary |
 | `capabilities: [DAC_READ_SEARCH]` | File read bypass only | Low | ✅ Recommended |
+
+8. **Test Production Migration**: Validate S3 migration before relying on it for disaster recovery
 
 ## References
 
