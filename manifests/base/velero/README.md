@@ -1,8 +1,16 @@
 # Velero Backup Solution
 
+> ⚠️ **Important:** The default `values.yaml` configuration assumes LocalStack is deployed for S3 storage testing. Before deploying Velero, either:
+> 1. Deploy LocalStack first (see [Prerequisites](#prerequisites)), OR
+> 2. Configure Velero for production S3 storage (see [Prerequisites - Option B](#prerequisites))
+>
+> If LocalStack is not available, Velero will fail to start with connection errors.
+
 Velero provides backup and disaster recovery for the Raspberry Pi 5 Kubernetes homelab cluster.
 
 ## Architecture
+
+> **Note:** The diagram below shows LocalStack as the S3 storage backend. This is the **default configuration for testing purposes**. LocalStack is **optional** - you can configure Velero to use production S3 providers (Backblaze B2, AWS S3, Wasabi, MinIO) instead. See the [Prerequisites](#prerequisites) section for options.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -56,6 +64,101 @@ Velero provides backup and disaster recovery for the Raspberry Pi 5 Kubernetes h
 | **Loki** | loki | 20Gi | synology-iscsi-retain | Log chunks/TSDB (7-day retention) |
 | **Grafana** | default | 5Gi | synology-iscsi-retain | Dashboards, datasources, plugins |
 | **Pi-hole** | pihole | 5Gi | synology-iscsi-retain | DNS blocklists, query history |
+
+## Prerequisites
+
+### LocalStack Deployment (Required for Current Configuration)
+
+The current `values.yaml` configuration assumes LocalStack is deployed and accessible. **Before installing or upgrading Velero**, verify LocalStack is running:
+
+```bash
+# 1. Check if LocalStack namespace exists
+kubectl get namespace localstack
+
+# 2. Verify LocalStack pod is running
+kubectl get pods -n localstack
+
+# 3. Verify LocalStack service exists and exposes port 4566
+kubectl get service -n localstack localstack
+
+# 4. Test LocalStack S3 endpoint connectivity
+kubectl run -n velero --rm -i --tty test-localstack --image=amazon/aws-cli --restart=Never -- \
+  s3 ls --endpoint-url=http://localstack.localstack:4566
+
+# If the above command succeeds, LocalStack is accessible from within the cluster
+```
+
+**If LocalStack is NOT deployed:**
+
+You have two options:
+
+**Option A: Deploy LocalStack first** (Recommended for testing)
+
+Deploy LocalStack before installing Velero. Example LocalStack deployment:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: localstack
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: localstack
+  namespace: localstack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: localstack
+  template:
+    metadata:
+      labels:
+        app: localstack
+    spec:
+      containers:
+      - name: localstack
+        image: localstack/localstack:latest
+        ports:
+        - containerPort: 4566
+        env:
+        - name: SERVICES
+          value: s3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: localstack
+  namespace: localstack
+spec:
+  selector:
+    app: localstack
+  ports:
+  - port: 4566
+    targetPort: 4566
+```
+
+**Option B: Configure Velero for production S3** (Skip LocalStack)
+
+If you want to skip LocalStack testing and go directly to production S3 (Backblaze B2, AWS S3, etc.), update `values.yaml` before deployment:
+
+1. Comment out the LocalStack configuration (lines 45-56)
+2. Uncomment your production S3 provider configuration (lines 58-73)
+3. Update credentials to match your production S3 provider
+4. See the "Migration from LocalStack to Production S3" section below for detailed steps
+
+**Common Error Messages if LocalStack is Missing:**
+
+If Velero is deployed without LocalStack being available, you'll see errors like:
+
+```
+BackupStorageLocation "default" is unavailable: rpc error: code = Unknown desc = Get "http://localstack.localstack:4566/": dial tcp: lookup localstack.localstack on 10.96.0.10:53: no such host
+```
+
+**Resolution:**
+- Deploy LocalStack (Option A above), OR
+- Reconfigure Velero for production S3 (Option B above)
 
 ## Storage Backends
 
@@ -429,19 +532,115 @@ velero backup logs <backup-name>
 
 ### S3 Connection Issues
 
+#### LocalStack Not Deployed or Unreachable
+
+**Symptoms:**
+```
+BackupStorageLocation "default" is unavailable: rpc error: code = Unknown desc = Get "http://localstack.localstack:4566/": dial tcp: lookup localstack.localstack on 10.96.0.10:53: no such host
+```
+
+**Diagnosis:**
+```bash
+# 1. Verify LocalStack namespace exists
+kubectl get namespace localstack
+# If error "Error from server (NotFound): namespaces 'localstack' not found"
+# → LocalStack is not deployed
+
+# 2. Check if LocalStack pods are running
+kubectl get pods -n localstack
+# If no pods or pods are in CrashLoopBackOff
+# → LocalStack deployment has issues
+
+# 3. Verify LocalStack service exists
+kubectl get service -n localstack localstack -o yaml
+# Check that:
+# - Service exists
+# - spec.ports includes port 4566
+# - Service selector matches LocalStack pod labels
+
+# 4. Test connectivity from Velero namespace
+kubectl run -n velero --rm -i --tty test-s3 --image=amazon/aws-cli --restart=Never -- \
+  s3 ls --endpoint-url=http://localstack.localstack:4566
+# If successful, LocalStack is reachable
+# If connection refused or DNS error → LocalStack not accessible
+```
+
+**Resolution:**
+
+Choose one of the following:
+
+**A. Deploy LocalStack** (see Prerequisites section above)
+
+**B. Reconfigure Velero for Production S3:**
+
+1. Update `manifests/base/velero/values.yaml`:
+   ```yaml
+   configuration:
+     backupStorageLocation:
+       - name: default
+         provider: aws
+         bucket: velero-backups-YOUR-IDENTIFIER
+         config:
+           # For Backblaze B2:
+           region: us-west-004
+           s3Url: https://s3.us-west-004.backblazeb2.com
+           # Remove LocalStack-specific settings:
+           # - s3ForcePathStyle
+           # - insecureSkipTLSVerify
+   ```
+
+2. Update credentials:
+   ```bash
+   kubectl create secret generic cloud-credentials \
+     -n velero \
+     --from-literal=cloud="[default]
+   aws_access_key_id=YOUR_KEY_ID
+   aws_secret_access_key=YOUR_SECRET_KEY"
+   ```
+
+3. Restart Velero:
+   ```bash
+   kubectl rollout restart deployment/velero -n velero
+   ```
+
+4. Verify backup storage location:
+   ```bash
+   kubectl get backupstoragelocation -n velero
+   # Status should change to "Available"
+   ```
+
+#### General S3 Connection Issues
+
 ```bash
 # Verify S3 credentials
-kubectl -n velero get secret velero-s3-credentials -o yaml
+kubectl -n velero get secret cloud-credentials -o yaml
 
 # Test S3 connectivity from Velero pod
 kubectl -n velero exec deployment/velero -- velero backup-location get
 
-# For LocalStack, verify LocalStack is running
+# Check backup storage location status
+kubectl get backupstoragelocation -n velero -o yaml
+
+# View Velero server logs for connection errors
+kubectl -n velero logs deployment/velero | grep -i "error\|failed"
+```
+
+#### For LocalStack Specifically
+
+```bash
+# Verify LocalStack is running
 kubectl -n localstack get pods
 
-# Test LocalStack S3 endpoint
+# Check LocalStack logs
+kubectl -n localstack logs deployment/localstack
+
+# Test LocalStack S3 endpoint from LocalStack pod
 kubectl -n localstack exec deployment/localstack -- \
   awslocal s3 ls s3://velero-backups
+
+# Create bucket if it doesn't exist
+kubectl -n localstack exec deployment/localstack -- \
+  awslocal s3 mb s3://velero-backups
 ```
 
 ### CSI Snapshot Issues
