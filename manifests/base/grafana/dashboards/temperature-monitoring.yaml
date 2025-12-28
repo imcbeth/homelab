@@ -291,7 +291,7 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "max_over_time(max(node_hwmon_temp_celsius{chip=\"cpu_thermal\",sensor=\"temp1\"})[24h:])",
+              "expr": "max_over_time(node_hwmon_temp_celsius{chip=\"cpu_thermal\",sensor=\"temp1\"}[24h])",
               "refId": "A"
             }
           ],
