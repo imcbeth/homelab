@@ -110,7 +110,7 @@ Based on the [TODO.md](TODO.md) roadmap:
   - External-DNS dual provider setup
   - Blackbox Exporter endpoint monitoring
   - Metrics Server deployment
-  - Custom Grafana dashboards (30 total)
+  - Custom Grafana dashboards (4 new, 30 total)
   - Log-based alerting with Loki Ruler
   - AlertManager SMTP email notifications
   - Velero backup solution
