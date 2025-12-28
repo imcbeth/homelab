@@ -86,7 +86,7 @@ configuration:
   # Upload progress monitoring
   uploaderType: kopia
 
-  # Default volumes to backup (opt-out model)
+  # Default volumes to backup (opt-in model; volumes must be explicitly annotated for backup)
   defaultVolumesToFsBackup: false
 
 # Credentials for S3 storage (stored in a Kubernetes Secret created by the Helm chart)
