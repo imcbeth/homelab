@@ -30,6 +30,29 @@ spec:
           2. kubectl logs -n velero -l app.kubernetes.io/name=velero
           3. kubectl get backupstoragelocation -n velero
 
+    - alert: VeleroBackupMetricAbsent
+      expr: absent(velero_backup_last_successful_timestamp)
+      for: 1h
+      labels:
+        severity: warning
+        component: backup
+      annotations:
+        summary: "Velero backup metric is absent"
+        description: |
+          The velero_backup_last_successful_timestamp metric is not present.
+          This may indicate:
+          - Velero is not running or not configured
+          - No backups have been configured yet
+          - Velero pod was recently restarted and no backup has completed
+
+          This is informational if no backup schedules are configured yet.
+          If backup schedules exist, this requires investigation.
+
+          Troubleshooting:
+          1. kubectl get pods -n velero
+          2. kubectl get schedule -n velero
+          3. kubectl logs -n velero -l app.kubernetes.io/name=velero
+
     - alert: VeleroBackupDelayed
       expr: time() - velero_backup_last_successful_timestamp > 86400
       for: 1h
@@ -40,7 +63,10 @@ spec:
         summary: "No successful Velero backup in 24 hours"
         description: |
           No successful backup for schedule {{ $labels.schedule }} in 24+ hours.
-          Last backup: {{ $value | humanizeDuration }} ago
+          Last successful backup was {{ $value | humanizeDuration }} ago
+
+          NOTE: This alert only fires when at least one successful backup has occurred.
+          If the metric is absent (no backups configured or completed), see VeleroBackupMetricAbsent alert.
 
           Troubleshooting:
           1. kubectl get schedule {{ $labels.schedule }} -n velero
@@ -48,7 +74,7 @@ spec:
           3. kubectl get pods -n velero
 
     - alert: VeleroBackupDurationHigh
-      expr: velero_backup_duration_seconds > 1800
+      expr: velero_backup_duration_seconds > 1800 and rate(velero_backup_duration_seconds[5m]) > 0
       for: 5m
       labels:
         severity: warning
