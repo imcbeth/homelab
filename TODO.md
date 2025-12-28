@@ -68,13 +68,21 @@
 ## 🔍 **Monitoring & Observability Enhancements**
 
 ### 4. **Custom Dashboards**
-- [ ] Pi cluster temperature monitoring dashboard (per-node CPU temps)
-- [ ] Node resource utilization dashboard (CPU, memory, disk per node)
+- [x] **Custom Grafana Dashboards** - 4 dashboards deployed via ConfigMap provisioning (2025-12-28)
+- [x] Pi cluster temperature monitoring dashboard (per-node CPU temps with Raspberry Pi 5 specifics)
+- [x] Node resource utilization dashboard (CPU, memory, disk per node)
+- [x] Loki log volume and ingestion rate dashboard (log analytics and error tracking)
+- [x] Create unified "cluster health" dashboard (Pi Cluster Overview with 12 panels)
+- [ ] **Migrate Uncommitted Dashboards to Code** ⭐ Next Task
+  - [ ] Audit Grafana UI for any manually created or modified dashboards
+  - [ ] Export uncommitted dashboards as JSON
+  - [ ] Create ConfigMap manifests for exported dashboards
+  - [ ] Add to kustomization and deploy via GitOps
+  - [ ] Verify dashboards load correctly after migration
+  - [ ] Document dashboard creation and modification workflow
 - [ ] Network utilization by VLAN/segment
 - [ ] Storage performance metrics (iSCSI latency, IOPS, throughput)
-- [ ] Loki log volume and ingestion rate dashboard
 - [ ] Application performance monitoring (APM) dashboard
-- [ ] Create unified "cluster health" dashboard
 
 ### 5. **Metrics Server Deployment**
 - [x] **Metrics Server** - Deployed for kubectl top and HPA (2025-12-28)
