@@ -29,12 +29,13 @@
 ## 🎯 **High Priority**
 
 ### 1. **Blackbox Exporter**
-- [ ] Deploy blackbox exporter for endpoint monitoring
-- [ ] Monitor external services availability (DNS, HTTP/HTTPS)
-- [ ] SSL certificate expiry monitoring for k8s.n37.ca domain
-- [ ] Network latency and response time tracking
-- [ ] Add alerts for service downtime
-- [ ] Monitor Synology NAS web interface availability
+- [x] **Blackbox Exporter** - Fully operational (deployed 2025-12-27, verified 2025-12-28)
+- [x] Deploy blackbox exporter for endpoint monitoring (v0.25.0, 2 replicas)
+- [x] Monitor external services availability (DNS, HTTP/HTTPS probes configured)
+- [x] SSL certificate expiry monitoring for k8s.n37.ca domain (https_cert_expiry module)
+- [x] Network latency and response time tracking (ICMP ping monitoring)
+- [x] Add alerts for service downtime (12 PrometheusRule alerts configured)
+- [x] Monitor Synology NAS web interface availability (10.0.1.204 monitored)
 
 ### 2. **Enhanced Alerting**
 - [x] **AlertManager SMTP Email** - Configured Gmail SMTP for critical alerts (2025-12-27)
