@@ -226,7 +226,7 @@ alertmanager:
       resolve_timeout: 5m
       smtp_from: 'alertmanager@n37.ca'
       smtp_smarthost: 'smtp.gmail.com:587'
-      smtp_auth_username_file: '/etc/alertmanager/secrets/alertmanager-smtp-credentials/smtp_username'
+      smtp_auth_username: 'imcbeth1980@gmail.com'
       smtp_auth_password_file: '/etc/alertmanager/secrets/alertmanager-smtp-credentials/smtp_password'
       # The above file-based SMTP credentials expect a Secret with the following structure:
       # ---
