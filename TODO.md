@@ -76,9 +76,11 @@
 - [ ] Create unified "cluster health" dashboard
 
 ### 5. **Metrics Server Deployment**
-- [ ] Deploy metrics-server for kubectl top commands
-- [ ] Enable Horizontal Pod Autoscaling (HPA) capabilities
-- [ ] Configure for resource-constrained Pi environment
+- [x] **Metrics Server** - Deployed for kubectl top and HPA (2025-12-28)
+- [x] Deploy metrics-server for kubectl top commands
+- [x] Enable Horizontal Pod Autoscaler (HPA) capabilities
+- [x] Configure for resource-constrained Pi environment (50m CPU / 100Mi RAM)
+- [x] Prometheus ServiceMonitor integration
 
 ### 6. **Log-Based Alerting**
 - [ ] Set up Loki alerting rules for error patterns
