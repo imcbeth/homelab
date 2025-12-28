@@ -48,7 +48,7 @@ spec:
           3. kubectl get pods -n velero
 
     - alert: VeleroBackupDurationHigh
-      expr: velero_backup_duration_seconds > 1800
+      expr: velero_backup_duration_seconds > 1800 and rate(velero_backup_duration_seconds[5m]) > 0
       for: 5m
       labels:
         severity: warning
