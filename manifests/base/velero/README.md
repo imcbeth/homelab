@@ -2,7 +2,7 @@
 
 > ⚠️ **Important:** The default `values.yaml` configuration assumes LocalStack is deployed for S3 storage testing. Before deploying Velero, either:
 > 1. Deploy LocalStack first (see [Prerequisites](#prerequisites)), OR
-> 2. Configure Velero for production S3 storage (see [Prerequisites - Option B](#prerequisites))
+> 2. Configure Velero for production S3 storage (see [Option B](#option-b-configure-velero-for-production-s3-skip-localstack))
 >
 > If LocalStack is not available, Velero will fail to start with connection errors.
 
@@ -175,12 +175,8 @@ credentials:
   aws_secret_access_key: test
 ```
 
-> Note: The `aws_access_key_id` and `aws_secret_access_key` values shown here (`test` / `test`) must match:
-> >
-> > - The credentials configured in your `values.yaml` (for example under `credentials.secretContents`), and
-> > - The credentials expected by your LocalStack deployment.
-> >
-> If these values are not consistent, Velero will fail to connect to the S3 endpoint.
+> **Note:** The `aws_access_key_id` and `aws_secret_access_key` values shown here (`test` / `test`) must match both the credentials configured in your `values.yaml` (for example under `credentials.secretContents`) and the credentials expected by your LocalStack deployment. If these values are not consistent, Velero will fail to connect to the S3 endpoint.
+
 **Limitations:**
 - ⚠️ Ephemeral storage - backups lost on LocalStack pod restart
 - ✅ Good for testing and validation
@@ -594,8 +590,8 @@ Choose one of the following:
    kubectl create secret generic cloud-credentials \
      -n velero \
      --from-literal=cloud="[default]
-   aws_access_key_id=YOUR_KEY_ID
-   aws_secret_access_key=YOUR_SECRET_KEY"
+aws_access_key_id=YOUR_KEY_ID
+aws_secret_access_key=YOUR_SECRET_KEY"
    ```
 
 3. Restart Velero:
