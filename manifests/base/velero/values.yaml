@@ -47,9 +47,17 @@ configuration:
         #   - LocalStack must be deployed in the "localstack" namespace.
         #   - A Kubernetes Service named "localstack" must exist in that namespace,
         #     exposing port 4566 (the LocalStack edge port).
+        #   - The cloud-credentials Secret must be created with matching credentials
+        #     (e.g., aws_access_key_id=test, aws_secret_access_key=test).
+        #
+        # Before installing/applying Velero with this values file, verify that:
+        #   - the LocalStack service is running and reachable at the URL below
+        #   - the cloud-credentials Secret exists with credentials matching LocalStack
+        #   - otherwise, the backup storage location will show as "Unavailable"
+        #     and Velero backups to this S3 target will fail.
+        #
         # If your LocalStack deployment uses a different namespace, service name, or port,
-        # update the s3Url below accordingly. Ensure LocalStack is deployed and reachable
-        # before installing/applying Velero with this values file.
+        # update the s3Url below accordingly.
         region: us-east-1
         s3ForcePathStyle: "true"
         s3Url: http://localstack.localstack:4566
@@ -133,8 +141,20 @@ credentials:
   # Never define real credentials directly in this base values.yaml or any file
   # that is committed to version control.
   #
-  # Example of referencing an externally managed Secret (set in your own values file):
-  # existingSecret: cloud-credentials
+  # Name of an existing Kubernetes Secret containing cloud provider credentials.
+  # The Secret must exist in the Velero namespace and contain a `cloud` key whose
+  # value is the credentials file content in the following format:
+  #   [default]
+  #   aws_access_key_id=<YOUR_KEY_ID>
+  #   aws_secret_access_key=<YOUR_SECRET_KEY>
+  #
+  # For LocalStack testing, create a Secret with test credentials:
+  #   kubectl create secret generic cloud-credentials -n velero \
+  #     --from-literal=cloud=$'[default]\naws_access_key_id=test\naws_secret_access_key=test'
+  #
+  # Override this value in a private, untracked values file to point to your Secret.
+  # Leaving this as an empty string means no existing Secret is referenced here.
+  existingSecret: ""
 # Node-agent (kopia) configuration for file-level backups
 nodeAgent:
   enabled: true
@@ -231,7 +251,7 @@ schedules:
       includeClusterResources: false
       defaultVolumesToFsBackup: true  # INTENTIONAL: enable Kopia file-level backups for all PVCs to support granular / cross-cluster restores.
       snapshotVolumes: true           # INTENTIONAL: also create CSI volume snapshots (synology-snapshots) for fast, same-cluster PVC restores.
-      storageLocation: default        # Restore strategy: prefer CSI snapshots for full-PVC, same-cluster recovery; fall back to Kopia for file-level or cross-cluster restores.
+      storageLocation: default        # Backup storage: both CSI snapshots and Kopia backups stored in 'default' location; restores automatically prefer CSI snapshots with Kopia as fallback.
       volumeSnapshotLocations:
         - synology-snapshots
 

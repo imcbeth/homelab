@@ -737,11 +737,10 @@ configuration:
 
 credentials:
   useSecret: true
-  secretContents:
-    cloud: |
-      [default]
-      aws_access_key_id=<YOUR_B2_KEY_ID>
-      aws_secret_access_key=<YOUR_B2_APPLICATION_KEY>
+  existingSecret: velero-b2-credentials        # Pre-created Kubernetes Secret
+  # Note: Create the Secret manually before deploying:
+  #   kubectl create secret generic velero-b2-credentials -n velero \
+  #     --from-literal=cloud=$'[default]\naws_access_key_id=<YOUR_B2_KEY_ID>\naws_secret_access_key=<YOUR_B2_APPLICATION_KEY>'
 ```
 
 **Step 2: Deploy Changes**
@@ -825,9 +824,12 @@ velero backup describe test-production-s3
    # Do NOT store real secrets in this repo.
    # This file should be kept out of Git or encrypted with git-crypt/sops.
    credentials:
-     useExistingSecret: true
-     existingSecretName: cloud-credentials
+     existingSecret: cloud-credentials
      # secretContents in the base values are for example only and should be disabled/overridden
+   ```
+
+8. **Test Production Migration**: Validate S3 migration before relying on it for disaster recovery
+
 ## Security Considerations
 
 ### Node-Agent Capabilities
@@ -867,8 +869,6 @@ containerSecurityContext:
 | `privileged: true` | All capabilities + host access | Very High | ❌ Avoid |
 | `capabilities: [SYS_ADMIN]` | Broad system admin | High | ⚠️ Only if necessary |
 | `capabilities: [DAC_READ_SEARCH]` | File read bypass only | Low | ✅ Recommended |
-
-8. **Test Production Migration**: Validate S3 migration before relying on it for disaster recovery
 
 ## References
 
