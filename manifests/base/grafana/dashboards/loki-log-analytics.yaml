@@ -73,7 +73,7 @@ data:
                   }
                 ]
               },
-              "unit": "logs/s"
+              "unit": "cps"
             },
             "overrides": []
           },
