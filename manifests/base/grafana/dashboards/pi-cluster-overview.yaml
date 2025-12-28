@@ -413,7 +413,7 @@ data:
           "targets": [
             {
               "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
-              "legendFormat": "{{node}}",
+              "legendFormat": "{{instance}}",
               "refId": "A"
             }
           ],
@@ -502,7 +502,7 @@ data:
           "targets": [
             {
               "expr": "node_hwmon_temp_celsius{chip=\"cpu_thermal\",sensor=\"temp1\"}",
-              "legendFormat": "{{node}}",
+              "legendFormat": "{{instance}}",
               "refId": "A"
             }
           ],
