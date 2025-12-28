@@ -3,6 +3,8 @@ kind: Application
 metadata:
   name: localstack
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-7"  # Deploy before Velero (-5) which depends on LocalStack S3
 spec:
   source:
     path: manifests/base/localstack
