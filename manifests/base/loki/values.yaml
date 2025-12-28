@@ -34,6 +34,20 @@ loki:
     compaction_interval: 10m
     delete_request_store: filesystem
 
+  # Ruler configuration for sending alerts to AlertManager
+  rulerConfig:
+    alertmanager_url: http://kube-prometheus-stack-alertmanager.default.svc.cluster.local:9093
+    enable_api: true
+    enable_alertmanager_v2: true
+    storage:
+      type: local
+      local:
+        directory: /rules
+    rule_path: /tmp/rules
+    ring:
+      kvstore:
+        store: inmemory
+
 singleBinary:
   replicas: 1
 
@@ -70,7 +84,12 @@ monitoring:
   dashboards:
     enabled: false
   rules:
-    enabled: false
+    enabled: true  # Enable Loki alerting rules
+    alerting: true  # Enable alerting to AlertManager
+    namespace: loki  # PrometheusRules will be created in loki namespace
+    labels:
+      prometheus: kube-prometheus  # Match Prometheus selector
+      role: alert-rules
   serviceMonitor:
     enabled: true
     labels:
@@ -79,6 +98,23 @@ monitoring:
     enabled: false
     grafanaAgent:
       installOperator: false
+
+# Ruler configuration for log-based alerting
+ruler:
+  enabled: true
+  kind: Deployment
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  persistence:
+    enabled: true
+    storageClass: synology-iscsi-retain
+    size: 1Gi
 
 # Test configuration
 test:
