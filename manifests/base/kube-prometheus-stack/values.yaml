@@ -228,6 +228,25 @@ alertmanager:
       smtp_smarthost: 'smtp.gmail.com:587'
       smtp_auth_username_file: '/etc/alertmanager/secrets/alertmanager-smtp-credentials/smtp_username'
       smtp_auth_password_file: '/etc/alertmanager/secrets/alertmanager-smtp-credentials/smtp_password'
+      # The above file-based SMTP credentials expect a Secret with the following structure:
+      # ---
+      # apiVersion: v1
+      # kind: Secret
+      # metadata:
+      #   name: alertmanager-smtp-credentials
+      #   namespace: <alertmanager-namespace>
+      # type: Opaque
+      # stringData:
+      #   smtp_username: your-email@example.com        # plain text email
+      #   smtp_password: your-app-specific-password    # plain text password
+      # ---
+      # Note: You can also use 'data:' instead of 'stringData:' if you prefer to
+      # base64 encode the values yourself. Kubernetes will decode them when mounting
+      # the files, so AlertManager always receives plain text credentials.
+      # Example with base64 encoding:
+      # data:
+      #   smtp_username: eW91ci1lbWFpbEBleGFtcGxlLmNvbQ==  # base64 of email
+      #   smtp_password: eW91ci1hcHAtc3BlY2lmaWMtcGFzc3dvcmQ=  # base64 of password
       smtp_require_tls: true
     inhibit_rules:
       - source_matchers:
