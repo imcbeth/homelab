@@ -124,15 +124,16 @@ nodeAgent:
   enabled: true
 
   # Resource limits for node-agent DaemonSet (runs on ALL nodes)
-  # Tuned for backing up larger PVCs (e.g., 50Gi Prometheus volume) on the Pi cluster.
-  # Monitor memory usage/OOMKilled events during backups and adjust as needed.
+  # Conservatively tuned for backing up larger PVCs (e.g., 50Gi Prometheus volume)
+  # on the Pi cluster. Monitor memory usage/OOMKilled events during backups and
+  # adjust requests/limits if needed based on real-world usage.
   resources:
     requests:
       cpu: 100m
       memory: 256Mi
     limits:
       cpu: 500m
-      memory: 2Gi
+      memory: 1Gi
 
   # Tolerations to run on all nodes including control-plane
   tolerations:
