@@ -73,13 +73,13 @@
 - [x] Node resource utilization dashboard (CPU, memory, disk per node)
 - [x] Loki log volume and ingestion rate dashboard (log analytics and error tracking)
 - [x] Create unified "cluster health" dashboard (Pi Cluster Overview with 12 panels)
-- [ ] **Migrate Uncommitted Dashboards to Code** ⭐ Next Task
-  - [ ] Audit Grafana UI for any manually created or modified dashboards
-  - [ ] Export uncommitted dashboards as JSON
-  - [ ] Create ConfigMap manifests for exported dashboards
-  - [ ] Add to kustomization and deploy via GitOps
-  - [ ] Verify dashboards load correctly after migration
-  - [ ] Document dashboard creation and modification workflow
+- [x] **Migrate Uncommitted Dashboards to Code** - Completed audit, no migration needed (2025-12-28)
+  - [x] Audit Grafana UI for any manually created or modified dashboards (30 total, all in ConfigMaps)
+  - [x] Export uncommitted dashboards as JSON (N/A - no uncommitted dashboards found)
+  - [x] Create ConfigMap manifests for exported dashboards (N/A - all 30 already in code)
+  - [x] Add to kustomization and deploy via GitOps (N/A - all already deployed)
+  - [x] Verify dashboards load correctly after migration (All 30 dashboards confirmed via sidecar)
+  - [x] Document dashboard creation and modification workflow (Added comprehensive audit section)
 - [ ] Network utilization by VLAN/segment
 - [ ] Storage performance metrics (iSCSI latency, IOPS, throughput)
 - [ ] Application performance monitoring (APM) dashboard
