@@ -92,11 +92,13 @@
 - [x] Prometheus ServiceMonitor integration
 
 ### 6. **Log-Based Alerting**
-- [ ] Set up Loki alerting rules for error patterns
-- [ ] Alert on CrashLoopBackOff events
-- [ ] Alert on OOMKilled events
-- [ ] Alert on persistent pod failures
-- [ ] Create log-based SLO monitoring
+- [x] **Loki Ruler Alerting** - Comprehensive log-based alerts deployed (2025-12-28)
+- [x] Set up Loki alerting rules for error patterns (HighErrorLogRate, CriticalErrorLogs)
+- [x] Alert on CrashLoopBackOff events (CrashLoopBackOffDetected)
+- [x] Alert on OOMKilled events (OOMKilledDetected)
+- [x] Alert on persistent pod failures (PersistentPodRestarts)
+- [x] Create log-based SLO monitoring (Error rate tracking via HighErrorLogRate)
+- [x] Additional alerts: HTTP 5xx errors, DB connection errors, auth failures, security events
 
 ---
 
