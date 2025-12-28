@@ -32,7 +32,7 @@ spec:
 
     - alert: VeleroBackupMetricAbsent
       expr: absent(velero_backup_last_successful_timestamp)
-      for: 30m
+      for: 1h
       labels:
         severity: warning
         component: backup
@@ -44,6 +44,9 @@ spec:
           - Velero is not running or not configured
           - No backups have been configured yet
           - Velero pod was recently restarted and no backup has completed
+
+          This is informational if no backup schedules are configured yet.
+          If backup schedules exist, this requires investigation.
 
           Troubleshooting:
           1. kubectl get pods -n velero
