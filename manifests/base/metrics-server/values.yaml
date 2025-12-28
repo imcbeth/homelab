@@ -36,7 +36,7 @@ args:
 apiService:
   create: true
   # ⚠️  SECURITY TRADE-OFF: Bypasses TLS verification for the metrics API endpoint
-  # This disables TLS certificate validation when kube-aggregator communicates with
+  # This disables TLS certificate validation when the kube-apiserver communicates with
   # the metrics-server API. This introduces a security risk by allowing potential
   # man-in-the-middle attacks on API server → metrics-server communication.
   #
