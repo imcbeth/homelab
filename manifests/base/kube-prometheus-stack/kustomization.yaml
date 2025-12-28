@@ -15,3 +15,7 @@ resources:
   - snmp-exporter-deployment.yaml
   - snmp-exporter-service.yaml
   - velero-alerts.yaml
+  - ../grafana/dashboards/pi-cluster-overview.yaml
+  - ../grafana/dashboards/node-resource-monitoring.yaml
+  - ../grafana/dashboards/temperature-monitoring.yaml
+  - ../grafana/dashboards/loki-log-analytics.yaml
