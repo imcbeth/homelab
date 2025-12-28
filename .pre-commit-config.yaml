@@ -33,7 +33,7 @@ repos:
     hooks:
       - id: yamllint
         name: Lint YAML files
-        exclude: '^secrets/.*'  # Exclude git-crypt encrypted files
+        exclude: '^(secrets/.*|manifests/base/grafana/dashboards/.*\.yaml)$'  # Exclude git-crypt encrypted files and Grafana dashboards
         args:
           - '-d'
           - |

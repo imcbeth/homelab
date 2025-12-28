@@ -1,0 +1,10 @@
+---
+extends: default
+
+rules:
+  line-length: disable
+  indentation:
+    spaces: 2
+  trailing-spaces: enable
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off']
