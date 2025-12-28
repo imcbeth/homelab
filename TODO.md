@@ -37,21 +37,30 @@
 - [ ] Monitor Synology NAS web interface availability
 
 ### 2. **Enhanced Alerting**
+- [x] **AlertManager SMTP Email** - Configured Gmail SMTP for critical alerts (2025-12-27)
+- [x] **Alert Routing** - Critical → email, warning/info → null (reduce noise)
+- [x] **Velero Backup Alerts** - 7 PrometheusRule alerts for backup monitoring
+- [x] **HTML Email Templates** - Custom-formatted critical alert emails
 - [ ] Configure AlertManager webhook to Discord/Slack/Telegram
-- [ ] Implement tiered alerting (warning → critical)
+- [ ] Implement tiered alerting (warning → Discord, critical → email+Discord)
 - [ ] Set up predictive alerts for disk space (Prometheus, Loki, Synology)
 - [ ] Create alerts for NAS disk failures and high temperature
 - [ ] Create runbooks for common alert scenarios
 - [ ] Test alert routing and escalation
 
 ### 3. **Backup Strategy** ⭐ Critical
-- [ ] **Velero** - Deploy for Kubernetes cluster backup to Synology
-- [ ] **Restic** or **Kopia** - Application data backup
-- [ ] Backup critical PVCs (Prometheus 50Gi, Grafana 5Gi, Loki 20Gi)
+- [x] **Velero** - Deployed for Kubernetes cluster backup (2025-12-27)
+- [x] **Kopia** - File-level backup via Velero node-agent
+- [x] Backup critical PVCs (Prometheus 50Gi, Grafana 5Gi, Loki 20Gi, Pi-hole 5Gi)
+- [x] Daily PVC backups (2 AM, 30-day retention)
+- [x] Weekly cluster resource backups (3 AM Sunday, 90-day retention)
+- [x] Velero backup monitoring alerts (7 PrometheusRule alerts)
+- [ ] **LocalStack Sync Wave Fix** - Move LocalStack to wave -7 (before Velero dependency issue)
+- [ ] Schedule regular backup testing and restore procedures (monthly)
+- [ ] Test first scheduled backup (wait for 2 AM execution)
+- [ ] Migrate from LocalStack to Backblaze B2 for production backups
+- [ ] Test disaster recovery scenarios (single PVC, namespace, full cluster)
 - [ ] ArgoCD configuration backup automation
-- [ ] Schedule regular backup testing and restore procedures
-- [ ] Document backup and restore processes
-- [ ] Test disaster recovery scenarios
 
 ---
 
@@ -134,13 +143,43 @@
 - [ ] Expand GitOps workflow documentation
 - [ ] Consider multi-cluster ArgoCD setup for dev/staging
 
-### 13. **Development & CI/CD Tools**
+### 13. **Development & CI/CD Tools - Argo Workflows** ⭐ Planned
+
+**Phase 1: Argo Workflows Deployment** (Q1 2026)
+- [ ] Deploy Argo Workflows v3.6+ (Helm chart 0.44.x)
+- [ ] Configure sync-wave: -8 (after Velero, before applications)
+- [ ] Set up artifact repository (S3 compatible - LocalStack or Backblaze B2)
+- [ ] Configure resource limits for Pi cluster constraints:
+  - Controller: 100m CPU / 256Mi RAM (request), 500m / 512Mi (limit)
+  - Server: 50m CPU / 128Mi RAM (request), 200m / 256Mi (limit)
+- [ ] Enable Prometheus ServiceMonitor for workflow metrics
+- [ ] Create Grafana dashboards for workflow monitoring
+- [ ] Set up AlertManager rules for workflow failures
+
+**Phase 2: Workflow Integration**
+- [ ] ARM64 container image build workflows
+- [ ] Automated testing pipelines for infrastructure changes
+- [ ] Monthly backup validation workflows (Velero restore tests)
+- [ ] Security vulnerability scanning workflows (Trivy integration)
+- [ ] Infrastructure compliance scan workflows
+
+**Phase 3: Advanced Features**
+- [ ] SSO integration via oauth2-proxy
+- [ ] Workflow templates library
+- [ ] Automated dependency updates (Renovate integration)
+- [ ] Multi-cluster workflow support (if dev/staging clusters added)
+
+**Dependencies & Considerations:**
+- Requires: Synology CSI (wave -30) for PVC storage ✓
+- Requires: kube-prometheus-stack (wave -15) for monitoring ✓
+- Optional: LocalStack (wave 0 → -7) for S3 artifact storage
+- Resource Impact: ~600m CPU, ~768Mi RAM total (acceptable for 20-core cluster)
+
+**Alternative Tools Considered:**
+- [ ] Evaluate **Tekton** (more complex, higher resource usage)
 - [ ] Evaluate **Gitea** vs **GitLab** for self-hosted git
 - [ ] **Harbor** - Container registry with vulnerability scanning
-- [ ] **Tekton** or **Argo Workflows** - CI/CD pipeline automation
 - [ ] Build and deployment automation for ARM64 custom containers
-- [ ] Integration with existing ArgoCD setup
-- [ ] Consider resource requirements on Pi cluster
 
 ---
 
@@ -208,6 +247,31 @@
 - [ ] Status page (Uptime Kuma or similar)
 - [ ] Internal chat/collaboration tool
 
+### 21. **Observability Maturity Enhancements**
+- [ ] **Distributed Tracing** - Evaluate Jaeger or Tempo for trace collection
+- [ ] **Continuous Profiling** - Pyroscope for application performance profiling
+- [ ] **Service Level Objectives (SLOs)** - Define and monitor SLOs for critical services
+- [ ] **Error Budget Tracking** - Automated SLO/error budget reporting
+- [ ] **Anomaly Detection** - ML-based anomaly detection for metrics (Prometheus AI/ML)
+- [ ] **Synthetic Monitoring** - Automated user journey testing
+
+### 22. **Disaster Recovery Testing**
+- [ ] **Monthly DR Drills** - Automated disaster recovery validation
+- [ ] **Chaos Engineering** - Controlled failure injection (Litmus)
+- [ ] **Velero Restore Testing** - Automated monthly PVC restore validation
+- [ ] **Network Partition Testing** - Simulate network failures
+- [ ] **Node Failure Scenarios** - Test cluster resilience to node loss
+- [ ] **Control Plane Failure** - Test etcd backup/restore procedures
+- [ ] **DR Runbook Automation** - Convert manual runbooks to Argo Workflows
+
+### 23. **Cost Optimization & Efficiency**
+- [ ] **Resource Right-Sizing** - Analyze actual vs requested resources
+- [ ] **Spot/Preemptible Instances** - Not applicable for bare metal, document for future cloud consideration
+- [ ] **Storage Optimization** - Compress old logs, optimize retention policies
+- [ ] **Network Egress Optimization** - Monitor and optimize outbound traffic
+- [ ] **Power Consumption Tracking** - PoE monitoring and efficiency analysis
+- [ ] **Carbon Footprint** - Calculate and optimize cluster carbon footprint
+
 ---
 
 ## 📅 **Implementation Priorities**
@@ -237,6 +301,96 @@ Items are organized by priority, not by timeline. Focus on:
 2. Chaos engineering and resilience testing
 3. Advanced networking and VPN
 4. Additional application deployments
+
+---
+
+## 🔄 **ArgoCD Sync Wave Optimization**
+
+### Current Sync Wave Order (Validated 2025-12-28)
+
+```
+Wave -50: argocd (self-management)
+Wave -35: metal-lb, pi-hole (networking foundation)
+Wave -30: synology-csi (storage driver)
+Wave -20: unipoller (UniFi metrics collection)
+Wave -15: kube-prometheus-stack (monitoring stack)
+Wave -12: loki (log aggregation)
+Wave -11: promtail (log collection)
+Wave -10: cert-manager, external-dns (certificates & DNS)
+Wave  -8: [PLANNED] argo-workflows (CI/CD)
+Wave  -7: [RECOMMENDED] localstack (S3 mock - move from wave 0)
+Wave  -5: velero (backup solution)
+Wave   0: [DEFAULT] localstack (applications tier)
+```
+
+### ⚠️ Identified Issues
+
+**1. LocalStack Dependency Conflict**
+- **Problem**: Velero (wave -5) depends on LocalStack (wave 0)
+- **Impact**: Velero's BackupStorageLocation shows "Unavailable" until LocalStack starts
+- **Current Config**: `s3Url: http://localstack.localstack:4566`
+- **Solution**: Add sync-wave `-7` to LocalStack Application manifest
+- **Priority**: Medium (Velero has retry logic, but cleaner deployment order is better)
+
+**2. Pi-hole Early Deployment**
+- **Current**: Wave -35 (same as MetalLB)
+- **Analysis**: Could move to -30 or -25 (only needs MetalLB for LoadBalancer IP)
+- **Decision**: Keep at -35 for early DNS availability (acceptable)
+
+**3. UniFi Poller Timing**
+- **Current**: Wave -20 (before monitoring stack)
+- **Analysis**: Could move to -10 or -5 (no critical dependencies)
+- **Decision**: Keep at -20 (metrics available when Prometheus starts)
+
+### ✅ Validated Dependencies
+
+- ✅ **ArgoCD** (-50) → Deploys itself first (correct)
+- ✅ **MetalLB** (-35) → Provides LoadBalancer IPs before services need them
+- ✅ **Synology CSI** (-30) → Storage driver available before PVCs
+- ✅ **kube-prometheus-stack** (-15) → Uses CSI for 50Gi Prometheus PVC
+- ✅ **Loki** (-12) → Uses CSI for 20Gi log storage PVC
+- ✅ **Promtail** (-11) → Depends on Loki being available
+- ✅ **cert-manager** (-10) → Independent, issues certs on-demand
+- ✅ **external-dns** (-10) → Works with TLS Ingresses (safe timing)
+- ✅ **Velero** (-5) → Uses CSI, depends on LocalStack (needs fix)
+
+### 🎯 Recommended Actions
+
+1. **Immediate**: Add sync-wave annotation to LocalStack Application
+   ```yaml
+   # /manifests/applications/localstack.yaml
+   annotations:
+     argocd.argoproj.io/sync-wave: "-7"
+   ```
+
+2. **Future**: Consider sync wave for Argo Workflows at `-8`
+
+3. **Optional Optimizations**:
+   - Move UniFi Poller to -10 (aligns with other non-critical monitoring)
+   - Move Pi-hole to -30 (after MetalLB, with CSI)
+
+### 📊 Sync Wave Best Practices
+
+**Critical Infrastructure** (Wave -50 to -30):
+- Self-managed components (ArgoCD)
+- Networking foundation (MetalLB, CNI)
+- Storage drivers (Synology CSI)
+
+**Monitoring & Logging** (Wave -20 to -10):
+- Metrics collection (UniFi Poller)
+- Monitoring stack (Prometheus, Grafana, AlertManager)
+- Log aggregation (Loki, Promtail)
+- Certificates and DNS (cert-manager, external-dns)
+
+**Operational Tools** (Wave -10 to 0):
+- CI/CD (Argo Workflows)
+- Testing infrastructure (LocalStack)
+- Backup solutions (Velero)
+
+**Applications** (Wave 0+):
+- User-facing services
+- Development tools
+- Internal applications
 
 ---
 
