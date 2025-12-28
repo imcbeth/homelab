@@ -34,6 +34,7 @@ data:
             "uid": "prometheus"
           },
           "fieldConfig": {
+            "defaults": {
               "color": {
                 "mode": "thresholds"
               },
