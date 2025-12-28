@@ -316,12 +316,15 @@ kubectl -n default scale deployment kube-prometheus-stack-grafana --replicas=1
 
 **Scenario 2: Namespace Loss (loki)**
 ```bash
-# 1. Restore entire namespace
+# 1. Identify most recent daily-critical-pvcs backup
+LATEST_BACKUP=$(velero backup get | awk '/^daily-critical-pvcs-/ {print $1}' | sort | tail -n 1)
+
+# 2. Restore entire namespace
 velero restore create loki-restore \
-  --from-backup daily-critical-pvcs-latest \
+  --from-backup "$LATEST_BACKUP" \
   --include-namespaces loki
 
-# 2. Verify pods come up
+# 3. Verify pods come up
 kubectl get pods -n loki -w
 
 # Time to recovery: < 30 minutes
