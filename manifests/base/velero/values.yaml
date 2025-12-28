@@ -13,6 +13,9 @@ image:
 # This avoids kubectl image version compatibility issues
 upgradeCRDs: false
 
+# Deploy node-agent DaemonSet for file-level backups (Kopia)
+deployNodeAgent: true
+
 # Resource limits for Pi cluster - Velero server pod
 resources:
   requests:
@@ -152,11 +155,11 @@ credentials:
   #     --from-literal=cloud=$'[default]\naws_access_key_id=test\naws_secret_access_key=test'
   #
   # Override this value in a private, untracked values file to point to your Secret.
-  # Leaving this as an empty string means no existing Secret is referenced here.
-  existingSecret: ""
-# Node-agent (kopia) configuration for file-level backups
+  # For LocalStack testing, we reference the manually created cloud-credentials secret.
+  existingSecret: "cloud-credentials"
+
+# Node-agent (Kopia) configuration for file-level backups
 nodeAgent:
-  enabled: true
 
   # Resource limits for node-agent DaemonSet (runs on ALL nodes)
   # Conservatively tuned for backing up larger PVCs (e.g., 50Gi Prometheus volume)
