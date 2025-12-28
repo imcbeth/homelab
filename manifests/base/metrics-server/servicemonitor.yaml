@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: metrics-server
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: metrics-server
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/part-of: kubernetes
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: metrics-server
+  endpoints:
+  - port: https
+    scheme: https
+    interval: 1m
+    scrapeTimeout: 10s
+    tlsConfig:
+      insecureSkipVerify: true
+      # Required because metrics-server uses self-signed certificates
