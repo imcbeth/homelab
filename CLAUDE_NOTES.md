@@ -2,13 +2,484 @@
 
 ## Quick Reference for AI Assistants Working in This Repository
 
-**Last Updated:** 2025-12-27
+**Last Updated:** 2025-12-28
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
 ---
 
+## 🚀 Quick Start for AI Assistants
+
+### First Steps When Starting a New Session
+
+1. **Check Recent Updates** (below) - Review the last 2-3 sessions to understand recent work
+2. **Review Active TODO** - Check `/Users/imcbeth/homelab/TODO.md` for current priorities
+3. **Understand Current State** - See "Current State" section in most recent session entry
+4. **Identify Pending Work** - Look for "For Next Session" items in recent updates
+
+### Critical Files to Reference
+
+| File | Purpose | When to Use |
+|------|---------|-------------|
+| `TODO.md` | Active roadmap and priorities | Planning next tasks |
+| `CLAUDE_NOTES.md` (this file) | Session history and troubleshooting | Understanding context, debugging |
+| `k8s-docs-n37/docs/applications/*.md` | Application documentation | Deep-dive into specific apps |
+| `manifests/applications/*.yaml` | ArgoCD Applications | Understanding deployment structure |
+| `manifests/base/<app>/values.yaml` | Helm chart values | Modifying application configuration |
+
+### Common Patterns in This Repository
+
+**PR-Required Workflow:**
+- Direct pushes to `main` branch are blocked
+- All changes require:
+  1. Create feature branch
+  2. Make changes
+  3. Create PR
+  4. Merge PR
+  5. ArgoCD auto-deploys within ~3 minutes
+
+**Git-crypt Encrypted Secrets:**
+- Files matching `*secret*` pattern are encrypted
+- ArgoCD **cannot read** encrypted files
+- Encrypted secrets must be:
+  1. Applied manually: `kubectl apply -f secrets/`
+  2. Excluded from `kustomization.yaml` resources list
+
+**Multi-source ArgoCD Applications:**
+- Chart source: Upstream Helm chart (versioned)
+- Path source: Local values + custom resources
+- Values file referenced via `$values/manifests/base/<app>/values.yaml`
+
+**Kustomization Pattern (kube-prometheus-stack):**
+- When path source has `kustomization.yaml`, ArgoCD uses Kustomize
+- Explicitly list resources to avoid parsing non-K8s files (e.g., values.yaml)
+- Exclude git-crypt encrypted files
+
+### Known Gotchas and Solutions
+
+| Gotcha | Solution | Reference |
+|--------|----------|-----------|
+| values.yaml parsed as K8s manifest | Create kustomization.yaml with explicit resource list | 2025-12-27/28 session |
+| Git-crypt encrypted secrets fail in ArgoCD | Exclude from kustomization, apply manually | 2025-12-27/28 session |
+| Base64 control characters | Use `echo -n` when encoding | 2025-12-27/28 session |
+| PrometheusRule not picked up | Add `release: kube-prometheus-stack` label | 2025-12-27/28 session |
+| AlertManager smtp_auth_username_file | Use `smtp_auth_username` (plain string) instead | 2025-12-27/28 session |
+| Node-exporter unreachable | Use `hostNetwork: false`, `hostPID: true` | 2025-12-26 session |
+
+### Session Documentation Template
+
+When documenting a new session in "Recent Updates", use this structure:
+
+```markdown
+### YYYY-MM-DD (Time of Day): Brief Session Title
+
+**Completed Work:**
+- ✅ Item 1
+- ✅ Item 2
+
+**Pull Requests:**
+- **PR #XXX:** [Status] Description
+
+**Issue N: Descriptive Title**
+
+**Symptoms:**
+[Error messages, behavior]
+
+**Root Cause:**
+[Why the issue occurred]
+
+**Solution:**
+[How it was fixed, code examples]
+
+**Current State:**
+[What's deployed and working]
+
+**For Next Session:**
+[Action items, pending work]
+
+**Files Modified:**
+[List of changed files with brief descriptions]
+```
+
+### Efficiency Tips for AI Assistants
+
+1. **Parallel Tool Calls:** When multiple independent reads/searches needed, use parallel tool calls
+2. **Use Task Tool for Exploration:** For code searches requiring multiple rounds, use Task tool with Explore agent
+3. **Reference Line Numbers:** When discussing code, use `file_path:line_number` format for clarity
+4. **Check Existing PRs:** Before creating new PR, verify previous PRs merged successfully
+5. **Session Continuity:** Always read last 1-2 session entries to understand recent context
+
+---
+
 ## 📋 Recent Updates
+
+### 2025-12-27/28 (Overnight): Velero Deployment and AlertManager SMTP Email Notifications
+
+**Completed Work:**
+- ✅ Deployed Velero v1.15.0 with Kopia file-level backup support
+- ✅ Configured daily PVC backups (Prometheus, Loki, Grafana, Pi-hole)
+- ✅ Configured weekly cluster resource backups
+- ✅ Created 7 Velero backup monitoring PrometheusRule alerts
+- ✅ Configured AlertManager SMTP email notifications (Gmail, critical-only)
+- ✅ Fixed multiple AlertManager configuration and deployment issues
+- ✅ Tested end-to-end email delivery successfully
+- ✅ Created comprehensive documentation in both repositories
+
+**Pull Requests:**
+- **PR #149:** [Merged] feat: Deploy Velero with Kopia file-level backup support
+- **PR #150:** [Merged] feat: Add Velero backup monitoring alerts
+- **PR #151:** [Merged] feat: Create .argocdignore to exclude values.yaml
+- **PR #152:** [Merged] fix: Create kustomization.yaml to explicitly list resources (supersedes #151)
+- **PR #153:** [Merged] fix: Remove control characters from grafana-secret base64 values
+- **PR #154:** [Merged] fix: Exclude git-crypt encrypted secrets from kustomization
+- **PR #155:** [Merged] fix: Use smtp_auth_username instead of smtp_auth_username_file
+- **PR #146:** [Merged] feat: Configure AlertManager SMTP email notifications
+- **CLAUDE_NOTES UPDATE:** [This session] Update documentation with Velero and AlertManager work
+
+**Phase 1 Task 1: Velero Backup Strategy - Completed**
+
+Deployed comprehensive backup solution for the homelab:
+
+**Architecture:**
+```
+Velero Server (1 pod)
+    ↓
+Node-Agent DaemonSet (5 pods, one per node)
+    ↓
+CSI Snapshots (Synology) + S3 Storage (LocalStack → Future: Backblaze B2)
+```
+
+**Backup Schedules:**
+- **daily-critical-pvcs:** 2 AM daily, 30-day retention, ~80Gi
+  - Namespaces: default (Prometheus 50Gi, Grafana 5Gi), loki (20Gi), pihole (5Gi)
+  - Method: Kopia file-level + CSI snapshots
+- **weekly-cluster-resources:** 3 AM Sunday, 90-day retention, ~100Mi
+  - Scope: All cluster resources (no PVCs)
+
+**Storage Backend:**
+- Testing: LocalStack (ephemeral, S3-compatible, for validation)
+- Production Plan: Backblaze B2 (~$1-2/month for ~100Gi)
+
+**Security:**
+- Node-agent uses minimal capabilities: `DAC_READ_SEARCH` (not privileged)
+- File-based backup from `/var/lib/kubelet/pods`
+- Credentials via git-crypt encrypted secrets
+
+**Phase 1 Task 2: Enhanced Alerting - AlertManager SMTP Email Notifications - Completed**
+
+Configured AlertManager to send critical-only email notifications via SMTP:
+
+**Configuration:**
+- Provider: Gmail (smtp.gmail.com:587 with TLS)
+- Credentials: Git-crypt encrypted secret `alertmanager-smtp-credentials`
+- Routing: Critical alerts → email, warning/info → null receiver
+- HTML template: Custom-formatted alert emails with styling
+- Filter: Watchdog alerts always silenced (heartbeat, not actionable)
+
+**Email Configuration:**
+```yaml
+smtp_auth_username: 'imcbeth1980@gmail.com'  # Plain string (AlertManager limitation)
+smtp_auth_password_file: '/etc/alertmanager/secrets/alertmanager-smtp-credentials/smtp_password'
+```
+
+**Velero Backup Monitoring Alerts Created (7 alerts):**
+
+**Critical Severity:**
+1. **VeleroBackupFailed**: Backup failures in last hour
+2. **VeleroBackupDelayed**: No successful backup in 24+ hours
+3. **VeleroBackupStorageLocationUnavailable**: S3 storage unreachable
+4. **VeleroBackupMetricAbsent**: Velero metrics not being scraped
+
+**Warning Severity:**
+5. **VeleroBackupDurationHigh**: Backup taking >30 minutes
+6. **VeleroVolumeSnapshotLocationUnavailable**: CSI snapshot location unavailable
+7. **VeleroPartialBackupFailure**: Some resources not backed up
+
+**Issue 1: values.yaml Treated as Kubernetes Manifest by ArgoCD**
+
+**Symptoms:**
+```
+ComparisonError: Failed to unmarshal "values.yaml": error unmarshaling JSON: Object 'Kind' is missing
+```
+
+**Root Cause:**
+ArgoCD's path source (`manifests/base/kube-prometheus-stack`) includes all files, including `values.yaml`. ArgoCD attempted to parse it as a Kubernetes manifest despite it being referenced as a Helm values file in the chart source.
+
+**Investigation:**
+```bash
+argocd app diff kube-prometheus-stack
+# Error: values.yaml treated as K8s resource
+```
+
+**Solution Attempt 1 (PR #151):**
+Created `.argocdignore` file:
+```
+values.yaml
+./values.yaml
+**/values.yaml
+```
+**Result:** Partially worked but not reliable across ArgoCD versions.
+
+**Solution Attempt 2 (PR #152) - SUCCESSFUL:**
+Created `kustomization.yaml` with explicit resource list:
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - blackbox-exporter-alerts.yaml
+  - blackbox-exporter-configmap.yaml
+  - blackbox-exporter-deployment.yaml
+  - blackbox-exporter-service.yaml
+  - snmp-exporter-configmap.yaml
+  - snmp-exporter-deployment.yaml
+  - snmp-exporter-service.yaml
+  - velero-alerts.yaml
+```
+
+**Why This Works:**
+- Kustomize explicitly defines which files to include
+- ArgoCD recognizes kustomization.yaml and only processes listed resources
+- values.yaml excluded by omission (documented in comments)
+
+**Issue 2: Git-crypt Encrypted Secrets in ArgoCD Kustomization**
+
+**Symptoms:**
+```
+MalformedYAMLError: yaml: control characters are not allowed in File: grafana-secret.yaml
+```
+
+**Root Cause:**
+- Added `grafana-secret.yaml` and `snmp-exporter-secret.yaml` to kustomization.yaml
+- These files are git-crypt encrypted
+- ArgoCD cannot read encrypted files (sees binary/garbled data)
+- User confirmed: "argocd cannot read secrets - git-crypt"
+
+**Solution (PR #154):**
+Excluded encrypted secrets from kustomization.yaml resources list with documentation:
+```yaml
+# Explicitly list resources to deploy
+# Excluded:
+#  - values.yaml (used by Helm chart source only)
+#  - grafana-secret.yaml (git-crypt encrypted, apply manually)
+#  - snmp-exporter-secret.yaml (git-crypt encrypted, apply manually)
+```
+
+**Workaround:**
+Git-crypt encrypted secrets must be applied manually:
+```bash
+kubectl apply -f secrets/grafana-secret.yaml
+kubectl apply -f manifests/base/kube-prometheus-stack/snmp-exporter-secret.yaml
+```
+
+**Issue 3: Control Characters in Base64-Encoded Secrets**
+
+**Symptoms:**
+```
+MalformedYAMLError: yaml: control characters are not allowed
+```
+
+When decoding grafana-secret values:
+```bash
+echo "YWRtaW4K" | base64 -d  # → "admin\n" (includes newline)
+```
+
+**Root Cause:**
+Base64 values included trailing newlines (`\n`), which are control characters in YAML:
+```yaml
+data:
+  admin-user: <base64-with-newline>          # Decodes to "admin\n"
+  admin-password: <base64-with-newline>  # Decodes to "password\n"
+```
+
+**Solution (PR #153):**
+Re-encoded without trailing newlines using `echo -n`:
+```bash
+echo -n "admin" | base64        # → <base64-without-newline>
+echo -n "password" | base64   # → <base64-without-newline>
+```
+
+Updated secret:
+```yaml
+data:
+  admin-user: <base64-value>
+  admin-password: <base64-value>
+```
+
+**Best Practice:**
+Always use `echo -n` when base64-encoding to avoid trailing newlines.
+
+**Issue 4: AlertManager smtp_auth_username_file Not Supported**
+
+**Symptoms:**
+```
+level=error msg="Unhandled Error" err="sync \"default/kube-prometheus-stack-alertmanager\" failed: provision alertmanager configuration: failed to initialize from secret: yaml: unmarshal errors:\n  line 4: field smtp_auth_username_file not found in type config.plain"
+```
+
+**Root Cause:**
+AlertManager only supports:
+- `smtp_auth_username`: Plain string (no file reference)
+- `smtp_auth_password_file`: File-based reference to mounted secret
+
+There is **NO** `smtp_auth_username_file` option in AlertManager configuration.
+
+**Initial Attempt (Failed):**
+```yaml
+smtp_auth_username_file: '/etc/alertmanager/secrets/alertmanager-smtp-credentials/smtp_username'
+smtp_auth_password_file: '/etc/alertmanager/secrets/alertmanager-smtp-credentials/smtp_password'
+```
+
+**Investigation:**
+User asked: "can you set them as env variables ?"
+User clarified: "nvm .. I get it now" (understood the file-based limitation)
+
+**Solution (PR #155):**
+Mixed authentication approach:
+```yaml
+smtp_auth_username: 'imcbeth1980@gmail.com'  # Plain string (required by AlertManager)
+smtp_auth_password_file: '/etc/alertmanager/secrets/alertmanager-smtp-credentials/smtp_password'  # File reference
+```
+
+**Why This Is Correct:**
+- Username is not sensitive (visible in SMTP handshake anyway)
+- Password remains protected via file-based secret mount
+- Follows AlertManager's supported authentication fields
+
+**References:**
+- [Prometheus AlertManager Configuration](https://prometheus.io/docs/alerting/latest/configuration/)
+
+**Issue 5: PrometheusRule Label Selector Missing**
+
+**Symptoms:**
+- PrometheusRule created but not loaded by Prometheus
+- Test alert not firing
+- Rule not visible in Prometheus UI
+
+**Root Cause:**
+Prometheus requires specific label selector to pick up PrometheusRule resources. Missing `release: kube-prometheus-stack` label.
+
+**Initial Labels (Insufficient):**
+```yaml
+labels:
+  prometheus: kube-prometheus
+  role: alert-rules
+```
+
+**Solution:**
+Added required label:
+```yaml
+labels:
+  release: kube-prometheus-stack  # Required for Prometheus to pick up rules!
+  prometheus: kube-prometheus
+  role: alert-rules
+```
+
+**Applies To:**
+All custom PrometheusRule resources:
+- Blackbox exporter alerts
+- Velero alerts
+- Any future custom alert rules
+
+**Verification:**
+```bash
+kubectl port-forward -n default svc/kube-prometheus-stack-prometheus 9090:9090
+# Navigate to http://localhost:9090/alerts
+# Test alert should appear in "Firing" state
+```
+
+**Technical Deep-Dive: AlertManager SMTP Configuration Architecture**
+
+**Secret Mount Flow:**
+```
+alertmanagerSpec.secrets:
+  - alertmanager-smtp-credentials
+        ↓
+prometheus-operator mounts secret
+        ↓
+/etc/alertmanager/secrets/alertmanager-smtp-credentials/
+  ├── smtp_username (symlink to secret data)
+  └── smtp_password (symlink to secret data)
+        ↓
+AlertManager config references:
+  smtp_auth_username: 'imcbeth1980@gmail.com'  # Plain string
+  smtp_auth_password_file: '/etc/alertmanager/secrets/..../smtp_password'
+```
+
+**Alert Routing Decision Tree:**
+```
+Incoming Alert
+    ↓
+Check: alertname == "Watchdog" ?
+    ├─ YES → Route to 'null' receiver (silenced)
+    └─ NO → Check: severity == "critical" ?
+            ├─ YES → Route to 'email-critical' receiver
+            └─ NO → Route to 'null' receiver (default)
+```
+
+**Email Template:**
+- HTML-formatted with CSS styling
+- Red left border for critical alerts
+- Alert summary (bold)
+- Alert description (pre-formatted, preserves whitespace)
+- Subject: `[CRITICAL] {{ .GroupLabels.alertname }} - K8s Homelab`
+
+**Current State:**
+- Velero deployed and running ✅
+- Daily backup schedule active (2 AM) ✅
+- Weekly cluster backup schedule active (3 AM Sunday) ✅
+- LocalStack S3 storage connected ✅
+- 7 Velero monitoring alerts deployed ✅
+- AlertManager SMTP email configured ✅
+- Email delivery tested and confirmed: "I have the Email :) thank you" ✅
+- All 6 PRs merged successfully ✅
+- Phase 1 Tasks 1 & 2 completed ✅
+
+**What Works:**
+- Velero server and node-agent pods running on all 5 nodes
+- Backup schedules created and ready to execute
+- CSI snapshot integration with Synology configured
+- Kopia file-level backup enabled with DAC_READ_SEARCH capability
+- Velero metrics exposed and scraped by Prometheus
+- AlertManager sends critical alerts via Gmail SMTP (port 587, TLS)
+- Warning/info alerts silenced (reduces alert noise)
+- HTML-formatted email notifications
+- Git-crypt encrypted SMTP credentials
+- PrometheusRule alerts for backup monitoring
+
+**For Next Session:**
+- Wait for first daily backup (2 AM) and verify success
+- Monitor Velero metrics in Prometheus
+- Test backup alert by simulating failure (optional)
+- Consider migrating from LocalStack to Backblaze B2 for production
+- Continue with TODO.md Phase 1 remaining items:
+  - ~~Backup strategy (Velero)~~ ✅ COMPLETED
+  - ~~Enhanced alerting (AlertManager SMTP)~~ ✅ COMPLETED
+  - Blackbox Exporter deployment
+  - Metrics Server deployment
+
+**Lessons Learned:**
+1. **ArgoCD Path Sources:** Use kustomization.yaml to explicitly list resources, prevents parsing non-K8s files
+2. **Git-crypt + ArgoCD:** Encrypted files must be excluded from kustomization and applied manually
+3. **Base64 Encoding:** Always use `echo -n` to avoid trailing newlines causing control character errors
+4. **AlertManager Auth Fields:** Only `smtp_auth_username` (plain) and `smtp_auth_password_file` (file) are supported
+5. **PrometheusRule Labels:** Must include `release: kube-prometheus-stack` for Prometheus to pick up custom rules
+6. **Velero Node-Agent Security:** `DAC_READ_SEARCH` capability sufficient for PVC backup, no need for privileged mode
+7. **Split Workflow:** Helm chart source + path source works well when path has kustomization.yaml
+
+**Files Modified:**
+- `manifests/base/velero/values.yaml` - Created comprehensive Velero configuration
+- `manifests/applications/velero.yaml` - Created ArgoCD Application for Velero
+- `manifests/base/velero/README.md` - Created extensive Velero documentation
+- `manifests/base/kube-prometheus-stack/velero-alerts.yaml` - Created 7 Velero backup monitoring alerts
+- `secrets/alertmanager-smtp-secret.yaml` - Created git-crypt encrypted SMTP credentials
+- `manifests/base/kube-prometheus-stack/values.yaml` - Updated AlertManager config for SMTP email
+- `manifests/base/kube-prometheus-stack/kustomization.yaml` - Created explicit resource list
+- `manifests/base/kube-prometheus-stack/.argocdignore` - Created (later superseded by kustomization)
+- `manifests/base/kube-prometheus-stack/grafana-secret.yaml` - Fixed base64 control characters
+- `k8s-docs-n37/docs/applications/velero.md` - Created comprehensive Velero documentation
+- `k8s-docs-n37/docs/applications/kube-prometheus-stack.md` - Added AlertManager SMTP configuration section and troubleshooting
+- `CLAUDE_NOTES.md` - Updated with this session (2025-12-27/28)
+
+---
 
 ### 2025-12-27 (Late Evening): External-DNS Deployment and Troubleshooting
 
