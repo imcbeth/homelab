@@ -563,7 +563,7 @@ velero backup describe test-production-s3
 
 **Total Cluster Overhead:**
 - CPU: 600m (100m server + 500m node-agents) (~3% of 20 cores)
-- Memory: ~1.5Gi (256Mi server + 1.28Gi node-agents) (~1.9% of 80GB)
+- Memory: 1.54Gi (256Mi server + 1.28Gi node-agents) (~1.9% of 80GB)
 
 **Storage:**
 - LocalStack: Ephemeral (no persistent storage)
