@@ -113,6 +113,218 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
+### 2025-12-28 (Late Morning/Afternoon): Custom Grafana Dashboards Deployment
+
+**Completed Work:**
+- ✅ Created 4 custom Grafana dashboards (38 total panels)
+- ✅ Deployed dashboards via ConfigMap sidecar provisioning pattern
+- ✅ Fixed datasource format (structured with type/uid)
+- ✅ Optimized LogQL queries for performance ({namespace!=""})
+- ✅ Fixed Loki ingester memory thresholds (256MB/512MB for Pi cluster)
+- ✅ Simplified error regex patterns (removed redundant uppercase)
+- ✅ Fixed kustomization pattern (bases vs direct resource references)
+- ✅ Fixed temperature dashboard chip label (thermal_thermal_zone0)
+- ✅ Created comprehensive dashboard documentation (grafana-dashboards.md)
+- ✅ Updated k8s-docs-n37 sidebars with new documentation page
+
+**Pull Requests:**
+- **PR #164:** [Merged] feat: Add custom Grafana dashboards for Pi cluster monitoring
+- **PR #165:** [Merged] Set editable: false in dashboard configmaps (Copilot fix)
+- **PR #166:** [Merged] Fix Temperature Delta gauge thresholds (Copilot fix)
+- **PR #167:** [Merged] fix: Use kustomization base for Grafana dashboards
+- **PR #168:** [Open] fix: Update temperature dashboard to use correct chip label
+- **k8s-docs-n37 PR:** [Pending] Add grafana-dashboards.md documentation
+
+**Phase 1 Task #4: Custom Dashboards - Completed**
+
+Created production-ready Grafana dashboards for comprehensive Pi cluster monitoring:
+
+**Dashboards Deployed:**
+
+1. **Pi Cluster Overview (7 panels)**
+   - Cluster stats (nodes, pods, CPU %, memory %)
+   - Per-node CPU/memory usage trends
+   - Real-time CPU temperature monitoring
+
+2. **Node Resource Monitoring (13 panels)**
+   - CPU usage, load averages (1m/5m/15m)
+   - Memory usage and available memory
+   - Disk I/O (bytes/sec and IOPS)
+   - Network traffic (RX/TX, excluding virtual interfaces)
+   - Filesystem usage table
+   - Node details (boot time, uptime, kernel, OS)
+
+3. **Temperature Monitoring (8 panels)**
+   - 24h CPU temperature timeline for all 5 nodes
+   - Temperature statistics (current max/avg/min, max 24h)
+   - Temperature distribution heatmap
+   - Cooling efficiency gauge (temperature delta)
+   - Per-node temperature summary table
+
+4. **Loki Log Analytics (10 panels)**
+   - Log ingestion rate (lines/sec and bytes/sec)
+   - Loki ingester metrics (streams, chunks, memory)
+   - Log volume by namespace and pod
+   - Query performance (p95/p99 latency)
+   - Error log volume tracking
+   - Recent error logs panel
+   - Top 20 pods by log volume
+
+**Issue 1: Kustomize Security Error on Deployment**
+
+**Symptoms:**
+```
+Error: accumulating resources from '../grafana/dashboards/pi-cluster-overview.yaml':
+security; file is not in or below '<path>/manifests/base/kube-prometheus-stack'
+```
+
+**Root Cause:**
+Kustomize doesn't allow referencing files outside the base directory using relative paths (`../`) for security reasons.
+
+**Solution:**
+1. Created `manifests/base/grafana/dashboards/kustomization.yaml`
+2. Updated `manifests/base/kube-prometheus-stack/kustomization.yaml`:
+   - Added `bases:` section referencing `../grafana/dashboards`
+   - Removed direct dashboard file references from `resources:`
+
+**Pattern:** Use kustomize `bases:` to include resources from another directory.
+
+**Issue 2: Temperature Metrics Not Displaying**
+
+**Symptoms:**
+Temperature panels showing "No data" despite lm-sensors working on nodes.
+
+**Root Cause:**
+Dashboard queried for wrong hwmon chip label:
+- Dashboard query: `chip="cpu_thermal"`
+- Actual chip: `chip="thermal_thermal_zone0"`
+
+**Investigation:**
+Queried Prometheus directly and found temperature metrics with different chip labels:
+```json
+{
+  "chip": "thermal_thermal_zone0",    // CPU thermal zone ← Correct
+  "chip": "1000120000_pcie_1f000c8000_adc",  // PCIe/RP1 sensor
+  "chip": "nvme_nvme0"                // NVMe drive temp
+}
+```
+
+**Solution:**
+Updated PromQL queries in both dashboards:
+```promql
+# Before
+node_hwmon_temp_celsius{chip="cpu_thermal",sensor="temp1"}
+
+# After
+node_hwmon_temp_celsius{chip="thermal_thermal_zone0",sensor="temp1"}
+```
+
+**Why thermal_thermal_zone0?**
+This is the kernel's thermal zone for the Broadcom BCM2712 SoC (Raspberry Pi 5 CPU), representing actual CPU die temperature.
+
+**Technical Deep-Dive: Dashboard Architecture**
+
+**Deployment Pattern:**
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-<name>
+  namespace: default
+  labels:
+    grafana_dashboard: "1"  # Sidecar auto-discovery
+data:
+  <name>.json: |
+    { "dashboard": {...} }
+```
+
+**Sidecar Auto-Discovery:**
+1. Grafana deployment includes sidecar container `grafana-sc-dashboard`
+2. Watches for ConfigMaps with label `grafana_dashboard: "1"`
+3. Extracts dashboard JSON and writes to `/tmp/dashboards/`
+4. Grafana automatically loads dashboards (~30s)
+
+**Kustomization Structure:**
+```
+manifests/base/
+├── grafana/dashboards/
+│   ├── kustomization.yaml          # Lists all 4 dashboards
+│   ├── pi-cluster-overview.yaml
+│   ├── node-resource-monitoring.yaml
+│   ├── temperature-monitoring.yaml
+│   └── loki-log-analytics.yaml
+└── kube-prometheus-stack/
+    └── kustomization.yaml           # Includes dashboards via bases:
+```
+
+**Dashboard Configuration Standards:**
+
+**Datasource Format (Structured):**
+```json
+"datasource": {
+  "type": "prometheus",  // or "loki"
+  "uid": "prometheus"    // or "loki"
+}
+```
+
+**Common Thresholds:**
+- Resource (CPU/Memory): Green < 70%, Yellow 70-90%, Red > 90%
+- Temperature: Green < 70°C, Yellow 70-85°C, Red > 85°C
+- Loki Memory: Green < 256MB, Yellow 256-512MB, Red > 512MB
+
+**LogQL Query Optimization:**
+```logql
+# Good (optimized)
+{namespace!=""}
+
+# Avoid (permissive, slower)
+{namespace=~".+"}
+```
+
+**Raspberry Pi 5 Temperature Characteristics:**
+- Idle: 40-50°C
+- Moderate Load: 50-65°C
+- Heavy Load: 65-75°C
+- Throttle Point: 85°C
+- Critical: 90°C
+
+**Current State:**
+
+**Deployed:**
+- 4 custom Grafana dashboards (38 panels total)
+- ConfigMaps created and discovered by sidecar
+- Dashboards accessible at https://grafana.k8s.n37.ca
+
+**Pending:**
+- PR #168 merge (temperature chip label fix)
+- k8s-docs-n37 PR merge (grafana-dashboards.md documentation)
+
+**For Next Session:**
+
+**Phase 1 Remaining Tasks:**
+1. Log-Based Alerting (Loki alerting rules)
+2. Security Scanning (Trivy Operator evaluation)
+3. Secrets Management (Sealed Secrets vs External Secrets evaluation)
+
+**Monitoring Improvements:**
+- Consider adding panels for:
+  - Container resource usage (top pods by CPU/memory)
+  - Network errors/drops
+  - Disk saturation metrics
+  - Alert firing history
+
+**Files Modified:**
+- `manifests/base/grafana/dashboards/pi-cluster-overview.yaml` (created)
+- `manifests/base/grafana/dashboards/node-resource-monitoring.yaml` (created)
+- `manifests/base/grafana/dashboards/temperature-monitoring.yaml` (created)
+- `manifests/base/grafana/dashboards/loki-log-analytics.yaml` (created)
+- `manifests/base/grafana/dashboards/kustomization.yaml` (created)
+- `manifests/base/kube-prometheus-stack/kustomization.yaml` (updated to use bases)
+- `k8s-docs-n37/docs/monitoring/grafana-dashboards.md` (created - comprehensive docs)
+- `k8s-docs-n37/sidebars.ts` (updated to include new doc page)
+
+---
+
 ### 2025-12-27/28 (Overnight): Velero Deployment and AlertManager SMTP Email Notifications
 
 **Completed Work:**
