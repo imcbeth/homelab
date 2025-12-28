@@ -119,7 +119,7 @@ spec:
     spec:
       containers:
       - name: localstack
-        image: localstack/localstack:latest
+        image: localstack/localstack:3.8.1
         ports:
         - containerPort: 4566
         env:
