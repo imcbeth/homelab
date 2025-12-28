@@ -72,6 +72,12 @@ credentials:
   aws_secret_access_key: test
 ```
 
+> Note: The `aws_access_key_id` and `aws_secret_access_key` values shown here (`test` / `test`) must match:
+> >
+> > - The credentials configured in your `values.yaml` (for example under `credentials.secretContents`), and
+> > - The credentials expected by your LocalStack deployment.
+> >
+> If these values are not consistent, Velero will fail to connect to the S3 endpoint.
 **Limitations:**
 - ⚠️ Ephemeral storage - backups lost on LocalStack pod restart
 - ✅ Good for testing and validation
@@ -94,10 +100,13 @@ credentials:
      aws_secret_access_key: <B2_APPLICATION_KEY>
    ```
 
-**Costs:**
-- Storage: $6/TB/month (~$0.60/month for 100Gi)
-- Egress: Free for first 3x storage size
-- Total: ~$1-2/month for homelab
+**Costs (assumptions & scaling):**
+- Storage rate: $6/TB/month
+  - Example: ~100Gi stored ≈ $0.60/month (100Gi is used as a round number slightly above the ~80Gi of critical data to allow for growth and metadata)
+  - Estimate assumes 30 days of daily backups with incremental/deduplicated storage (i.e., not 30× full copies); actual usage depends on how much data changes between backups
+  - As a rough guide, effective stored size will scale approximately with: `base data size × (1 + average daily change rate × retention days)`, capped by how well Kopia/Velero deduplicate unchanged blocks
+- Egress: Free for the first 3× of total stored data size (per Backblaze B2 policy)
+- Total cost: typically in the ~$1–2/month range for this homelab with ~80–100Gi of logical data and a 30‑day retention policy, assuming moderate daily change rates
 
 ## Manual Backup Commands
 
@@ -593,9 +602,20 @@ velero backup describe test-production-s3
 4. **Update Retention Policies**: Adjust based on compliance needs
 5. **Document Procedures**: Keep runbooks up-to-date
 6. **Plan for Growth**: Monitor backup sizes and adjust resources
-7. **Secure Credentials**: Use git-crypt or external secret management
-8. **Test Production Migration**: Validate S3 migration before relying on it
+7. **Secure Credentials (IMPORTANT)**:
+   - The example `values.yaml` uses plaintext `secretContents` **for local testing only**.
+   - **Do not commit real credentials in plaintext** or deploy them as-is to production.
+   - For production, store secrets outside of Git (e.g. external secret manager like Vault/ExternalSecrets, or encrypted files via `git-crypt`, `sops`, etc.) and override the example values.
 
+   Example (override in your own `values.secure.yaml`):
+
+   ```yaml
+   # Do NOT store real secrets in this repo.
+   # This file should be kept out of Git or encrypted with git-crypt/sops.
+   credentials:
+     useExistingSecret: true
+     existingSecretName: velero-s3-credentials
+     # secretContents in the base values are for example only and should be disabled/overridden
 ## Security Considerations
 
 ### Node-Agent Capabilities
