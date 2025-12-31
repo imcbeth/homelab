@@ -11,6 +11,13 @@ loki:
   commonConfig:
     replication_factor: 1
 
+  chunksCache:
+    enabled: true
+    allocatedMemory: 2048 # Setting to 2GB
+
+  resultsCache:
+    allocatedMemory: 256 # Setting to 256MB
+
   storage:
     type: filesystem
 
