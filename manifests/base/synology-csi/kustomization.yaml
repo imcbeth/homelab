@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: synology-csi
 resources:
   - github.com/kubernetes-csi/external-snapshotter/client/config/crd?ref=v8.2.0
+  - github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller?ref=v8.2.0
   - controller.yml
   - csi-driver.yml
   - namespace.yml
