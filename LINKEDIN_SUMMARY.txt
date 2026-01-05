@@ -1,0 +1,27 @@
+DevOps Engineer | Kubernetes Specialist | Infrastructure Automation
+
+I build and maintain production-grade infrastructure using modern DevOps practices. Currently running a 5-node Raspberry Pi 5 Kubernetes cluster that demonstrates enterprise-level capabilities on edge hardware.
+
+🔧 What I Work With:
+• Kubernetes orchestration with GitOps workflows (ArgoCD)
+• Infrastructure as Code using Terraform for network automation
+• Comprehensive monitoring with Prometheus, Grafana, and Loki
+• Multi-VLAN network architecture with UniFi enterprise equipment
+• Automated backup and disaster recovery strategies
+
+🚀 Recent Projects:
+Built a complete homelab infrastructure featuring 25+ managed applications, automated deployments, centralized logging, and custom monitoring dashboards. Developed a Terraform generator that automates UniFi network configuration management. Created comprehensive technical documentation covering all aspects of cloud-native infrastructure.
+
+💡 Skills:
+Kubernetes • Docker • ArgoCD • Terraform • Prometheus • Grafana • Bash Scripting • Network Engineering • GitOps • Infrastructure as Code • Linux Administration • API Integration • Technical Documentation
+
+📚 I document everything I build and share my learnings through detailed guides covering installation, configuration, troubleshooting, and best practices for modern infrastructure.
+
+🔗 Check out my projects:
+• Homelab Infrastructure: github.com/imcbeth/homelab
+• Documentation Site: imcbeth.github.io/k8s-docs-n37
+• Terraform Tools: github.com/imcbeth/unifi-tf-generator
+
+Always learning, always building, always automating. Open to connecting with fellow DevOps engineers and infrastructure enthusiasts!
+
+#DevOps #Kubernetes #Infrastructure #CloudNative #Automation #GitOps

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ian McBeth - Resume</title>
+    <style>
+        body {
+            font-family: 'Trebuchet MS', Arial, sans-serif;
+            max-width: 8.5in;
+            margin: 0 auto;
+            padding: 1in;
+            line-height: 1.4;
+            color: #00000a;
+        }
+        h1 {
+            text-align: center;
+            font-size: 20pt;
+            margin: 10px 0 5px 0;
+            font-weight: bold;
+        }
+        .contact-info {
+            text-align: center;
+            font-size: 10pt;
+            margin: 5px 0;
+        }
+        h2 {
+            border-top: 8px solid #00000a;
+            padding-top: 10px;
+            text-align: center;
+            font-size: 15pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 20px;
+        }
+        .subtitle {
+            text-align: center;
+            font-style: italic;
+            text-decoration: underline;
+            font-size: 10pt;
+            margin: 10px 0;
+        }
+        .job-description {
+            font-style: italic;
+            font-size: 10pt;
+            margin: 8px 0;
+            text-align: justify;
+        }
+        .section-title {
+            font-weight: bold;
+            font-style: italic;
+            font-size: 11pt;
+            margin: 10px 0 5px 0;
+        }
+        .skills-table {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .skills-table td {
+            vertical-align: top;
+            width: 50%;
+            padding: 5px;
+        }
+        ul {
+            margin: 5px 0;
+            padding-left: 25px;
+        }
+        li {
+            margin: 4px 0;
+            font-size: 11pt;
+        }
+        .job-title {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 10pt;
+        }
+        .job-title strong {
+            font-weight: bold;
+        }
+        .company-name {
+            text-align: center;
+            font-size: 10pt;
+            margin: 5px 0;
+        }
+        .project-highlight {
+            background-color: #f8f8f8;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #00000a;
+        }
+        .project-highlight h4 {
+            margin: 0 0 8px 0;
+            color: #00000a;
+        }
+        a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ian McBeth</h1>
+    <div class="contact-info">Calgary, Alberta, Canada</div>
+    <div class="contact-info">imcbeth1980@gmail.com | 403.978.5041</div>
+    <div class="contact-info">
+        <a href="https://github.com/imcbeth/homelab">github.com/imcbeth/homelab</a> |
+        <a href="https://imcbeth.github.io/k8s-docs-n37/">imcbeth.github.io/k8s-docs-n37</a>
+    </div>
+
+    <h2>Systems Operations Professional</h2>
+
+    <div class="subtitle">
+        Respected Systems Engineer and DevOps expert with 20+ years of professional experience on a wide range of platforms
+    </div>
+
+    <div class="job-description">
+        Forever challenging my skills and abilities within DevOps teams. Specializing in automation, Kubernetes orchestration, and continuous integration/deployment workflows. Expert knowledge in monitoring, infrastructure as code, and cloud-native architectures.
+    </div>
+
+    <div class="section-title">Areas of expertise include…</div>
+
+    <table class="skills-table">
+        <tr>
+            <td>
+                <ul>
+                    <li>Kubernetes & Container Orchestration</li>
+                    <li>Docker Containerization Development</li>
+                    <li>Linux System Administration</li>
+                    <li>AWS Managed Services</li>
+                    <li>Infrastructure as Code (Terraform, Chef)</li>
+                    <li>Git Repository Management</li>
+                </ul>
+            </td>
+            <td>
+                <ul>
+                    <li>Monitoring & Observability (Prometheus, Grafana)</li>
+                    <li>GitOps Workflows (ArgoCD)</li>
+                    <li>Virtualization of Server Infrastructure</li>
+                    <li>Troubleshooting & Problem Resolution</li>
+                    <li>Technical Documentation & Design</li>
+                    <li>SOC2 Compliance & Implementation</li>
+                </ul>
+            </td>
+        </tr>
+    </table>
+
+    <h2>Featured Project</h2>
+
+    <div class="project-highlight">
+        <h4>🏠 Production Kubernetes Homelab Infrastructure</h4>
+        <p><strong>Technologies:</strong> Kubernetes 1.35, ArgoCD, Prometheus, Grafana, Terraform, Synology NAS, UniFi Networking</p>
+
+        <p><strong>Overview:</strong> Designed and deployed a production-ready 5-node Raspberry Pi 5 Kubernetes cluster demonstrating enterprise-level capabilities on edge hardware. This project showcases practical expertise in modern DevOps practices and cloud-native technologies.</p>
+
+        <p><strong>Key Achievements:</strong></p>
+        <ul>
+            <li><strong>GitOps Implementation:</strong> Complete GitOps workflow managing 25+ applications with ArgoCD for automated, self-healing deployments</li>
+            <li><strong>Comprehensive Monitoring:</strong> Prometheus + Grafana stack with 20+ custom dashboards, comprehensive alerting, and centralized logging via Loki/Promtail</li>
+            <li><strong>Infrastructure as Code:</strong> Developed Terraform automation for UniFi network infrastructure, enabling version-controlled network management</li>
+            <li><strong>Enterprise Storage Integration:</strong> Integrated Synology NAS with iSCSI CSI driver for persistent storage with 50Gi+ data retention</li>
+            <li><strong>Network Architecture:</strong> Multi-VLAN design with Calico CNI, network policies, and comprehensive monitoring via UniFi Poller</li>
+            <li><strong>Backup & DR:</strong> Implemented Velero + Kopia for automated backup with cloud storage integration</li>
+            <li><strong>Technical Documentation:</strong> Created comprehensive documentation site with 50+ guides covering installation, configuration, and troubleshooting</li>
+        </ul>
+
+        <p><strong>Technical Environment:</strong></p>
+        <ul>
+            <li>5x Raspberry Pi 5 nodes (16GB RAM each) with NVMe SSDs and PoE+ power</li>
+            <li>Synology NAS for persistent storage via iSCSI</li>
+            <li>UniFi networking (UDM Pro, USW-Pro-24-POE)</li>
+            <li>Multi-VLAN architecture (Kubernetes, Home, IoT, Work VLANs)</li>
+        </ul>
+
+        <p><strong>Project Links:</strong></p>
+        <ul>
+            <li>Infrastructure Repository: <a href="https://github.com/imcbeth/homelab">github.com/imcbeth/homelab</a></li>
+            <li>Documentation Site: <a href="https://imcbeth.github.io/k8s-docs-n37/">imcbeth.github.io/k8s-docs-n37</a></li>
+            <li>Terraform Tools: <a href="https://github.com/imcbeth/unifi-tf-generator">github.com/imcbeth/unifi-tf-generator</a></li>
+        </ul>
+    </div>
+
+    <h2>Professional Experience</h2>
+
+    <div class="job-title">
+        <strong>Site Reliability Engineer</strong>, June 2017 to Present
+    </div>
+    <div class="company-name">Cisco Systems (Calgary, Alberta)</div>
+
+    <ul>
+        <li>Technical Team Lead for Linux Administration and Patching operations</li>
+        <li>Large infrastructure deployment and management with Terraform code</li>
+        <li>Extensive experience with AWS Managed Services at enterprise level (ES/MSK/S3/EC2/SNS/CloudWatch LogGroups/EventBridge/EMR)</li>
+        <li>Working with Datadog metrics monitoring (log/time series data)</li>
+        <li>HashiCorp Vault for shared secrets management</li>
+        <li>Working with Jenkins and Capistrano scripts and deployment tools</li>
+        <li>Stream processing systems: Flink, Storm deployment and administration</li>
+        <li>Infrastructure as code methodology implementation (Chef)</li>
+        <li>Git code repository management and maintenance</li>
+        <li>SOC2 implementation (processes and procedures), documentation</li>
+        <li>Working with Chef infrastructure to automate application and OS automation</li>
+        <li>Docker containers with CircleCI and Jenkins CI/CD pipelines</li>
+    </ul>
+
+    <div class="job-title">
+        <strong>Systems Engineer</strong>, April 2013 to June 2017
+    </div>
+    <div class="company-name">Getty Images (Calgary, Alberta)</div>
+
+    <ul>
+        <li>Linux Server Administration and web application management</li>
+        <li>Setting up automation (CI/CD) with Jenkins working with various Dev teams</li>
+        <li>Nginx advanced setup and administration</li>
+        <li>Splunk reporting and dashboard creation with basic administration tasks</li>
+        <li>Time series database setup and administration (Graphite/Prometheus/InfluxDB)</li>
+        <li>Grafana dashboard metrics using various data sources (log/time series data)</li>
+        <li>Working with HashiCorp software (Consul, Packer, Vault, Nomad)</li>
+        <li>Distributed web application deployment and containerization</li>
+        <li>Develop containerization strategy for legacy applications</li>
+        <li>Work with development groups on cloud architecture design</li>
+        <li>Infrastructure as code methodology implementation (Puppet 2.x, 3.x)</li>
+        <li>Git code repository management</li>
+        <li>Working with GitLab-CI for continuous integration</li>
+    </ul>
+
+    <div class="job-title">
+        <strong>Senior Open Source Solution Architect</strong>, May 2011 to April 2013
+    </div>
+    <div class="company-name">Guest-Tek Interactive Entertainment (Calgary, Alberta)</div>
+
+    <ul>
+        <li>Senior Team lead for OSSA team</li>
+        <li>Plan and execute rollout of new applications and solutions</li>
+        <li>Designate team members on projects and follow up on progress</li>
+        <li>Focus on distributed networking design and application distribution using CDNs</li>
+        <li>Ensure all projects are completed in a timely fashion</li>
+        <li>High Availability/High redundancy/High scalability in application design and deployment</li>
+    </ul>
+
+    <div class="job-title">
+        <strong>Open Source Solution Architect</strong>, May 2010 to April 2011
+    </div>
+    <div class="company-name">Guest-Tek Interactive Entertainment (Calgary, Alberta)</div>
+
+    <ul>
+        <li>Senior Linux lead for infrastructure operations</li>
+        <li>Plan and execute rollout of new hardware/servers</li>
+        <li>Re-design current infrastructure to support new programs and applications</li>
+        <li>Focus on distributed networking design and fault tolerance</li>
+        <li>Develop plan of action to manage and maintain new infrastructure and hardware</li>
+        <li>Ensure all systems are setup for Highly Available/Redundancy and Highly Scalable deployments</li>
+    </ul>
+
+    <div class="job-title">
+        <strong>Server Builds Administrator</strong>, May 2009 to May 2010
+    </div>
+    <div class="company-name">Guest-Tek Interactive Entertainment (Calgary, Alberta)</div>
+
+    <ul>
+        <li>Setup main platform for field units (VOD and HSIA)</li>
+        <li>Work on duplication of problems seen within the field for QA analysis</li>
+        <li>Tune Linux system attributes and settings for optimal performance</li>
+        <li>Create custom Linux kernel and packaging for specialized deployments</li>
+        <li>Implement custom drivers with kernel module framework</li>
+        <li>Create and maintain kickstart images and files for CentOS/RHEL distributions</li>
+        <li>Contribute and consult with other teams for needs and design specs on various projects</li>
+        <li>Maintain a stable code base structure for Dev teams (SVN and GIT)</li>
+    </ul>
+
+    <h2>Education and Training</h2>
+
+    <ul style="list-style-type: none; padding-left: 0;">
+        <li><strong>1997 to 2000</strong> – Bowness High School, Calgary, Alberta, Canada</li>
+        <li><strong>1997 to present</strong> – Continuous self-education and development</li>
+    </ul>
+
+    <div class="section-title">Specialized Training and Skills:</div>
+    <ul>
+        <li>Kubernetes Administration and Cloud Native Architecture</li>
+        <li>GitOps Workflows and ArgoCD Implementation</li>
+        <li>Linux System Administration (RHEL, CentOS, Ubuntu)</li>
+        <li>Mass deployment of platform and infrastructure at scale</li>
+        <li>Shell scripting (Bash) and automation frameworks</li>
+        <li>CI/CD automation setups (Jenkins, GitLab-CI, CircleCI, GitHub Actions)</li>
+        <li>Cloud technologies (OpenStack, OpenNebula, Mesos, Kubernetes, AWS)</li>
+        <li>Infrastructure as Code (Terraform, Chef, Puppet)</li>
+        <li>Monitoring and Observability (Prometheus, Grafana, Datadog, Splunk)</li>
+        <li>Containerization and orchestration (Docker, Kubernetes)</li>
+    </ul>
+
+</body>
+</html>
