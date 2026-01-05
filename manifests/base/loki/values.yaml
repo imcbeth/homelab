@@ -28,6 +28,9 @@ loki:
     retention_period: 168h  # 7 days
     max_query_series: 500
     max_query_parallelism: 32
+    # Memory limits for ingester (aligned with 768Mi pod limit)
+    ingestion_rate_mb: 10  # Limit ingestion rate to 10MB/sec
+    ingestion_burst_size_mb: 20  # Allow bursts up to 20MB
 
   compactor:
     retention_enabled: true
@@ -54,10 +57,15 @@ singleBinary:
   resources:
     requests:
       cpu: 200m
-      memory: 384Mi
+      memory: 512Mi  # Increased from 384Mi for better stability
     limits:
       cpu: 500m
       memory: 768Mi
+
+  # Additional configuration for memory management
+  extraEnv:
+    - name: GOMEMLIMIT
+      value: "700MiB"  # Go memory limit, leave ~68Mi for overhead
 
   persistence:
     enabled: true
