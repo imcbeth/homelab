@@ -120,11 +120,11 @@ monitoring:
       installOperator: false
 
 # Ruler configuration for log-based alerting
-# Note: In singleBinary mode, ruler is embedded in the main pod
+# Note: Disabled as separate Deployment - ruler runs embedded in singleBinary pod
+# The rulerConfig above enables ruler functionality within the main Loki process
 ruler:
-  enabled: false
-  kind: Deployment
-  replicas: 0
+  enabled: false  # Disable separate Deployment
+  replicas: 0     # No standalone ruler pods
   resources:
     requests:
       cpu: 50m
