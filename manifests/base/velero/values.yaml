@@ -246,11 +246,14 @@ schedules:
         - loki         # Loki
         - pihole       # Pi-hole
       includeClusterResources: false
-      defaultVolumesToFsBackup: true  # INTENTIONAL: enable Kopia file-level backups for all PVCs to support granular / cross-cluster restores.
-      snapshotVolumes: true           # INTENTIONAL: also create CSI volume snapshots (synology-snapshots) for fast, same-cluster PVC restores.
-      storageLocation: default        # Backup storage: both CSI snapshots and Kopia backups stored in 'default' location; restores automatically prefer CSI snapshots with Kopia as fallback.
+      defaultVolumesToFsBackup: false  # Disabled: Use CSI snapshots only (faster, more efficient)
+      snapshotVolumes: true            # Use CSI volume snapshots via Synology CSI
+      storageLocation: default
       volumeSnapshotLocations:
         - synology-snapshots
+      # Explicitly set snapshot options
+      snapshotMoveData: false          # Keep snapshots on Synology (don't move to S3)
+      defaultVolumesToRestic: false    # Ensure Restic/Kopia is disabled
 
   # Weekly full cluster backup on Sunday at 3 AM
   weekly-cluster-resources:
