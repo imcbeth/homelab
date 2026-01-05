@@ -33,3 +33,8 @@ Thumbs.db
 # Backup files
 *.bak
 *~
+
+# Personal files
+Ian_McBeth_resume*
+LINKEDIN_SUMMARY.txt
+RESUME.md
