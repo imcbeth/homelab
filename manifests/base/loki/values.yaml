@@ -120,10 +120,11 @@ monitoring:
       installOperator: false
 
 # Ruler configuration for log-based alerting
+# Note: In singleBinary mode, ruler is embedded in the main pod
 ruler:
-  enabled: true
+  enabled: false
   kind: Deployment
-  replicas: 1
+  replicas: 0
   resources:
     requests:
       cpu: 50m
