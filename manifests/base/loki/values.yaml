@@ -14,29 +14,9 @@ loki:
   storage:
     type: filesystem
 
-  # Internal cache configuration with size limits
-  # Using embedded cache (in-process) instead of external memcached
-  chunk_cache_config:
-    embedded_cache:
-      enabled: true
-      max_size_mb: 128  # Limit chunks cache to 128MB
-      ttl: 1h
-
-  results_cache:
-    cache:
-      embedded_cache:
-        enabled: true
-        max_size_mb: 64  # Limit results cache to 64MB
-        ttl: 24h
-
-  query_range:
-    cache_results: true
-    results_cache:
-      cache:
-        embedded_cache:
-          enabled: true
-          max_size_mb: 32  # Limit query range cache to 32MB
-          ttl: 24h
+  # Note: In singleBinary mode, caches are managed internally by the Loki process
+  # External cache configuration is disabled to avoid creating separate cache pods
+  # Memory is controlled via GOMEMLIMIT and pod resource limits below
 
   schemaConfig:
     configs:
@@ -106,6 +86,12 @@ read:
 write:
   replicas: 0
 gateway:
+  enabled: false
+
+# Disable external caches (singleBinary mode uses internal caching)
+chunksCache:
+  enabled: false
+resultsCache:
   enabled: false
 
 # Note: Promtail is deployed separately via its own ArgoCD application
