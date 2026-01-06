@@ -13,8 +13,9 @@ image:
 # This avoids kubectl image version compatibility issues
 upgradeCRDs: false
 
-# Deploy node-agent DaemonSet for file-level backups (Kopia)
-deployNodeAgent: true
+# Disable node-agent DaemonSet (using CSI snapshots only, not Kopia file-level backups)
+# CSI snapshots are storage-native and more efficient for block storage
+deployNodeAgent: false
 
 # Resource limits for Pi cluster - Velero server pod
 resources:
@@ -93,26 +94,23 @@ configuration:
   # Default backup TTL (30 days)
   defaultBackupTTL: 720h
 
-  # Upload progress monitoring - Kopia is the default uploader since Velero 1.10+
-  uploaderType: kopia
+  # NOTE: uploaderType and repositoryMaintenanceJob configurations are Kopia-specific
+  # and not needed when using CSI snapshots exclusively. These settings are commented
+  # out as they only apply to file-level backups with node-agent.
+  #
+  # uploaderType: kopia
+  # repositoryMaintenanceJob:
+  #   repositoryConfigData:
+  #     name: "velero-repo-maintenance"
+  #     global:
+  #       keepLatestMaintenanceJobs: 3
+  #       podResources:
+  #         cpuRequest: "100m"
+  #         cpuLimit: "500m"
+  #         memoryRequest: "256Mi"
+  #         memoryLimit: "1Gi"
 
-  # Kopia-specific configuration for repository maintenance
-  # Repository maintenance jobs run periodically to optimize backup storage
-  repositoryMaintenanceJob:
-    repositoryConfigData:
-      name: "velero-repo-maintenance"
-      global:
-        # Keep last 3 maintenance job pods for debugging
-        keepLatestMaintenanceJobs: 3
-        # Resource limits for repository maintenance jobs
-        # These jobs perform compaction, garbage collection, and deduplication
-        podResources:
-          cpuRequest: "100m"
-          cpuLimit: "500m"
-          memoryRequest: "256Mi"
-          memoryLimit: "1Gi"
-
-  # Default volumes to backup (opt-in model; volumes must be explicitly annotated for backup)
+  # Default volumes to file-system backup disabled (using CSI snapshots instead)
   defaultVolumesToFsBackup: false
 
 # Credentials for S3 storage (stored in a Kubernetes Secret created by the Helm chart)
@@ -159,6 +157,8 @@ credentials:
   existingSecret: "cloud-credentials"
 
 # Node-agent (Kopia) configuration for file-level backups
+# NOTE: This section is disabled (deployNodeAgent: false above) as we use CSI snapshots exclusively.
+# Configuration is retained for reference in case file-level backups are needed in the future.
 nodeAgent:
 
   # Resource limits for node-agent DaemonSet (runs on ALL nodes)

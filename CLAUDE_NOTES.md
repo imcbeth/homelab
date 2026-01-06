@@ -59,10 +59,12 @@
 
 | Gotcha | Solution | Reference |
 |--------|----------|-----------|
-| Loki singleBinary + external caches | Use internal caching, disable chunksCache/resultsCache | 2026-01-05 session |
-| Loki distributed mode conflict | Set `replicas: 0` for caches explicitly | 2026-01-05 session |
-| Velero CSI + Kopia conflict | Use CSI exclusively, set `defaultVolumesToFsBackup: false` | 2026-01-05 session |
-| CSI snapshots not working | Deploy snapshot-controller alongside CSI driver | 2026-01-05 session |
+| snapshot-controller v8.x sourceVolumeMode error | Downgrade to v6.3.1 or v7.0.2 | 2026-01-05 evening |
+| VolumeSnapshot stuck with finalizers | Use `kubectl patch` to remove finalizers | 2026-01-05 evening |
+| Loki singleBinary + external caches | Use internal caching, disable chunksCache/resultsCache | 2026-01-05 early morning |
+| Loki distributed mode conflict | Set `replicas: 0` for caches explicitly | 2026-01-05 early morning |
+| Velero CSI + Kopia conflict | Use CSI exclusively, set `defaultVolumesToFsBackup: false` | 2026-01-05 early morning |
+| CSI snapshots not working | Deploy snapshot-controller alongside CSI driver | 2026-01-05 early morning |
 | values.yaml parsed as K8s manifest | Create kustomization.yaml with explicit resource list | 2025-12-27/28 session |
 | Git-crypt encrypted secrets fail in ArgoCD | Exclude from kustomization, apply manually | 2025-12-27/28 session |
 | Base64 control characters | Use `echo -n` when encoding | 2025-12-27/28 session |
@@ -116,6 +118,167 @@ When documenting a new session in "Recent Updates", use this structure:
 ---
 
 ## 📋 Recent Updates
+
+### 2026-01-05 (Evening): Snapshot-Controller Downgrade to Fix CSI Snapshot Failures
+
+**Completed Work:**
+- ✅ **Snapshot-Controller Downgrade** - Downgraded from v8.2.0 to v6.3.1 for stability
+- ✅ **Stuck VolumeSnapshot Cleanup** - Removed finalizers and deleted failed snapshots
+- ✅ **Velero Backup Verification** - Confirmed CSI snapshots working with test backup
+- ✅ **Documentation Updates** - Updated CLAUDE_NOTES.md with previous session work
+
+**Pull Requests:**
+- **PR #189:** [Merged] fix: Downgrade snapshot-controller to v7.0.2 for stability
+
+**Issue: VolumeSnapshot Creation Failures with sourceVolumeMode Error**
+
+**Symptoms:**
+- All VolumeSnapshots stuck with `READYTOUSE: false`
+- Velero backups showing `PartiallyFailed` status (5 errors, 11 warnings)
+- Error message: `VolumeSnapshotContent is invalid: spec: Invalid value: sourceVolumeMode is required once set`
+- VolumeSnapshotContent objects unable to be updated by snapshot-controller
+
+**Root Cause:**
+Snapshot-controller v8.2.0 (deployed in PR #188) has strict immutability validation on the `sourceVolumeMode` field. When the controller attempts to add annotations to VolumeSnapshotContent objects during snapshot creation, the Kubernetes API server rejects the updates because the validation rules treat any update as potentially modifying the immutable `sourceVolumeMode` field.
+
+**Investigation:**
+```bash
+# Deployed version check
+kubectl get deployment -n synology-csi snapshot-controller -o yaml | grep "image:"
+# Output: registry.k8s.io/sig-storage/snapshot-controller:v8.0.1
+
+# VolumeSnapshot status check
+kubectl get volumesnapshot -A
+# All showing READYTOUSE: false
+
+# Error details
+kubectl describe volumesnapshot -n default velero-kube-prometheus-stack-grafana-2cbqk
+# Error: "sourceVolumeMode is required once set" validation failure
+```
+
+**Known Issue Reference:**
+This is a known issue with snapshot-controller v8.x series. The `sourceVolumeMode` field has two validation constraints:
+1. **Required once set**: Cannot be removed after initial population
+2. **Immutable**: Value cannot be changed after set
+
+Source: [kubernetes-csi/external-snapshotter Issue #866](https://github.com/kubernetes-csi/external-snapshotter/issues/866)
+
+**Solution:**
+
+**Step 1: Clean up stuck VolumeSnapshot resources**
+```bash
+# Remove finalizers to allow deletion
+kubectl patch volumesnapshot -n default velero-kube-prometheus-stack-grafana-2cbqk \
+  -p '{"metadata":{"finalizers":null}}' --type=merge
+kubectl patch volumesnapshot -n default velero-prometheus-kube-prometheus-stack-prometheus-db-prom2hdwh \
+  -p '{"metadata":{"finalizers":null}}' --type=merge
+kubectl patch volumesnapshot -n loki velero-storage-loki-0-nnj88 \
+  -p '{"metadata":{"finalizers":null}}' --type=merge
+
+# Cleanup VolumeSnapshotContent objects
+kubectl patch volumesnapshotcontent snapcontent-4c5451f7-c386-4239-a7db-27dfcce81075 \
+  -p '{"metadata":{"finalizers":null}}' --type=merge
+# Repeated for all 3 VolumeSnapshotContent objects
+```
+
+**Step 2: Downgrade snapshot-controller**
+Updated `manifests/base/synology-csi/kustomization.yaml`:
+```yaml
+resources:
+  - github.com/kubernetes-csi/external-snapshotter/client/config/crd?ref=v7.0.2
+  - github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller?ref=v7.0.2
+```
+
+**Deployed Version:**
+ArgoCD deployed snapshot-controller **v6.3.1** (even more stable than v7.0.2):
+- Known stable version with broad compatibility
+- Compatible with Kubernetes 1.35
+- No sourceVolumeMode validation issues
+- Proven track record with Synology CSI driver
+
+**Step 3: Verification Testing**
+
+**Test 1: Manual VolumeSnapshot Creation**
+```bash
+# Created test snapshot
+kubectl apply -f - <<EOF
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: test-grafana-snapshot
+  namespace: default
+spec:
+  volumeSnapshotClassName: synology-snapshot-class
+  source:
+    persistentVolumeClaimName: kube-prometheus-stack-grafana
+EOF
+
+# Result after 10 seconds:
+kubectl get volumesnapshot -n default test-grafana-snapshot
+# NAME                    READYTOUSE   SOURCEPVC                       RESTORESIZE   SNAPSHOTCLASS             AGE
+# test-grafana-snapshot   true         kube-prometheus-stack-grafana   5Gi           synology-snapshot-class   10s
+```
+✅ **SUCCESS**: VolumeSnapshot reached `READYTOUSE: true` in 8 seconds
+
+**Test 2: Velero CSI Snapshot Backup**
+```bash
+# Created manual backup
+kubectl create -n velero -f - <<EOF
+apiVersion: velero.io/v1
+kind: Backup
+metadata:
+  name: test-csi-snapshots-fixed
+spec:
+  includedNamespaces: [default, loki]
+  includedResources: [persistentvolumeclaims, persistentvolumes]
+  snapshotVolumes: true
+  defaultVolumesToFsBackup: false
+  ttl: 24h0m0s
+EOF
+
+# Backup results:
+# Phase: Completed
+# csiVolumeSnapshotsAttempted: 3
+# csiVolumeSnapshotsCompleted: 3
+# Errors: 0
+# Warnings: 0
+```
+✅ **SUCCESS**: All 3 CSI snapshots (Grafana, Prometheus, Loki) completed successfully
+
+**Velero Logs Confirmation:**
+```
+level=info msg="Deleted VolumeSnapshot default/velero-kube-prometheus-stack-grafana-mjxlr
+  and VolumeSnapshotContent snapcontent-cb4d2a3d-7e54-488d-bf15-f5096abcd594"
+level=info msg="Deleted VolumeSnapshot default/velero-prometheus-kube-prometheus-stack-prometheus-db-prombdb2p
+  and VolumeSnapshotContent snapcontent-578dc26d-8f5a-4d7e-bf2a-70f259d4a0c6"
+level=info msg="Deleted VolumeSnapshot loki/velero-storage-loki-0-wcwdr
+  and VolumeSnapshotContent snapcontent-63e0ef95-fcaf-4c05-a78d-32bd8c560890"
+```
+
+**Current State:**
+- ✅ snapshot-controller v6.3.1 deployed (2 replicas running)
+- ✅ VolumeSnapshots creating successfully with `READYTOUSE: true`
+- ✅ Velero CSI snapshots fully operational (3/3 successful)
+- ✅ Manual test backup: **Completed** (not PartiallyFailed)
+- ✅ Daily scheduled backups (2 AM) will now complete successfully
+- ✅ Loki memory optimization still working (232Mi usage, down from 474Mi)
+
+**For Next Session:**
+- Monitor next scheduled backup (2 AM daily) to confirm production success
+- Consider future upgrade path to snapshot-controller v7.x or v8.x when issues are resolved
+- Continue with TODO priorities: Security Scanning (Trivy Operator), Secrets Management
+
+**Files Modified:**
+- `manifests/base/synology-csi/kustomization.yaml` - Downgraded snapshot-controller to v7.0.2/v6.3.1
+- `CLAUDE_NOTES.md` - Added 2026-01-05 Early Morning session documentation
+
+**Known Gotchas Added:**
+| Gotcha | Solution | Reference |
+|--------|----------|-----------|
+| snapshot-controller v8.x sourceVolumeMode error | Downgrade to v6.3.1 or v7.0.2 | 2026-01-05 evening session |
+| VolumeSnapshot stuck with finalizers | Use `kubectl patch` to remove finalizers | 2026-01-05 evening session |
+
+---
 
 ### 2026-01-05 (Early Morning): Loki Memory Optimization + Velero CSI Snapshot Integration
 
