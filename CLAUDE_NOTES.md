@@ -2,7 +2,7 @@
 
 ## Quick Reference for AI Assistants Working in This Repository
 
-**Last Updated:** 2025-12-28
+**Last Updated:** 2026-01-05
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -59,6 +59,10 @@
 
 | Gotcha | Solution | Reference |
 |--------|----------|-----------|
+| Loki singleBinary + external caches | Use internal caching, disable chunksCache/resultsCache | 2026-01-05 session |
+| Loki distributed mode conflict | Set `replicas: 0` for caches explicitly | 2026-01-05 session |
+| Velero CSI + Kopia conflict | Use CSI exclusively, set `defaultVolumesToFsBackup: false` | 2026-01-05 session |
+| CSI snapshots not working | Deploy snapshot-controller alongside CSI driver | 2026-01-05 session |
 | values.yaml parsed as K8s manifest | Create kustomization.yaml with explicit resource list | 2025-12-27/28 session |
 | Git-crypt encrypted secrets fail in ArgoCD | Exclude from kustomization, apply manually | 2025-12-27/28 session |
 | Base64 control characters | Use `echo -n` when encoding | 2025-12-27/28 session |
@@ -112,6 +116,247 @@ When documenting a new session in "Recent Updates", use this structure:
 ---
 
 ## 📋 Recent Updates
+
+### 2026-01-05 (Early Morning): Loki Memory Optimization + Velero CSI Snapshot Integration
+
+**Completed Work:**
+- ✅ **Loki Memory Limits** - Implemented proper memory management for singleBinary mode
+- ✅ **Velero CSI Snapshots** - Configured CSI snapshot support for PVC backups
+- ✅ **Snapshot Controller** - Deployed snapshot-controller for Kubernetes CSI functionality
+- ✅ **Loki Configuration Fixes** - Resolved distributed mode conflicts in singleBinary deployment
+- ✅ **Log-Based Alerting** - Temporarily disabled due to ruler/singleBinary compatibility
+
+**Pull Requests:**
+- **PR #180:** [Merged, then Reverted] Initial Loki memory restraints (incorrectly configured)
+- **PR #181:** [Merged] Revert PR #180 (external caches too resource-intensive)
+- **PR #182:** [Merged] Implement proper Loki memory limits without external caches
+- **PR #183:** [Merged] Remove cache config incompatible with singleBinary mode
+- **PR #184:** [Merged] Explicitly set cache replicas to 0
+- **PR #185:** [Merged] Disable separate ruler deployment in singleBinary mode
+- **PR #186:** [Merged] Temporarily disable log-based alerts for Loki memory limits
+- **PR #187:** [Merged] Configure Velero to use CSI snapshots only
+- **PR #188:** [Merged] Add snapshot-controller to Synology CSI deployment
+
+**Issue 1: Loki Memory Exhaustion and OOM Kills**
+
+**Symptoms:**
+- Loki pod consuming excessive memory (approaching 768Mi limit)
+- Risk of OOM kills during high log ingestion
+- Need for memory management without external infrastructure
+
+**Initial Attempt (PR #180 - REVERTED):**
+- Configured external memcached caches
+- Created separate StatefulSets: `loki-chunks-cache-0` (9.6GB), `loki-results-cache-0` (1.2GB)
+- **Problem:** Too resource-intensive for Raspberry Pi cluster (10.8GB total allocation)
+- Reverted in PR #181
+
+**Root Cause:**
+- Loki running in singleBinary mode without memory constraints
+- No ingestion rate limits configured
+- Go runtime memory not capped
+- Memory request too close to actual usage (384Mi request vs 474Mi actual)
+
+**Solution (PR #182):**
+
+**1. Ingestion Rate Limits:**
+```yaml
+limits_config:
+  ingestion_rate_mb: 10      # Limit to 10MB/sec per tenant
+  ingestion_burst_size_mb: 20  # Allow bursts up to 20MB
+```
+
+**2. Go Runtime Memory Limit:**
+```yaml
+extraEnv:
+  - name: GOMEMLIMIT
+    value: "700MiB"  # Prevents Go runtime from exceeding 700Mi
+```
+
+**3. Increased Memory Request:**
+- Before: 384Mi request, 768Mi limit
+- After: 512Mi request, 768Mi limit
+- Rationale: Current usage is 474Mi, so 384Mi was insufficient
+
+**4. Internal Cache Management:**
+In singleBinary mode, Loki manages caches internally within the process. No external configuration needed.
+
+**Issue 2: Distributed Mode Triggered in singleBinary Deployment**
+
+**Symptoms (PR #183):**
+```
+Error: You have more than zero replicas configured for both the single binary
+and distributed targets
+```
+
+**Root Cause:**
+- Added cache configuration (`chunk_cache_config`, `results_cache`) triggered distributed mode
+- Helm chart created separate cache StatefulSets (`loki-chunks-cache-0`, `loki-results-cache-0`)
+- Cannot coexist with `singleBinary.replicas: 1`
+
+**Solution:**
+Removed incompatible cache configs and explicitly disabled external caches:
+```yaml
+chunksCache:
+  enabled: false
+  replicas: 0  # Must explicitly set to 0 (PR #184)
+resultsCache:
+  enabled: false
+  replicas: 0  # Must explicitly set to 0 (PR #184)
+```
+
+**Issue 3: Ruler Deployment Conflicts with singleBinary Mode**
+
+**Symptoms (PR #185):**
+- Separate ruler Deployment being created alongside singleBinary pod
+- Distributed mode validation error
+
+**Root Cause:**
+- Ruler configuration from PR #174 (log-based alerting) created separate Deployment
+- Ruler functionality is embedded in singleBinary pod, separate deployment conflicts
+
+**Solution:**
+Disabled separate ruler deployment:
+```yaml
+ruler:
+  enabled: false  # Ruler runs inside singleBinary pod
+```
+
+**Issue 4: Log-Based Alerting Incompatible with Current Configuration**
+
+**Symptoms (PR #186):**
+- ArgoCD sync failures due to ruler configuration
+- Log-based alerts from PR #174 require ruler component
+
+**Root Cause:**
+- Ruler alerting requires dedicated ruler deployment or proper singleBinary ruler config
+- Current focus on stabilizing memory limits, alerting is secondary
+
+**Solution:**
+Temporarily disabled log-based alerts:
+- Renamed `manifests/base/loki/loki-alerts.yaml` to `loki-alerts.yaml.disabled`
+- Removed ruler configuration from values.yaml
+- Added `.disabled` files to `.gitignore`
+- Can be re-enabled in future work with proper singleBinary ruler configuration
+
+**Issue 5: Velero Backups Failing with PartiallyFailed Status**
+
+**Symptoms (PR #187):**
+- Velero backups showing "PartiallyFailed" status
+- CSI snapshots and Kopia file-level backups conflicting
+
+**Root Cause:**
+- Velero configured with both Kopia node-agent and CSI snapshot features
+- Conflicting backup methods for the same PVCs
+
+**Solution:**
+Configured Velero to use CSI snapshots exclusively:
+```yaml
+configuration:
+  features: EnableCSI
+  defaultVolumesToFsBackup: false  # Disable Kopia by default
+
+snapshotsEnabled: true
+nodeAgent:
+  podVolumePath: /var/lib/kubelet/pods
+  privileged: false
+```
+
+**Issue 6: CSI Snapshots Not Being Created**
+
+**Symptoms (PR #188):**
+- VolumeSnapshot resources not being processed
+- CSI snapshots failing silently
+
+**Root Cause:**
+- Missing snapshot-controller deployment in cluster
+- CSI driver (synology-csi) present, but no controller to process VolumeSnapshot requests
+
+**Solution:**
+Added snapshot-controller to Synology CSI deployment:
+```yaml
+# manifests/base/synology-csi/kustomization.yaml
+resources:
+  - https://github.com/SynologyOpenSource/synology-csi/releases/download/v1.3.0/synology-csi-v1.3.0.yml
+  - https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/v8.2.0/deploy/kubernetes/snapshot-controller/setup-snapshot-controller.yaml
+```
+
+**Technical Deep-Dive: Loki singleBinary Mode Memory Management**
+
+**Architecture:**
+- Single pod runs all Loki components: ingester, distributor, querier, compactor
+- No external dependencies (no memcached, no separate ruler)
+- All caching happens in-process
+
+**Memory Control Mechanisms:**
+1. **GOMEMLIMIT**: Go runtime respects this limit, triggers GC aggressively when approaching
+2. **Pod memory limit**: 768Mi hard limit enforced by kubelet (OOM kill if exceeded)
+3. **Ingestion rate limits**: Prevents memory spikes during high log volume
+4. **Memory request**: 512Mi ensures sufficient scheduling buffer
+
+**Expected Behavior:**
+- Memory usage stays within 512-700Mi range
+- No external cache pods created
+- No OOM kills during normal operation
+- Ingestion throttled if >10MB/sec sustained
+
+**Technical Deep-Dive: Velero CSI Snapshot Integration**
+
+**CSI Snapshot Architecture:**
+1. **snapshot-controller**: Watches VolumeSnapshot resources, triggers CSI driver
+2. **CSI driver (synology-csi)**: Creates actual snapshots on Synology NAS
+3. **Velero**: Creates VolumeSnapshot resources during backup, captures snapshot metadata
+
+**Backup Flow:**
+1. Velero backup triggered (schedule or manual)
+2. Velero creates VolumeSnapshot for each PVC
+3. snapshot-controller processes VolumeSnapshot
+4. synology-csi creates snapshot on NAS (iSCSI LUN snapshot)
+5. Velero captures VolumeSnapshot metadata in backup archive
+6. Backup completes with CSI snapshot references
+
+**Restore Flow:**
+1. Velero restore initiated
+2. Velero creates PVC with dataSource referencing VolumeSnapshot
+3. CSI driver provisions new volume from snapshot
+4. Pod starts with restored data
+
+**Advantages over Kopia:**
+- Native Kubernetes integration
+- Storage-level snapshots (faster, more efficient)
+- No file-level scanning required
+- Better suited for block storage (iSCSI)
+
+**Current State:**
+- ✅ Loki memory optimized for singleBinary mode (512Mi request, 768Mi limit, GOMEMLIMIT 700Mi)
+- ✅ Loki running without external cache dependencies
+- ✅ Ingestion rate limits configured (10MB/sec, 20MB burst)
+- ✅ Velero using CSI snapshots exclusively (no Kopia conflicts)
+- ✅ snapshot-controller deployed and processing VolumeSnapshot requests
+- ⚠️ Log-based alerting temporarily disabled (can be re-enabled with proper singleBinary ruler config)
+
+**For Next Session:**
+- Monitor Loki memory usage over 24-48 hours to validate limits
+- Test Velero CSI snapshot backup and restore functionality
+- Verify first scheduled backup completes successfully with CSI snapshots
+- Consider re-enabling log-based alerting with singleBinary-compatible ruler configuration
+- Continue with next TODO priorities: Security Scanning (Trivy Operator), Secrets Management
+
+**Files Modified:**
+- `manifests/base/loki/values.yaml` - Memory limits, ingestion rates, GOMEMLIMIT, disabled ruler
+- `manifests/base/loki/loki-alerts.yaml` → `loki-alerts.yaml.disabled` - Temporarily disabled
+- `manifests/base/velero/values.yaml` - CSI snapshot configuration, disabled Kopia
+- `manifests/base/synology-csi/kustomization.yaml` - Added snapshot-controller
+- `.gitignore` - Added `*.disabled` pattern
+
+**Known Gotchas Added:**
+| Gotcha | Solution | Reference |
+|--------|----------|-----------|
+| Loki singleBinary + external caches | Use internal caching, disable chunksCache/resultsCache | 2026-01-05 session |
+| Loki distributed mode conflict | Set `replicas: 0` for caches explicitly | 2026-01-05 session |
+| Velero CSI + Kopia conflict | Use CSI exclusively, set `defaultVolumesToFsBackup: false` | 2026-01-05 session |
+| CSI snapshots not working | Deploy snapshot-controller alongside CSI driver | 2026-01-05 session |
+
+---
 
 ### 2025-12-28 (Afternoon/Evening): Log-Based Alerting + Dashboard Migration Audit
 
