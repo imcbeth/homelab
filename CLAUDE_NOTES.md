@@ -59,6 +59,7 @@
 
 | Gotcha | Solution | Reference |
 |--------|----------|-----------|
+| Trivy ServiceMonitor not discovered by Prometheus | Use `serviceMonitor.labels` (not `additionalLabels`) with `release: kube-prometheus-stack` | 2026-01-05 late evening |
 | snapshot-controller v8.x sourceVolumeMode error | Downgrade to v6.3.1 or v7.0.2 | 2026-01-05 evening |
 | VolumeSnapshot stuck with finalizers | Use `kubectl patch` to remove finalizers | 2026-01-05 evening |
 | Loki singleBinary + external caches | Use internal caching, disable chunksCache/resultsCache | 2026-01-05 early morning |
@@ -130,7 +131,10 @@ When documenting a new session in "Recent Updates", use this structure:
 
 **Pull Requests:**
 - **PR #193:** [Merged] feat: Add Trivy Operator monitoring and alerting (homelab)
-- **PR #44:** [Open] docs: Add Trivy Operator documentation and vulnerability remediation guide (k8s-docs-n37)
+- **PR #194:** [Merged] docs: Update CLAUDE_NOTES with Trivy deployment session (homelab)
+- **PR #195:** [Merged] fix: Correct Trivy ServiceMonitor label parameter (homelab)
+- **PR #44:** [Merged] docs: Add Trivy Operator documentation and vulnerability remediation guide (k8s-docs-n37)
+- **PR #45:** [Open] docs: Comprehensive hardware documentation update (k8s-docs-n37)
 
 **Current Security Posture (Initial Scan Results):**
 
@@ -267,6 +271,82 @@ Trivy Operator exports metrics at `http://trivy-operator.trivy-system.svc:8080/m
 - Preventive measures and best practices
 - Troubleshooting false positives
 
+**Issue: Grafana Dashboard Showing No Data**
+
+**Symptoms:**
+- Grafana Trivy Security Dashboard panels all empty
+- Trivy metrics endpoint accessible and returning data
+- ServiceMonitor exists but Prometheus not scraping
+
+**Root Cause:**
+Incorrect Helm parameter name in `manifests/base/trivy-operator/values.yaml`:
+```yaml
+# ❌ INCORRECT (used initially):
+serviceMonitor:
+  additionalLabels:
+    release: kube-prometheus-stack
+
+# ✅ CORRECT (per Trivy Helm chart v0.31.0):
+serviceMonitor:
+  labels:
+    release: kube-prometheus-stack
+```
+
+Prometheus requires `release: kube-prometheus-stack` label for ServiceMonitor discovery, but the parameter was named incorrectly. The Trivy Helm chart uses `labels` not `additionalLabels`.
+
+**Solution:**
+
+1. Manual verification:
+```bash
+kubectl label servicemonitor -n trivy-system trivy-operator release=kube-prometheus-stack
+# Prometheus immediately discovered target and started scraping
+```
+
+2. Permanent fix via PR #195:
+```yaml
+# manifests/base/trivy-operator/values.yaml
+serviceMonitor:
+  enabled: true
+  labels:  # Changed from additionalLabels
+    release: kube-prometheus-stack
+  interval: "60s"
+```
+
+**Verification:**
+```bash
+# After ArgoCD sync
+kubectl get servicemonitor -n trivy-system trivy-operator --show-labels
+# release=kube-prometheus-stack ✅
+
+# Prometheus metrics flowing
+curl 'http://localhost:9090/api/v1/query?query=sum(trivy_image_vulnerabilities)'
+# Result: 2,391 total vulnerabilities ✅
+```
+
+Grafana dashboard now populated with real-time vulnerability data.
+
+**3. k8s-docs-n37: Hardware Documentation** (`docs/getting-started/hardware.md`)
+
+Comprehensive rewrite of hardware specifications document:
+
+**New Sections:**
+- Architecture diagram: Network topology (Internet → UDR7 → USW-Pro-24-PoE → Pi cluster + Synology NAS)
+- Synology DS925+ NAS: Full specifications, Kubernetes integration via iSCSI CSI driver
+- Power & Cooling: Complete power budget (140-180W typical), thermal management, fan curves
+- Resource Allocation: Current usage (60-80 pods, 40-50% memory allocated)
+- Bill of Materials: ~$3,000 total hardware cost
+- Cloud Cost Comparison: Break-even in 6-7 months vs AWS/GCP/Azure
+- Expansion Hardware: PoE HATs, active cooling, NVMe details
+- Performance Metrics: NVMe (400 MB/s), iSCSI (110 MB/s), benchmarks
+
+**Hardware Updates Documented:**
+- Switch: TP-Link TL-SG1008MP → UniFi USW-Pro-24-PoE (400W PoE, 24 ports)
+- Network: VLAN isolation (VLAN 10 for K8s, VLAN 1 for NAS)
+- Node table: All 5 nodes with IPs, roles, Kubernetes v1.35.0
+
+**Fixed:**
+- Broken link: `network-info.md` → `networking/overview.md`
+
 **Deployment Verification (Overnight Status Check):**
 
 **Loki**: ✅ Memory stable at 231Mi (optimization successful from morning session)
@@ -359,13 +439,16 @@ This configuration provides vulnerability counts without creating thousands of u
 
 homelab repository:
 - `manifests/base/trivy-operator/trivy-alerts.yaml` (new)
+- `manifests/base/trivy-operator/values.yaml` (fixed ServiceMonitor labels parameter)
 - `manifests/base/trivy-operator/kustomization.yaml`
 - `manifests/base/grafana/dashboards/trivy-security-dashboard.yaml` (new)
 - `manifests/base/grafana/dashboards/kustomization.yaml`
+- `CLAUDE_NOTES.md` (documented Trivy deployment session)
 
 k8s-docs-n37 repository:
 - `docs/applications/trivy-operator.md` (new)
 - `docs/applications/trivy-vulnerability-remediation.md` (new)
+- `docs/getting-started/hardware.md` (comprehensive rewrite)
 - `sidebars.ts` (added Trivy submenu)
 
 **Key Learnings:**
@@ -375,6 +458,8 @@ k8s-docs-n37 repository:
 3. **Scan Resource Limits**: Pi cluster requires aggressive resource limits (3 concurrent jobs max)
 4. **MDX Documentation**: Docusaurus requires `[text](url)` format, not `<url>` angle brackets
 5. **Vulnerability Scale**: Even a homelab has 2,300+ vulnerabilities - automation essential
+6. **ServiceMonitor Labels**: Trivy Helm chart uses `serviceMonitor.labels`, not `serviceMonitor.additionalLabels` - always verify parameter names in Helm chart documentation
+7. **Hardware Documentation**: Complete infrastructure docs (architecture, power, cooling) essential for capacity planning and troubleshooting
 
 ---
 
