@@ -1,0 +1,148 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: trivy-operator-alerts
+  namespace: trivy-system
+  labels:
+    app: trivy-operator
+    prometheus: kube-prometheus
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: trivy_vulnerabilities
+    interval: 60s
+    rules:
+    # Critical vulnerability alerts
+    - alert: CriticalVulnerabilitiesDetected
+      expr: trivy_image_vulnerabilities{severity="Critical"} > 0
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Critical vulnerabilities detected in {{ $labels.namespace }}/{{ $labels.resource_name }}"
+        description: |
+          Container image {{ $labels.image_repository }}:{{ $labels.image_tag }} has {{ $value }} CRITICAL vulnerabilities.
+          Namespace: {{ $labels.namespace }}
+          Resource: {{ $labels.resource_kind }}/{{ $labels.resource_name }}
+          Container: {{ $labels.container_name }}
+          Registry: {{ $labels.image_registry }}
+
+    - alert: HighVulnerabilityCount
+      expr: trivy_image_vulnerabilities{severity="High"} > 20
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High number of vulnerabilities in {{ $labels.namespace }}/{{ $labels.resource_name }}"
+        description: |
+          Container image {{ $labels.image_repository }}:{{ $labels.image_tag }} has {{ $value }} HIGH vulnerabilities.
+          Namespace: {{ $labels.namespace }}
+          Resource: {{ $labels.resource_kind }}/{{ $labels.resource_name }}
+          Container: {{ $labels.container_name }}
+          Consider updating the image or reviewing the vulnerability report.
+
+    # Cluster-wide vulnerability metrics
+    - alert: ClusterCriticalVulnerabilityThresholdExceeded
+      expr: sum(trivy_image_vulnerabilities{severity="Critical"}) > 100
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "Cluster has high number of critical vulnerabilities"
+        description: |
+          The cluster has {{ $value }} total CRITICAL vulnerabilities across all images.
+          Current threshold: 100 critical vulnerabilities.
+          Review vulnerability reports and plan image updates.
+
+    - alert: ClusterHighVulnerabilityThresholdExceeded
+      expr: sum(trivy_image_vulnerabilities{severity="High"}) > 1000
+      for: 1h
+      labels:
+        severity: info
+      annotations:
+        summary: "Cluster has high number of high-severity vulnerabilities"
+        description: |
+          The cluster has {{ $value }} total HIGH vulnerabilities across all images.
+          Current threshold: 1000 high vulnerabilities.
+          Consider planning a security audit and image update cycle.
+
+  - name: trivy_configuration_audit
+    interval: 60s
+    rules:
+    # Configuration audit alerts
+    - alert: CriticalConfigurationIssues
+      expr: |
+        trivy_role_configauditreports{severity="Critical"} > 0 or
+        trivy_clusterrole_configauditreports{severity="Critical"} > 0
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Critical Kubernetes configuration issues detected"
+        description: |
+          Critical configuration issues found in {{ $labels.resource_kind }}/{{ $labels.resource_name }}.
+          Namespace: {{ $labels.namespace }}
+          Review and remediate configuration audit findings.
+
+  - name: trivy_rbac_assessment
+    interval: 60s
+    rules:
+    # RBAC permission alerts
+    - alert: HighRiskRBACPermissions
+      expr: trivy_clusterrole_clusterrbacassessments{severity="Critical"} > 0
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "High-risk RBAC permissions detected in {{ $labels.resource_name }}"
+        description: |
+          ClusterRole {{ $labels.resource_name }} has {{ $value }} critical RBAC issues.
+          Review the role's permissions and apply principle of least privilege.
+
+  - name: trivy_exposed_secrets
+    interval: 60s
+    rules:
+    # Exposed secrets alerts
+    - alert: ExposedSecretsDetected
+      expr: |
+        trivy_image_exposedsecrets{severity="Critical"} > 0 or
+        trivy_image_exposedsecrets{severity="High"} > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Exposed secrets detected in {{ $labels.namespace }}/{{ $labels.resource_name }}"
+        description: |
+          CRITICAL: Exposed secrets found in {{ $labels.image_repository }}:{{ $labels.image_tag }}!
+          Namespace: {{ $labels.namespace }}
+          Resource: {{ $labels.resource_kind }}/{{ $labels.resource_name }}
+          Severity: {{ $labels.severity }}
+          IMMEDIATE ACTION REQUIRED: Rotate credentials and rebuild image without secrets.
+
+  - name: trivy_compliance
+    interval: 300s  # Check every 5 minutes
+    rules:
+    # Compliance failures
+    - alert: CISKubernetesBenchmarkFailures
+      expr: trivy_cluster_compliance{title=~"CIS Kubernetes.*",status="Fail"} > 0
+      for: 1h
+      labels:
+        severity: info
+      annotations:
+        summary: "CIS Kubernetes Benchmark compliance failures detected"
+        description: |
+          CIS Kubernetes Benchmark ({{ $labels.title }}) has failing checks.
+          Review compliance report for details and remediation steps.
+
+    - alert: NSAKubernetesHardeningFailures
+      expr: trivy_cluster_compliance{title=~"National Security Agency.*",status="Fail"} > 0
+      for: 1h
+      labels:
+        severity: info
+      annotations:
+        summary: "NSA Kubernetes Hardening Guidance compliance failures"
+        description: |
+          NSA Kubernetes Hardening Guidance has failing checks.
+          Review compliance report for security hardening recommendations.
