@@ -26,3 +26,6 @@ resources:
   - unifi-pdu.yaml
   - unifi-sites.yaml
   - unifi-switches.yaml
+
+  # Security Dashboards
+  - trivy-security-dashboard.yaml

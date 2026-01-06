@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: trivy-system
 resources:
   - namespace.yaml
+  - trivy-alerts.yaml
