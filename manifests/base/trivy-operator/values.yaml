@@ -56,9 +56,10 @@ operator:
   metricsConfigAuditInfo: false                    # Disable config audit metrics (high cardinality)
 
 # Trivy operator image configuration
+# Using default mirror.gcr.io registry (supports ARM64)
 image:
-  registry: "ghcr.io"                              # GitHub Container Registry
-  repository: "aquasecurity/trivy-operator"
+  registry: "mirror.gcr.io"                        # Google Container Registry mirror
+  repository: "aquasec/trivy-operator"
   pullPolicy: IfNotPresent
 
 # Service configuration for Prometheus metrics
