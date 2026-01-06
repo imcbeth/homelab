@@ -1,8 +1,13 @@
 # Homelab TODO & Improvements
 
-## ✅ **Recently Completed** (December 2025)
+## ✅ **Recently Completed** (December 2025 - January 2026)
 
-### Monitoring & Observability
+### Backup & Disaster Recovery (January 2026)
+- **Velero CSI Snapshots** - Configured Velero to use CSI snapshots exclusively (2026-01-05)
+- **snapshot-controller Fix** - Downgraded from v8.2.0 → v6.3.1 to resolve VolumeSnapshot failures (2026-01-05)
+- **Loki Memory Optimization** - Implemented GOMEMLIMIT, ingestion rate limits, reduced memory usage from 474Mi → 232Mi (2026-01-05)
+
+### Monitoring & Observability (December 2025)
 - **SNMP Monitoring for Synology** - Deployed SNMP exporter, scraping NAS metrics (disk health, temperature, RAID status)
 - **Node Exporter for Pi Cluster** - DaemonSet running on all 5 nodes, monitoring CPU, memory, disk, network
 - **Log Aggregation** - Loki + Promtail deployed, 7-day retention, collecting logs from all pods on all nodes (including control-plane)
@@ -51,17 +56,20 @@
 
 ### 3. **Backup Strategy** ⭐ Critical
 - [x] **Velero** - Deployed for Kubernetes cluster backup (2025-12-27)
-- [x] **Kopia** - File-level backup via Velero node-agent
+- [x] **CSI Snapshots** - Configured Velero to use CSI snapshots exclusively (2026-01-05)
+- [x] **snapshot-controller** - Deployed v6.3.1 for VolumeSnapshot processing (2026-01-05)
 - [x] Backup critical PVCs (Prometheus 50Gi, Grafana 5Gi, Loki 20Gi, Pi-hole 5Gi)
-- [x] Daily PVC backups (2 AM, 30-day retention)
+- [x] Daily PVC backups (2 AM, 30-day retention) - CSI snapshots operational
 - [x] Weekly cluster resource backups (3 AM Sunday, 90-day retention)
 - [x] Velero backup monitoring alerts (7 PrometheusRule alerts)
+- [x] **Fixed VolumeSnapshot failures** - Downgraded snapshot-controller v8.2.0 → v6.3.1 (2026-01-05)
 - [ ] **LocalStack Sync Wave Fix** - Move LocalStack to wave -7 (before Velero dependency issue)
 - [ ] Schedule regular backup testing and restore procedures (monthly)
-- [ ] Test first scheduled backup (wait for 2 AM execution)
 - [ ] Migrate from LocalStack to Backblaze B2 for production backups
 - [ ] Test disaster recovery scenarios (single PVC, namespace, full cluster)
 - [ ] ArgoCD configuration backup automation
+
+**Note:** Kopia file-level backups disabled in favor of CSI snapshots (more efficient for block storage)
 
 ---
 
@@ -92,13 +100,15 @@
 - [x] Prometheus ServiceMonitor integration
 
 ### 6. **Log-Based Alerting**
-- [x] **Loki Ruler Alerting** - Comprehensive log-based alerts deployed (2025-12-28)
-- [x] Set up Loki alerting rules for error patterns (HighErrorLogRate, CriticalErrorLogs)
-- [x] Alert on CrashLoopBackOff events (CrashLoopBackOffDetected)
-- [x] Alert on OOMKilled events (OOMKilledDetected)
-- [x] Alert on persistent pod failures (PersistentPodRestarts)
-- [x] Create log-based SLO monitoring (Error rate tracking via HighErrorLogRate)
-- [x] Additional alerts: HTTP 5xx errors, DB connection errors, auth failures, security events
+- [~] **Loki Ruler Alerting** - Temporarily disabled due to singleBinary mode compatibility (2026-01-05)
+- [~] Set up Loki alerting rules for error patterns (HighErrorLogRate, CriticalErrorLogs)
+- [~] Alert on CrashLoopBackOff events (CrashLoopBackOffDetected)
+- [~] Alert on OOMKilled events (OOMKilledDetected)
+- [~] Alert on persistent pod failures (PersistentPodRestarts)
+- [~] Create log-based SLO monitoring (Error rate tracking via HighErrorLogRate)
+- [~] Additional alerts: HTTP 5xx errors, DB connection errors, auth failures, security events
+
+**Status:** Rules created but disabled (loki-alerts.yaml.disabled). Can be re-enabled with proper singleBinary ruler configuration.
 
 ---
 
