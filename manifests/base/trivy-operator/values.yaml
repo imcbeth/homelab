@@ -1,0 +1,156 @@
+# Trivy Operator Configuration for Raspberry Pi 5 Kubernetes Homelab
+# Cluster: 5x Pi 5 nodes (16GB each, 80GB total)
+# Purpose: Continuous security scanning for container vulnerabilities and misconfigurations
+
+# Target all namespaces for comprehensive security coverage
+targetNamespaces: ""
+
+# Exclude system namespaces that don't need scanning
+excludeNamespaces: "kube-system,kube-public,kube-node-lease"
+
+# Scan all standard Kubernetes workloads
+targetWorkloads: "pod,replicaset,replicationcontroller,statefulset,daemonset,cronjob,job"
+
+operator:
+  # Single replica is sufficient for homelab
+  replicas: 1
+
+  # Resource limits tuned for Pi cluster
+  resources:
+    requests:
+      cpu: 50m          # Reduced from default 100m
+      memory: 100Mi     # Same as default
+    limits:
+      cpu: 300m         # Reduced from default 500m
+      memory: 300Mi     # Reduced from default 500Mi
+
+  # Scanning configuration
+  scanJobTimeout: 10m                              # Increased from 5m for slower Pi nodes
+  scanJobsConcurrentLimit: 3                       # Reduced from 10 to limit resource usage
+  scanNodeCollectorLimit: 1                        # Default, only one node collector at a time
+
+  # Enable all security scanners
+  vulnerabilityScannerEnabled: true                # CVE vulnerability scanning
+  sbomGenerationEnabled: true                      # Software Bill of Materials
+  configAuditScannerEnabled: true                  # Kubernetes configuration auditing
+  rbacAssessmentScannerEnabled: true               # RBAC permission analysis
+  infraAssessmentScannerEnabled: true              # Infrastructure component scanning
+  clusterComplianceEnabled: true                   # Compliance reporting (NSA, CIS, PSS)
+  exposedSecretScannerEnabled: true                # Detect exposed secrets
+
+  # Report retention
+  scannerReportTTL: "24h"                          # Keep vulnerability reports for 24 hours
+  cacheReportTTL: "120h"                           # Keep SBOM cache for 5 days
+
+  # Scan only current revisions to reduce load
+  vulnerabilityScannerScanOnlyCurrentRevisions: true
+  configAuditScannerScanOnlyCurrentRevisions: true
+
+  # Use built-in Trivy server (no external dependency)
+  builtInTrivyServer: true
+
+  # Prometheus metrics configuration
+  metricsFindingsEnabled: true                     # Enable metrics for findings
+  metricsVulnIdEnabled: false                      # Disable CVE ID metrics (high cardinality)
+  metricsExposedSecretInfo: false                  # Disable secret metrics (high cardinality)
+  metricsConfigAuditInfo: false                    # Disable config audit metrics (high cardinality)
+
+# Trivy operator image configuration
+image:
+  registry: "ghcr.io"                              # GitHub Container Registry
+  repository: "aquasecurity/trivy-operator"
+  pullPolicy: IfNotPresent
+
+# Service configuration for Prometheus metrics
+service:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+  metricsPort: 8080
+
+# Prometheus ServiceMonitor for kube-prometheus-stack
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: kube-prometheus-stack
+  interval: "60s"                                  # Scrape every 60 seconds
+
+# Built-in Trivy server configuration
+trivyServer:
+  enabled: true                                    # Enable built-in server
+
+  # Resource limits for Trivy server
+  resources:
+    requests:
+      cpu: 100m                                    # Reduced from default 200m
+      memory: 256Mi                                # Reduced from default 512Mi
+    limits:
+      cpu: 500m                                    # Reduced from default 1 CPU
+      memory: 512Mi                                # Reduced from default 1Gi
+
+  # Security context
+  podSecurityContext:
+    runAsUser: 65534
+    runAsNonRoot: true
+    fsGroup: 65534
+
+  # Trivy vulnerability database storage
+  persistence:
+    enabled: true
+    storageClass: "synology-iscsi-retain"         # Use Synology storage
+    size: 5Gi                                      # Database and cache storage
+    accessMode: ReadWriteOnce
+
+# Trivy scanner configuration
+trivy:
+  # Use built-in server mode
+  mode: ClientServer
+
+  # Severity levels to report
+  severity: "CRITICAL,HIGH,MEDIUM"
+
+  # Ignore unfixed vulnerabilities to reduce noise
+  ignoreUnfixed: true
+
+  # Timeout for vulnerability scans
+  timeout: "10m"
+
+  # Resource limits for scan jobs
+  resources:
+    requests:
+      cpu: 50m
+      memory: 100Mi
+    limits:
+      cpu: 500m
+      memory: 500Mi
+
+# Node collector for node component scanning
+nodeCollector:
+  # Use built-in volume
+  useBuiltinVolume: true
+
+  # Resource limits for node collector jobs
+  resources:
+    requests:
+      cpu: 50m
+      memory: 100Mi
+    limits:
+      cpu: 300m
+      memory: 300Mi
+
+# RBAC configuration
+rbac:
+  create: true
+
+# ServiceAccount configuration
+serviceAccount:
+  create: true
+  name: trivy-operator
+
+# Security policies
+# Configure tolerations to scan control-plane nodes
+# (similar to node-exporter configuration)
+tolerations: []
+# - key: node-role.kubernetes.io/control-plane
+#   operator: Exists
+#   effect: NoSchedule
