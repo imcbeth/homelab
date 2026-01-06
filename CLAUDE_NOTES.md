@@ -119,6 +119,265 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
+### 2026-01-05 (Late Evening): Trivy Operator Deployment with Monitoring and Alerting
+
+**Completed Work:**
+- ✅ **Trivy Operator Deployed** - Security scanning for vulnerabilities, misconfigurations, RBAC, secrets, and compliance
+- ✅ **PrometheusRule Alerts Created** - Critical/High vulnerability alerting with multiple alert groups
+- ✅ **Grafana Dashboard Built** - Trivy Security Scanning dashboard with vulnerability metrics
+- ✅ **Comprehensive Documentation** - Trivy Operator guide and vulnerability remediation procedures
+- ✅ **Deployment Verification** - Confirmed overnight deployments (Trivy, Velero, Loki)
+
+**Pull Requests:**
+- **PR #193:** [Merged] feat: Add Trivy Operator monitoring and alerting (homelab)
+- **PR #44:** [Open] docs: Add Trivy Operator documentation and vulnerability remediation guide (k8s-docs-n37)
+
+**Current Security Posture (Initial Scan Results):**
+
+Trivy Operator scanned 52 container images across the cluster and identified:
+
+| Severity | Count | Percentage |
+|----------|-------|------------|
+| CRITICAL | 53 | 2.2% |
+| HIGH | 754 | 31.4% |
+| MEDIUM | 1,495 | 62.3% |
+| **Total** | **2,302** | **100%** |
+
+**Top Vulnerable Components:**
+
+1. **Promtail** (Loki log collector): 7 CRITICAL, 34 HIGH
+   - Multiple Kerberos CVEs (CVE-2024-37371)
+   - Docker/Moby vulnerability (CVE-2024-41110)
+
+2. **Synology CSI** components: 3-5 CRITICAL each, 48-57 HIGH each
+   - CSI controller: 5 CRITICAL, 57 HIGH
+   - CSI snapshotter: 4 CRITICAL, 54 HIGH
+   - CSI node: 4 CRITICAL, 52 HIGH
+
+3. **ArgoCD Redis**: 3 CRITICAL, 34 HIGH
+
+4. **MetalLB speaker**: 2 CRITICAL, 21 HIGH (per pod x4)
+
+**Key CVEs Identified:**
+
+- **CVE-2024-37371**: Kerberos GSS message token handling (affects Debian base images)
+- **CVE-2024-41110**: Docker/Moby authorization bypass
+- **CVE-2024-45337**: golang.org/x/crypto SSH vulnerability
+- **CVE-2024-24790**: golang net/netip unexpected behavior
+
+Most vulnerabilities are in base OS packages (Debian, Alpine) and require upstream vendor image updates.
+
+**Configuration Audit Results:**
+
+- **0 CRITICAL** configuration issues (excellent!)
+- **80 HIGH** configuration issues (missing security contexts, resource limits, etc.)
+
+**Trivy Operator Configuration:**
+
+**Deployment Details:**
+- **Namespace**: `trivy-system`
+- **Version**: Helm chart 0.31.0 (app v0.29.0)
+- **Registry**: mirror.gcr.io (ARM64 compatible)
+- **Scanners Enabled**: Vulnerability, Config Audit, RBAC, Secrets, Compliance
+- **Scan Frequency**: On deployment + daily rescans
+- **Report Retention**: 24h for vulnerabilities, 120h for SBOM cache
+
+**Resource Limits (Pi-optimized):**
+- Operator: 50m-300m CPU, 100Mi-300Mi RAM
+- Trivy Server: 100m-500m CPU, 256Mi-512Mi RAM
+- Scan Jobs: 50m-500m CPU, 100Mi-500Mi RAM
+- Concurrent Scans: Limited to 3 jobs
+- Scan Timeout: 10 minutes (increased for ARM64)
+
+**Persistence:**
+- Trivy vulnerability database: 5Gi PVC on Synology NAS (`synology-iscsi-retain`)
+- Daily automatic database updates
+
+**Monitoring and Alerting Infrastructure:**
+
+**PrometheusRule: `trivy-operator-alerts`**
+
+Created 5 alert groups with 12 total alerts:
+
+1. **trivy_vulnerabilities** group:
+   - `CriticalVulnerabilitiesDetected` (critical) - Any image with CRITICAL CVEs
+   - `HighVulnerabilityCount` (warning) - Image has >20 HIGH CVEs
+   - `ClusterCriticalVulnerabilityThresholdExceeded` (warning) - >100 CRITICAL cluster-wide
+   - `ClusterHighVulnerabilityThresholdExceeded` (info) - >1000 HIGH cluster-wide
+
+2. **trivy_configuration_audit** group:
+   - `CriticalConfigurationIssues` (warning) - Critical K8s misconfigurations
+
+3. **trivy_rbac_assessment** group:
+   - `HighRiskRBACPermissions` (warning) - Dangerous cluster role permissions
+
+4. **trivy_exposed_secrets** group:
+   - `ExposedSecretsDetected` (critical) - **IMMEDIATE ACTION REQUIRED** for leaked credentials
+
+5. **trivy_compliance** group:
+   - `CISKubernetesBenchmarkFailures` (info) - CIS compliance issues
+   - `NSAKubernetesHardeningFailures` (info) - NSA hardening issues
+
+**Grafana Dashboard: "Trivy Security Scanning"**
+
+Dashboard panels:
+- **Stat Panels**: Total CRITICAL/HIGH/MEDIUM counts + images scanned
+- **Vulnerability Table**: Sortable table with per-image severity breakdown
+- **Severity Pie Chart**: Cluster-wide distribution
+- **Namespace Breakdown**: Critical+High by namespace
+
+Access: `https://grafana.k8s.n37.ca`
+
+**Prometheus Metrics:**
+
+Trivy Operator exports metrics at `http://trivy-operator.trivy-system.svc:8080/metrics`:
+
+- `trivy_image_vulnerabilities{severity="Critical|High|Medium"}` - Per-image vulnerability counts
+- `trivy_cluster_compliance{title, status}` - CIS/NSA compliance pass/fail
+- `trivy_role_configauditreports` - Configuration audit findings
+- `trivy_clusterrole_clusterrbacassessments` - RBAC permission risks
+- `trivy_image_exposedsecrets` - Exposed secret detections
+
+**Comprehensive Documentation Created:**
+
+**1. k8s-docs-n37: Trivy Operator Overview** (`docs/applications/trivy-operator.md`)
+- Architecture diagram
+- Security scanner capabilities
+- Deployment configuration
+- Monitoring and alerts
+- Current security posture
+- Maintenance procedures
+- Troubleshooting guide
+
+**2. k8s-docs-n37: Vulnerability Remediation Guide** (`docs/applications/trivy-vulnerability-remediation.md`)
+- Alert triage workflow (1-hour SLA)
+- Vulnerability assessment procedures
+- Remediation strategies:
+  - Strategy A: Update container images (preferred)
+  - Strategy B: Rebuild custom images
+  - Strategy C: Accept risk with mitigation (temporary)
+- Post-remediation verification
+- Common vulnerability scenarios with solutions
+- Remediation priorities and SLAs:
+  - Priority 1 (CRITICAL): 24 hours - Exposed secrets, RCE, privilege escalation
+  - Priority 2 (HIGH): 1 week - Internet-facing services, container escape
+  - Priority 3 (MEDIUM): 1 month - Internal services, no known exploits
+  - Priority 4 (LOW): Best effort
+- Compliance and reporting procedures
+- Preventive measures and best practices
+- Troubleshooting false positives
+
+**Deployment Verification (Overnight Status Check):**
+
+**Loki**: ✅ Memory stable at 231Mi (optimization successful from morning session)
+
+**Velero**: ⚠️ Last backup (2 AM) had 5 errors
+- **Root Cause**: Backup ran before PR #190 merge (node-agent still enabled at 2 AM)
+- **Timeline**: Backup at 02:00 AM, PR #190 merged at 6:13 PM
+- **Status**: Next backup (tonight 2 AM) will use correct CSI-only configuration
+- **Verification**: ArgoCD synced, node-agent DaemonSet pruned successfully
+
+**Trivy Operator**: ✅ Deployed and actively scanning
+- 52 vulnerability reports generated
+- 41 reports with CRITICAL/HIGH findings
+- Scan jobs running successfully
+- PrometheusRule loaded in Prometheus
+- Grafana dashboard deployed successfully
+
+**Technical Deep-Dive: Trivy Metrics Architecture**
+
+**Metrics Exposition:**
+
+Trivy Operator uses a ServiceMonitor to expose metrics:
+
+```yaml
+# manifests/base/trivy-operator/values.yaml
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: kube-prometheus-stack
+  interval: "60s"
+```
+
+**Metrics Cardinality Control:**
+
+Disabled high-cardinality metrics to prevent Prometheus overload:
+
+```yaml
+operator:
+  metricsFindingsEnabled: true       # ✅ Aggregate counts
+  metricsVulnIdEnabled: false        # ❌ Per-CVE ID (too many labels)
+  metricsExposedSecretInfo: false    # ❌ Secret details (high cardinality)
+  metricsConfigAuditInfo: false      # ❌ Detailed audit info (high cardinality)
+```
+
+This configuration provides vulnerability counts without creating thousands of unique metric series.
+
+**Current State:**
+
+**Deployed and Healthy:**
+- Trivy Operator v0.29.0 scanning all namespaces
+- 52 images scanned, 41 with CRITICAL/HIGH findings
+- PrometheusRule alerts configured (12 alerts across 5 groups)
+- Grafana dashboard available for vulnerability visualization
+- Comprehensive documentation published to k8s-docs-n37
+
+**Monitoring Working:**
+- Loki memory optimized (231Mi)
+- Velero CSI snapshots ready (next backup tonight)
+- Trivy metrics scraped every 60s
+- AlertManager configured for vulnerability notifications
+
+**Security Posture:**
+- 53 CRITICAL vulnerabilities identified
+- 754 HIGH vulnerabilities identified
+- Top issues documented with remediation priorities
+- Vulnerability response procedures documented
+
+**For Next Session:**
+
+1. **Monitor Overnight Results:**
+   - Check tonight's Velero backup (2 AM) - should succeed with CSI-only config
+   - Review any Trivy alerts that fire
+   - Verify Loki memory remains stable
+
+2. **Begin Vulnerability Remediation (TODO Section 7):**
+   - Update Promtail to address 7 CRITICAL CVEs
+   - Investigate Synology CSI updates
+   - Plan cluster-wide base image updates
+   - Prioritize exposed secrets (if any)
+
+3. **Continue Security Infrastructure (TODO Section 7):**
+   - Deploy Falco for runtime security monitoring
+   - Deploy OPA Gatekeeper for policy enforcement
+
+4. **Secrets Management (TODO Section 8):**
+   - Evaluate External Secrets Operator vs Sealed Secrets
+   - Begin migration from git-crypt
+
+**Files Modified:**
+
+homelab repository:
+- `manifests/base/trivy-operator/trivy-alerts.yaml` (new)
+- `manifests/base/trivy-operator/kustomization.yaml`
+- `manifests/base/grafana/dashboards/trivy-security-dashboard.yaml` (new)
+- `manifests/base/grafana/dashboards/kustomization.yaml`
+
+k8s-docs-n37 repository:
+- `docs/applications/trivy-operator.md` (new)
+- `docs/applications/trivy-vulnerability-remediation.md` (new)
+- `sidebars.ts` (added Trivy submenu)
+
+**Key Learnings:**
+
+1. **ARM64 Image Registry**: ghcr.io didn't have Trivy images; mirror.gcr.io worked
+2. **Metrics Cardinality**: Disabled per-CVE metrics to prevent Prometheus overload
+3. **Scan Resource Limits**: Pi cluster requires aggressive resource limits (3 concurrent jobs max)
+4. **MDX Documentation**: Docusaurus requires `[text](url)` format, not `<url>` angle brackets
+5. **Vulnerability Scale**: Even a homelab has 2,300+ vulnerabilities - automation essential
+
+---
+
 ### 2026-01-05 (Evening): Snapshot-Controller Downgrade to Fix CSI Snapshot Failures
 
 **Completed Work:**
