@@ -72,7 +72,7 @@ service:
 # Prometheus ServiceMonitor for kube-prometheus-stack
 serviceMonitor:
   enabled: true
-  additionalLabels:
+  labels:
     release: kube-prometheus-stack
   interval: "60s"                                  # Scrape every 60 seconds
 
