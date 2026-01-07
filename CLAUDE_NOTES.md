@@ -2,7 +2,7 @@
 
 ## Quick Reference for AI Assistants Working in This Repository
 
-**Last Updated:** 2026-01-05
+**Last Updated:** 2026-01-07
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -59,6 +59,7 @@
 
 | Gotcha | Solution | Reference |
 |--------|----------|-----------|
+| Synology CSI v1.2.1 node plugin iscsiadm regression | Use v1.2.0 for node plugin, keep sidecars upgraded | 2026-01-07 late evening |
 | Trivy ServiceMonitor not discovered by Prometheus | Use `serviceMonitor.labels` (not `additionalLabels`) with `release: kube-prometheus-stack` | 2026-01-05 late evening |
 | snapshot-controller v8.x sourceVolumeMode error | Downgrade to v6.3.1 or v7.0.2 | 2026-01-05 evening |
 | VolumeSnapshot stuck with finalizers | Use `kubectl patch` to remove finalizers | 2026-01-05 evening |
@@ -119,6 +120,114 @@ When documenting a new session in "Recent Updates", use this structure:
 ---
 
 ## 📋 Recent Updates
+
+### 2026-01-07 (All Day): Vulnerability Remediation - Promtail & Synology CSI Upgrades
+
+**Completed Work:**
+- ✅ **CLAUDE_NOTES.md Maintenance** - Archived old sessions to CLAUDE_NOTES_2025.md (reduced from 3,121 to 2,524 lines)
+- ✅ **Trivy Documentation** - Created comprehensive operational documentation for Trivy Operator
+- ✅ **Promtail Upgrade** - Helm chart 6.16.6 → 6.17.1 (app 3.0.0 → 3.5.1)
+- ✅ **Synology CSI Partial Upgrade** - Sidecars upgraded, node plugin rolled back
+- ✅ **Grafana Restoration** - Fixed iSCSI mount issue after CSI upgrade
+
+**Pull Requests:**
+- **PR #198:** [Merged] docs: Archive old CLAUDE_NOTES sessions to manage file size (homelab)
+- **PR #47:** [Merged] docs: Add Trivy Operator operational documentation (k8s-docs-n37)
+- **PR #199:** [Merged] feat: Upgrade Promtail to 6.17.1 to address vulnerabilities (homelab)
+- **PR #200:** [Merged] feat: Upgrade Synology CSI sidecars to remediate vulnerabilities (homelab)
+- **PR #201:** [Merged] fix: Rollback synology-csi node to v1.2.0 to fix iscsiadm issue (homelab)
+- **PR #49:** [Merged] docs: Update Trivy remediation with Promtail completion (k8s-docs-n37)
+- **PR #50:** [Pushed to main] docs: Update Synology CSI remediation with rollback details (k8s-docs-n37)
+
+**Vulnerability Remediation Results:**
+
+**Promtail (Evening - 100% Success):**
+- CRITICAL: 7 → 0 (100% elimination) ✅
+- HIGH: 34 → 4 (88% reduction) ✅
+- Deployment: Rolling update, 3 minutes, zero downtime
+- All 5 pods running successfully
+
+**Synology CSI (Late Evening - Partial Success with Rollback):**
+- **Upgraded Successfully:**
+  - csi-attacher: v4.0.0 → v4.10.0 ✅
+  - csi-node-driver-registrar: v2.3.0 → v2.15.0 ✅
+  - csi-snapshotter: v4.2.1 → v7.0.2 ✅
+- **Rolled Back:**
+  - synology-csi (node): v1.2.1 → v1.2.0 (due to iscsiadm regression)
+- Component CRITICAL: 13 → 11 (15% reduction)
+- Component HIGH: 163 → 49 (70% reduction) ✅
+- Sidecar containers now have 0 CRITICAL vulnerabilities
+
+**Cluster-Wide Impact:**
+- CRITICAL: 43 → 28 (-35%, -15 vulnerabilities)
+- HIGH: 606 → 428 (-29%, -178 vulnerabilities)
+- MEDIUM: ~1,450 (stable)
+- Two Priority 1 components completed in one day
+
+**Issue 1: Synology CSI v1.2.1 iSCSI Mount Failure**
+
+**Symptoms:**
+```
+MountVolume.SetUp failed: env: can't execute 'iscsiadm': No such file or directory (exit status 127)
+```
+- Grafana pod stuck in Init:0/1 (unable to mount PVC)
+- Existing PVCs (Prometheus, Loki, Trivy) remained mounted successfully
+- New mount attempts failed across all nodes
+
+**Root Cause:**
+- synology-csi v1.2.1 node plugin introduced regression
+- Container cannot access `iscsiadm` binary from host filesystem
+- Ironically, v1.2.1 was released to FIX path issues but created new one
+- Existing mounts work because iSCSI sessions already established
+
+**Solution:**
+1. Created hotfix branch `hotfix/synology-csi-iscsiadm-rollback`
+2. Rolled back node.yml: synology-csi v1.2.1 → v1.2.0
+3. PR #201 merged, ArgoCD auto-synced
+4. All 4 CSI node pods restarted with v1.2.0
+5. Deleted Grafana pod to retry mount
+6. Grafana successfully started with PVC mounted
+
+**Verification:**
+```bash
+# Confirmed rollback
+kubectl get daemonset synology-csi-node -n synology-csi -o jsonpath='{.spec.template.spec.containers[?(@.name=="csi-plugin")].image}'
+# Output: synology/synology-csi:v1.2.0
+
+# Grafana restored
+kubectl get pods -n default | grep grafana
+# Output: kube-prometheus-stack-grafana-6db4f4df67-gvtr6   3/3   Running
+
+# PVC mounted successfully
+kubectl exec -n default kube-prometheus-stack-grafana-... -- df -h /var/lib/grafana
+# Output: /dev/sda  5.0G  53.9M  4.4G  1% /var/lib/grafana
+```
+
+**Current State:**
+- Promtail: Fully upgraded, 0 CRITICAL vulnerabilities ✅
+- Synology CSI: Partial upgrade successful
+  - Sidecars upgraded (csi-attacher, csi-node-driver-registrar, csi-snapshotter)
+  - Node plugin on v1.2.0 (awaiting upstream fix for v1.2.1)
+- All PVCs operational (Prometheus 50Gi, Grafana 5Gi, Loki 20Gi, Trivy 5Gi)
+- Grafana fully restored and accessible
+- Cluster CRITICAL reduced from 43 → 28 (35% improvement)
+
+**For Next Session:**
+- [ ] Monitor [Synology CSI GitHub](https://github.com/SynologyOpenSource/synology-csi) for v1.2.1 fix or v1.2.2 release
+- [ ] Next priority: ArgoCD Redis (3 CRITICAL, 34 HIGH) - Target: 2026-01-15
+- [ ] Continue cluster-wide base image updates (Priority 3)
+
+**Files Modified:**
+- `CLAUDE_NOTES.md` - Reduced file size, added archive reference
+- `CLAUDE_NOTES_2025.md` - Created archive for December 2025 sessions
+- `k8s-docs-n37/docs/applications/trivy-operator.md` - Added production status
+- `k8s-docs-n37/docs/applications/trivy-vulnerability-remediation.md` - Updated remediation tracking, added Promtail and Synology CSI results
+- `manifests/applications/promtail.yaml` - Updated chart version 6.16.6 → 6.17.1
+- `manifests/base/synology-csi/controller.yml` - Updated csi-attacher v4.0.0 → v4.10.0
+- `manifests/base/synology-csi/node.yml` - Updated csi-node-driver-registrar v2.3.0 → v2.15.0, synology-csi v1.2.1 → v1.2.0 (rollback)
+- `manifests/base/synology-csi/snapshotter/snapshotter.yml` - Updated csi-snapshotter v4.2.1 → v7.0.2
+
+---
 
 ### 2026-01-05 (Late Evening): Trivy Operator Deployment with Monitoring and Alerting
 
