@@ -62,8 +62,8 @@
 - [x] Daily PVC backups (2 AM, 30-day retention) - CSI snapshots operational
 - [x] Weekly cluster resource backups (3 AM Sunday, 90-day retention)
 - [x] Velero backup monitoring alerts (7 PrometheusRule alerts)
-- [x] **Fixed VolumeSnapshot failures** - Downgraded snapshot-controller v8.2.0 → v6.3.1 (2026-01-05)
-- [ ] **LocalStack Sync Wave Fix** - Move LocalStack to wave -7 (before Velero dependency issue)
+- [x] **Fixed VolumeSnapshot failures** - Upgraded snapshot-controller to v8.2.1, csi-snapshotter to v8.4.0 (2026-01-11)
+- [x] **LocalStack Sync Wave Fix** - LocalStack at wave -7, before Velero (-5) ✓
 - [ ] Schedule regular backup testing and restore procedures (monthly)
 - [ ] Migrate from LocalStack to Backblaze B2 for production backups
 - [ ] Test disaster recovery scenarios (single PVC, namespace, full cluster)
@@ -115,12 +115,15 @@
 ## 🛡️ **Security & Compliance**
 
 ### 7. **Security Scanning & Runtime Protection**
-- [ ] **Trivy Operator** - Container vulnerability scanning
+- [x] **Trivy Operator** - Container vulnerability scanning (deployed 2026-01-05, chart 0.31.0)
+  - [x] ServiceMonitor configured for Prometheus metrics
+  - [x] VulnerabilityReports available via kubectl
+  - [x] Scanning all cluster images automatically
 - [ ] **Falco** - Runtime security monitoring and threat detection
 - [ ] **OPA Gatekeeper** - Policy enforcement and admission control
 - [ ] Security policy definitions for workloads
 - [ ] Compliance reporting and alerting
-- [ ] Scan existing images for vulnerabilities
+- [ ] Create Grafana dashboard for vulnerability trends
 
 ### 8. **Secrets Management**
 - [ ] Evaluate **External Secrets Operator** vs **Sealed Secrets**
@@ -329,7 +332,7 @@ Items are organized by priority, not by timeline. Focus on:
 
 ## 🔄 **ArgoCD Sync Wave Optimization**
 
-### Current Sync Wave Order (Validated 2025-12-28)
+### Current Sync Wave Order (Validated 2026-01-11)
 
 ```
 Wave -50: argocd (self-management)
@@ -339,21 +342,18 @@ Wave -20: unipoller (UniFi metrics collection)
 Wave -15: kube-prometheus-stack (monitoring stack)
 Wave -12: loki (log aggregation)
 Wave -11: promtail (log collection)
-Wave -10: cert-manager, external-dns (certificates & DNS)
+Wave -10: cert-manager, external-dns, metrics-server (certificates & DNS & metrics)
 Wave  -8: [PLANNED] argo-workflows (CI/CD)
-Wave  -7: [RECOMMENDED] localstack (S3 mock - move from wave 0)
+Wave  -7: localstack (S3 mock for Velero)
 Wave  -5: velero (backup solution)
-Wave   0: [DEFAULT] localstack (applications tier)
 ```
 
-### ⚠️ Identified Issues
+### ✅ Resolved Issues
 
-**1. LocalStack Dependency Conflict**
-- **Problem**: Velero (wave -5) depends on LocalStack (wave 0)
-- **Impact**: Velero's BackupStorageLocation shows "Unavailable" until LocalStack starts
-- **Current Config**: `s3Url: http://localstack.localstack:4566`
-- **Solution**: Add sync-wave `-7` to LocalStack Application manifest
-- **Priority**: Medium (Velero has retry logic, but cleaner deployment order is better)
+**1. LocalStack Dependency Conflict** ✅ FIXED
+- **Problem**: Velero (wave -5) depended on LocalStack (wave 0)
+- **Solution**: LocalStack moved to wave -7, now deploys before Velero
+- **Status**: Resolved - Velero BackupStorageLocation is available on startup
 
 **2. Pi-hole Early Deployment**
 - **Current**: Wave -35 (same as MetalLB)
@@ -375,20 +375,14 @@ Wave   0: [DEFAULT] localstack (applications tier)
 - ✅ **Promtail** (-11) → Depends on Loki being available
 - ✅ **cert-manager** (-10) → Independent, issues certs on-demand
 - ✅ **external-dns** (-10) → Works with TLS Ingresses (safe timing)
-- ✅ **Velero** (-5) → Uses CSI, depends on LocalStack (needs fix)
+- ✅ **LocalStack** (-7) → S3 mock available before Velero
+- ✅ **Velero** (-5) → Uses CSI and LocalStack S3
 
 ### 🎯 Recommended Actions
 
-1. **Immediate**: Add sync-wave annotation to LocalStack Application
-   ```yaml
-   # /manifests/applications/localstack.yaml
-   annotations:
-     argocd.argoproj.io/sync-wave: "-7"
-   ```
+1. **Future**: Consider sync wave for Argo Workflows at `-8`
 
-2. **Future**: Consider sync wave for Argo Workflows at `-8`
-
-3. **Optional Optimizations**:
+2. **Optional Optimizations**:
    - Move UniFi Poller to -10 (aligns with other non-critical monitoring)
    - Move Pi-hole to -30 (after MetalLB, with CSI)
 
