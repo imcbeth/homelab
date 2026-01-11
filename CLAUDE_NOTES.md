@@ -121,55 +121,57 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
-### 2026-01-11 (Morning): ArgoCD Chart Upgrade - Redis Vulnerability Remediation
+### 2026-01-11 (Morning): ArgoCD & MetalLB Vulnerability Remediation
 
 **Completed Work:**
 - ✅ **ArgoCD Chart Upgrade** - Helm chart 9.0.5 → 9.2.4 (app v3.2.0 → v3.2.3)
-- ✅ **Redis Image Upgrade** - 7.2.11-alpine → 8.2.2-alpine
-- ✅ **CRITICAL Vulnerability Elimination** - ArgoCD Redis: 3 CRITICAL → 0 CRITICAL
-- ✅ **HIGH Vulnerability Elimination** - ArgoCD Redis: 34 HIGH → 0 HIGH
+- ✅ **ArgoCD Redis Upgrade** - 7.2.11-alpine → 8.2.2-alpine (0 CRITICAL, 0 HIGH)
+- ✅ **MetalLB Chart Upgrade** - Helm chart v0.15.2 → 0.15.3
+- ✅ **MetalLB FRR Upgrade** - 9.1.0 → 10.4.1 (0 CRITICAL, 0 HIGH)
 
 **Pull Requests:**
 - **PR #203:** [Merged] fix: Upgrade ArgoCD chart 9.0.5 → 9.2.4 to remediate Redis vulnerabilities
+- **PR #204:** [Merged] docs: Update CLAUDE_NOTES with ArgoCD upgrade session
+- **PR #205:** [Merged] fix: Upgrade MetalLB chart 0.15.2 → 0.15.3 to remediate FRR vulnerabilities
 
 **Vulnerability Remediation Results:**
 
 **ArgoCD Redis (100% Success):**
 - CRITICAL: 3 → 0 (100% elimination) ✅
 - HIGH: 34 → 0 (100% elimination) ✅
-- MEDIUM: 40 → 3 (92% reduction) ✅
+- CVEs: CVE-2023-24538, CVE-2023-24540, CVE-2024-24790 (Go stdlib)
 
-**Vulnerabilities Addressed:**
-| CVE | Description | Fixed By |
-|-----|-------------|----------|
-| CVE-2023-24538 | Go html/template backtick handling | Redis 8.2.2-alpine (newer Go stdlib) |
-| CVE-2023-24540 | Go html/template JavaScript whitespace | Redis 8.2.2-alpine (newer Go stdlib) |
-| CVE-2024-24790 | Go net/netip IPv4-mapped IPv6 behavior | Redis 8.2.2-alpine (newer Go stdlib) |
+**MetalLB FRR (100% Success):**
+- CRITICAL: 8 → 0 (100% elimination) ✅
+- HIGH: 84 → 10 (88% reduction) ✅
+- CVEs: CVE-2024-45491, CVE-2024-45492 (libexpat integer overflow)
 
-**Root Cause:**
-The Redis 7.2.11-alpine image contained Go stdlib v1.18.2, which had 3 CRITICAL vulnerabilities. The Redis 8.2.2-alpine image includes updated Go runtime.
+**Cluster-Wide Impact (Today's Session):**
+| Metric | Start of Day | After ArgoCD | After MetalLB | Total Reduction |
+|--------|--------------|--------------|---------------|-----------------|
+| CRITICAL | 28 | 25 | 17 | -39% (-11) |
+| HIGH | 482 | 482 | 386 | -20% (-96) |
+| MEDIUM | 1421 | 1421 | 1185 | -17% (-236) |
 
-**Cluster-Wide Impact:**
-- CRITICAL: 28 → 25 (-3 vulnerabilities, -11%)
-- ArgoCD namespace now has 0 CRITICAL vulnerabilities
-
-**Note on Redis Licensing:**
-Redis 8.x uses RSALv2/SSPLv1/AGPLv3 licensing (changed from BSD in 7.2.x). The ArgoCD project has adopted this version in their official Helm chart.
+**Technical Notes:**
+- ArgoCD Application manifests require `kubectl apply` to update targetRevision (ArgoCD doesn't auto-update its own Application resources from git)
+- MetalLB speaker DaemonSet rolled out one pod at a time (zero downtime)
+- Redis 8.x licensing: RSALv2/SSPLv1/AGPLv3 (ArgoCD project accepted this)
 
 **Current State:**
-- ArgoCD: All 8 pods running with updated images
-- Redis: 8.2.2-alpine with 0 CRITICAL, 0 HIGH vulnerabilities
-- Cluster: Healthy, all applications synced
+- ArgoCD: All 8 pods running v3.2.3, Redis 8.2.2-alpine
+- MetalLB: All 6 pods running v0.15.3, FRR 10.4.1
+- Cluster: 17 CRITICAL vulnerabilities remaining (down from 28)
 
 **For Next Session:**
-- [ ] Continue cluster-wide vulnerability remediation
-- [ ] Monitor Synology CSI for v1.2.2 release
-- [ ] Consider Falco deployment for runtime security
-- [ ] Update TODO.md to mark Trivy Operator as completed
+- [ ] Continue vulnerability remediation (Blackbox/SNMP exporters - quick wins)
+- [ ] Synology CSI blocked until upstream fixes v1.2.1 iscsiadm regression
+- [ ] Consider app-of-apps pattern to auto-update Application manifests
 
 **Files Modified:**
-- `manifests/applications/argocd.yaml` - Updated chart version 9.0.5 → 9.2.4
-- `CLAUDE_NOTES.md` - Added session documentation
+- `manifests/applications/argocd.yaml` - Chart version 9.0.5 → 9.2.4
+- `manifests/applications/metal-lb.yaml` - Chart version v0.15.2 → 0.15.3
+- `CLAUDE_NOTES.md` - Session documentation
 
 ---
 
