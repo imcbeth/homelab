@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: blackbox-exporter
-        image: prom/blackbox-exporter:v0.25.0
+        image: prom/blackbox-exporter:v0.28.0
         args:
         - "--config.file=/config/blackbox.yml"
         - "--log.level=info"
