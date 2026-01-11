@@ -47,8 +47,8 @@
 - [x] **Alert Routing** - Critical → email, warning/info → null (reduce noise)
 - [x] **Velero Backup Alerts** - 7 PrometheusRule alerts for backup monitoring
 - [x] **HTML Email Templates** - Custom-formatted critical alert emails
-- [ ] Configure AlertManager webhook to Discord/Slack/Telegram
-- [ ] Implement tiered alerting (warning → Discord, critical → email+Discord)
+- [~] ~~Configure AlertManager webhook to Discord/Slack/Telegram~~ - Not used (email preferred)
+- [ ] Implement tiered alerting (warning → suppress, critical → email)
 - [ ] Set up predictive alerts for disk space (Prometheus, Loki, Synology)
 - [ ] Create alerts for NAS disk failures and high temperature
 - [ ] Create runbooks for common alert scenarios
