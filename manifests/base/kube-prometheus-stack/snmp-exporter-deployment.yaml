@@ -65,7 +65,7 @@ spec:
           mountPath: /config
       containers:
       - name: snmp-exporter
-        image: prom/snmp-exporter:v0.26.0
+        image: prom/snmp-exporter:v0.30.0
         args:
         - "--config.file=/config/snmp.yml"
         ports:
