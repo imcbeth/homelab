@@ -121,57 +121,74 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
-### 2026-01-11 (Morning): ArgoCD & MetalLB Vulnerability Remediation
+### 2026-01-11 (All Day): Major Vulnerability Remediation Day
 
 **Completed Work:**
-- ✅ **ArgoCD Chart Upgrade** - Helm chart 9.0.5 → 9.2.4 (app v3.2.0 → v3.2.3)
-- ✅ **ArgoCD Redis Upgrade** - 7.2.11-alpine → 8.2.2-alpine (0 CRITICAL, 0 HIGH)
-- ✅ **MetalLB Chart Upgrade** - Helm chart v0.15.2 → 0.15.3
-- ✅ **MetalLB FRR Upgrade** - 9.1.0 → 10.4.1 (0 CRITICAL, 0 HIGH)
+- ✅ **ArgoCD Chart Upgrade** - Helm chart 9.0.5 → 9.2.4 (Redis 8.2.2-alpine)
+- ✅ **MetalLB Chart Upgrade** - Helm chart v0.15.2 → 0.15.3 (FRR 10.4.1)
+- ✅ **Blackbox Exporter Upgrade** - v0.25.0 → v0.28.0 (0 vulnerabilities)
+- ✅ **SNMP Exporter Upgrade** - v0.26.0 → v0.30.0 (0 vulnerabilities)
+- ✅ **External-DNS Cloudflare Upgrade** - v0.15.0 → v0.20.0 (0 CRITICAL)
 
 **Pull Requests:**
-- **PR #203:** [Merged] fix: Upgrade ArgoCD chart 9.0.5 → 9.2.4 to remediate Redis vulnerabilities
-- **PR #204:** [Merged] docs: Update CLAUDE_NOTES with ArgoCD upgrade session
-- **PR #205:** [Merged] fix: Upgrade MetalLB chart 0.15.2 → 0.15.3 to remediate FRR vulnerabilities
+- **PR #203:** [Merged] ArgoCD chart upgrade 9.0.5 → 9.2.4
+- **PR #205:** [Merged] MetalLB chart upgrade 0.15.2 → 0.15.3
+- **PR #206:** [Merged] Session documentation update
+- **PR #207:** [Merged] Blackbox/SNMP exporter upgrades
+- **PR #208:** [Merged] SNMP exporter probe fix for v0.30.0
+- **PR #209:** [Merged] External-DNS Cloudflare upgrade
 
 **Vulnerability Remediation Results:**
 
-**ArgoCD Redis (100% Success):**
-- CRITICAL: 3 → 0 (100% elimination) ✅
-- HIGH: 34 → 0 (100% elimination) ✅
-- CVEs: CVE-2023-24538, CVE-2023-24540, CVE-2024-24790 (Go stdlib)
+| Component | CRITICAL Before | CRITICAL After | HIGH Before | HIGH After |
+|-----------|-----------------|----------------|-------------|------------|
+| ArgoCD Redis | 3 | 0 ✅ | 34 | 0 ✅ |
+| MetalLB FRR | 8 | 0 ✅ | 84 | 10 |
+| Blackbox Exporter | 2 | 0 ✅ | 7 | 0 ✅ |
+| SNMP Exporter | 2 | 0 ✅ | 6 | 0 ✅ |
+| External-DNS | 1 | 0 ✅ | 7 | 1 |
 
-**MetalLB FRR (100% Success):**
-- CRITICAL: 8 → 0 (100% elimination) ✅
-- HIGH: 84 → 10 (88% reduction) ✅
-- CVEs: CVE-2024-45491, CVE-2024-45492 (libexpat integer overflow)
+**CVEs Addressed:**
+- CVE-2023-24538, CVE-2023-24540, CVE-2024-24790 (Go stdlib)
+- CVE-2024-45491, CVE-2024-45492 (libexpat integer overflow)
+- CVE-2024-45337 (golang.org/x/crypto SSH vulnerability)
 
-**Cluster-Wide Impact (Today's Session):**
-| Metric | Start of Day | After ArgoCD | After MetalLB | Total Reduction |
-|--------|--------------|--------------|---------------|-----------------|
-| CRITICAL | 28 | 25 | 17 | -39% (-11) |
-| HIGH | 482 | 482 | 386 | -20% (-96) |
-| MEDIUM | 1421 | 1421 | 1185 | -17% (-236) |
+**Cluster-Wide Impact:**
+| Metric | Start of Day | End of Day | Reduction |
+|--------|--------------|------------|-----------|
+| CRITICAL | 28 | 12 | **-57%** (-16) |
+| HIGH | 482 | 331 | **-31%** (-151) |
+| MEDIUM | 1421 | 1043 | **-27%** (-378) |
 
 **Technical Notes:**
-- ArgoCD Application manifests require `kubectl apply` to update targetRevision (ArgoCD doesn't auto-update its own Application resources from git)
-- MetalLB speaker DaemonSet rolled out one pod at a time (zero downtime)
+- SNMP exporter v0.30.0 removed `/health` endpoint - updated probes to use `/`
+- ArgoCD Application manifests require `kubectl apply` for targetRevision updates
 - Redis 8.x licensing: RSALv2/SSPLv1/AGPLv3 (ArgoCD project accepted this)
 
+**Remaining CRITICAL (12):**
+- Synology CSI: 9 (blocked - waiting for upstream v1.2.2)
+- Trivy Server: 1 (waiting for upstream Alpine base image fix)
+- Snapshot Controller: 1 (Go stdlib)
+- CSI Snapshotter: 1 (Go stdlib)
+
 **Current State:**
-- ArgoCD: All 8 pods running v3.2.3, Redis 8.2.2-alpine
-- MetalLB: All 6 pods running v0.15.3, FRR 10.4.1
-- Cluster: 17 CRITICAL vulnerabilities remaining (down from 28)
+- ArgoCD: v3.2.3, Redis 8.2.2-alpine
+- MetalLB: v0.15.3, FRR 10.4.1
+- Blackbox/SNMP Exporters: 0 vulnerabilities
+- External-DNS: All deployments on v0.20.0
+- Cluster: 12 CRITICAL remaining (mostly Synology CSI - blocked)
 
 **For Next Session:**
-- [ ] Continue vulnerability remediation (Blackbox/SNMP exporters - quick wins)
-- [ ] Synology CSI blocked until upstream fixes v1.2.1 iscsiadm regression
-- [ ] Consider app-of-apps pattern to auto-update Application manifests
+- [ ] Monitor Synology CSI for v1.2.2 release (fixes 9 CRITICAL)
+- [ ] Monitor Trivy upstream for Alpine base image update
+- [ ] Snapshot Controller upgrade when Go stdlib fix available
 
 **Files Modified:**
-- `manifests/applications/argocd.yaml` - Chart version 9.0.5 → 9.2.4
-- `manifests/applications/metal-lb.yaml` - Chart version v0.15.2 → 0.15.3
-- `CLAUDE_NOTES.md` - Session documentation
+- `manifests/applications/argocd.yaml` - Chart 9.0.5 → 9.2.4
+- `manifests/applications/metal-lb.yaml` - Chart v0.15.2 → 0.15.3
+- `manifests/base/kube-prometheus-stack/blackbox-exporter-deployment.yaml` - v0.28.0
+- `manifests/base/kube-prometheus-stack/snmp-exporter-deployment.yaml` - v0.30.0, updated probes
+- `manifests/base/external-dns/deployment-cloudflare.yaml` - v0.20.0
 
 ---
 
