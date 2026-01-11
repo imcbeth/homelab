@@ -61,7 +61,7 @@
 |--------|----------|-----------|
 | Synology CSI v1.2.1 node plugin iscsiadm regression | Use v1.2.0 for node plugin, keep sidecars upgraded | 2026-01-07 late evening |
 | Trivy ServiceMonitor not discovered by Prometheus | Use `serviceMonitor.labels` (not `additionalLabels`) with `release: kube-prometheus-stack` | 2026-01-05 late evening |
-| snapshot-controller v8.x sourceVolumeMode error | Downgrade to v6.3.1 or v7.0.2 | 2026-01-05 evening |
+| snapshot-controller/csi-snapshotter v8.x RBAC | Add `patch` verb for volumesnapshotcontents and groupsnapshot API group | 2026-01-11 evening |
 | VolumeSnapshot stuck with finalizers | Use `kubectl patch` to remove finalizers | 2026-01-05 evening |
 | Loki singleBinary + external caches | Use internal caching, disable chunksCache/resultsCache | 2026-01-05 early morning |
 | Loki distributed mode conflict | Set `replicas: 0` for caches explicitly | 2026-01-05 early morning |
@@ -129,6 +129,8 @@ When documenting a new session in "Recent Updates", use this structure:
 - ✅ **Blackbox Exporter Upgrade** - v0.25.0 → v0.28.0 (0 vulnerabilities)
 - ✅ **SNMP Exporter Upgrade** - v0.26.0 → v0.30.0 (0 vulnerabilities)
 - ✅ **External-DNS Cloudflare Upgrade** - v0.15.0 → v0.20.0 (0 CRITICAL)
+- ✅ **Snapshot Controller Upgrade** - v6.3.1 → v8.2.1 (Go 1.24.0, fixes CVE-2024-24790)
+- ✅ **CSI Snapshotter Upgrade** - v7.0.2 → v8.4.0 (Go 1.24.0, fixes CVE-2024-24790)
 
 **Pull Requests:**
 - **PR #203:** [Merged] ArgoCD chart upgrade 9.0.5 → 9.2.4
@@ -137,6 +139,8 @@ When documenting a new session in "Recent Updates", use this structure:
 - **PR #207:** [Merged] Blackbox/SNMP exporter upgrades
 - **PR #208:** [Merged] SNMP exporter probe fix for v0.30.0
 - **PR #209:** [Merged] External-DNS Cloudflare upgrade
+- **PR #211:** [Merged] Snapshot controller/CSI snapshotter upgrade to v8.x
+- **PR #212:** [Merged] Fix CSI snapshotter RBAC for v8.x compatibility
 
 **Vulnerability Remediation Results:**
 
@@ -147,6 +151,8 @@ When documenting a new session in "Recent Updates", use this structure:
 | Blackbox Exporter | 2 | 0 ✅ | 7 | 0 ✅ |
 | SNMP Exporter | 2 | 0 ✅ | 6 | 0 ✅ |
 | External-DNS | 1 | 0 ✅ | 7 | 1 |
+| Snapshot Controller | 1 | 0 ✅ | 8 | 4 |
+| CSI Snapshotter | 1 | 0 ✅ | 6 | 2 |
 
 **CVEs Addressed:**
 - CVE-2023-24538, CVE-2023-24540, CVE-2024-24790 (Go stdlib)
@@ -156,32 +162,34 @@ When documenting a new session in "Recent Updates", use this structure:
 **Cluster-Wide Impact:**
 | Metric | Start of Day | End of Day | Reduction |
 |--------|--------------|------------|-----------|
-| CRITICAL | 28 | 12 | **-57%** (-16) |
-| HIGH | 482 | 331 | **-31%** (-151) |
-| MEDIUM | 1421 | 1043 | **-27%** (-378) |
+| CRITICAL | 28 | 10 | **-64%** (-18) |
+| HIGH | 482 | 350 | **-27%** (-132) |
+| MEDIUM | 1421 | 1060 | **-25%** (-361) |
 
 **Technical Notes:**
 - SNMP exporter v0.30.0 removed `/health` endpoint - updated probes to use `/`
 - ArgoCD Application manifests require `kubectl apply` for targetRevision updates
 - Redis 8.x licensing: RSALv2/SSPLv1/AGPLv3 (ArgoCD project accepted this)
+- Snapshot controller v8.x requires updated RBAC with `patch` verb for volumesnapshotcontents
+- v8.x external-snapshotter refs (kustomize) deploy snapshot-controller v8.2.1 image
 
-**Remaining CRITICAL (12):**
+**Remaining CRITICAL (10):**
 - Synology CSI: 9 (blocked - waiting for upstream v1.2.2)
 - Trivy Server: 1 (waiting for upstream Alpine base image fix)
-- Snapshot Controller: 1 (Go stdlib)
-- CSI Snapshotter: 1 (Go stdlib)
 
 **Current State:**
 - ArgoCD: v3.2.3, Redis 8.2.2-alpine
 - MetalLB: v0.15.3, FRR 10.4.1
 - Blackbox/SNMP Exporters: 0 vulnerabilities
 - External-DNS: All deployments on v0.20.0
-- Cluster: 12 CRITICAL remaining (mostly Synology CSI - blocked)
+- Snapshot Controller: v8.2.1 (Go 1.24.0)
+- CSI Snapshotter: v8.4.0 (Go 1.24.0)
+- VolumeSnapshots: Working with v8.x (tested with Grafana PVC)
+- Cluster: 10 CRITICAL remaining (Synology CSI 9, Trivy Server 1)
 
 **For Next Session:**
 - [ ] Monitor Synology CSI for v1.2.2 release (fixes 9 CRITICAL)
 - [ ] Monitor Trivy upstream for Alpine base image update
-- [ ] Snapshot Controller upgrade when Go stdlib fix available
 
 **Files Modified:**
 - `manifests/applications/argocd.yaml` - Chart 9.0.5 → 9.2.4
@@ -189,6 +197,8 @@ When documenting a new session in "Recent Updates", use this structure:
 - `manifests/base/kube-prometheus-stack/blackbox-exporter-deployment.yaml` - v0.28.0
 - `manifests/base/kube-prometheus-stack/snmp-exporter-deployment.yaml` - v0.30.0, updated probes
 - `manifests/base/external-dns/deployment-cloudflare.yaml` - v0.20.0
+- `manifests/base/synology-csi/kustomization.yaml` - external-snapshotter ref v7.0.2 → v8.4.0
+- `manifests/base/synology-csi/snapshotter/snapshotter.yml` - csi-snapshotter v7.0.2 → v8.4.0, updated RBAC
 
 ---
 
