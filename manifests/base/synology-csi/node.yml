@@ -86,13 +86,15 @@ spec:
           securityContext:
             privileged: true
           imagePullPolicy: IfNotPresent
-          image: synology/synology-csi:v1.2.0
+          image: synology/synology-csi:v1.2.1
           args:
             - --nodeid=$(KUBE_NODE_NAME)
             - --endpoint=$(CSI_ENDPOINT)
             - --client-info
             - /etc/synology/client-info.yml
             - --log-level=info
+            - --chroot-dir=/host
+            - --iscsiadm-path=/usr/sbin/iscsiadm
           env:
             - name: CSI_ENDPOINT
               value: unix://csi/csi.sock
