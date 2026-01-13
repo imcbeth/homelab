@@ -1,0 +1,13 @@
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: unipoller-secret
+  namespace: unipoller
+spec:
+  encryptedData:
+    api-key: AgAH3/yBwG3hfozc+bXIscoZnjW4atIu39j+V67kb3I6G/ad9WxcVdbc+J1ysFeiKQK9fHCYgTa3UX4pmaRTUjmWUo5nPLc4F5V9Tqqio+NObkK1uLjZU96jW9+6TUak7C84pvsq1wC2ZWSjOTCWy5/2ddw//F6f+zr145H3Na5dEOLcegGVdWB0UlAYFaJUYtJK+pvkrxNSEKyz7ktS6P/9uhn8ojq93C7b8PTlSNVRC0MIkZOnsX51mP0YFos6SxQhpnnIa3qqxHWLy7bnKToKK4MOJnH+kq/rxdIyZITZoKIfEh+LrHVqjtTpa/2X/ikDXX1VEdvmd02nvSlriB1qlg+SznQ+DKqp46SCukWJBsNgdFgll4ozDGMra5K/bNfJEih2Fk+/bu5aZKt9qXwpyccekm0EYaz4wOngP3fPFOzaSFwu4uVXKl8OAaj+KmAbunUCq/Wd4Y9yACjE1RpYpkfNoosIfe/c+LDv7mFd4Z3qSqkfrJC7zJidKupiGeB8PbVRksFx2g9NZEntFhtj7deYs8YePPMwLGM8zLqzeb2QdeLy46KYtQRSzV9gV1p/a7CluiZRo+LleB3bpQb2lJqKo2cIaafA6agkJjw1MEgbcYKRu7rsZsyDPdI0lVsZugkodKqZpiNY/JE3CMGNPZRv3dp1aUHYrHG30nOVt+tsUWs5gmxFtaUtiPzO27SmXBnAL7qGSjp0Q/sKJ91OS+buOE0bGx2+f258dBSlRw==
+  template:
+    metadata:
+      name: unipoller-secret
+      namespace: unipoller
+    type: Opaque
