@@ -1,0 +1,397 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: storage-alerts
+  namespace: default
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  # Node Filesystem Alerts (Pi Cluster NVMe drives)
+  - name: node_filesystem
+    interval: 60s
+    rules:
+    - alert: NodeFilesystemSpaceLow
+      expr: |
+        (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"} /
+         node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"}) * 100 < 20
+        and
+        node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"} > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "Low disk space on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+        description: |
+          Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} has only
+          {{ printf "%.1f" $value }}% free space remaining.
+
+          Action: Review disk usage and consider cleanup or expansion.
+
+          Troubleshooting:
+          1. SSH to node and run: df -h {{ $labels.mountpoint }}
+          2. Find large files: du -sh {{ $labels.mountpoint }}/* | sort -h
+          3. Check pod logs for log rotation issues
+
+    - alert: NodeFilesystemSpaceCritical
+      expr: |
+        (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"} /
+         node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"}) * 100 < 10
+        and
+        node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"} > 0
+      for: 5m
+      labels:
+        severity: critical
+        component: storage
+      annotations:
+        summary: "CRITICAL: Disk space critical on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+        description: |
+          Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} has only
+          {{ printf "%.1f" $value }}% free space remaining.
+
+          IMMEDIATE ACTION REQUIRED: System may become unstable.
+
+          Emergency steps:
+          1. SSH to node: ssh pi@{{ $labels.instance | reReplaceAll ":.*" "" }}
+          2. Find large files: sudo du -sh /* | sort -h
+          3. Clear old logs: sudo journalctl --vacuum-time=1d
+          4. Check container logs: sudo crictl logs
+          5. Consider pod eviction if necessary
+
+    - alert: NodeFilesystemSpacePredicted
+      expr: |
+        predict_linear(
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"}[6h],
+          24*3600
+        ) < 0
+        and
+        node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"} > 0
+      for: 1h
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "Predicted disk full in 24h on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+        description: |
+          Based on current growth rate, filesystem {{ $labels.mountpoint }} on {{ $labels.instance }}
+          is predicted to run out of space within 24 hours.
+
+          This is a predictive alert based on 6-hour trend analysis.
+
+          Action: Investigate what is consuming disk space before it becomes critical.
+
+          Troubleshooting:
+          1. Check recent log growth: journalctl --disk-usage
+          2. Review container image cache: crictl images
+          3. Check for runaway log files in pods
+
+    - alert: NodeFilesystemInodesLow
+      expr: |
+        (node_filesystem_files_free{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"} /
+         node_filesystem_files{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"}) * 100 < 20
+        and
+        node_filesystem_files{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/sys.*|/var/lib/kubelet/pods.*"} > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "Low inodes on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+        description: |
+          Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} has only
+          {{ printf "%.1f" $value }}% free inodes remaining.
+
+          Inode exhaustion can prevent file creation even with available disk space.
+
+          Troubleshooting:
+          1. Find directories with many files: find {{ $labels.mountpoint }} -xdev -type d | while read d; do echo "$(ls -1 "$d" 2>/dev/null | wc -l) $d"; done | sort -rn | head -20
+          2. Check for accumulated small files (logs, cache)
+
+  # Persistent Volume Alerts (Kubernetes PVCs)
+  - name: persistent_volumes
+    interval: 60s
+    rules:
+    - alert: PersistentVolumeSpaceLow
+      expr: |
+        (kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes) * 100 < 20
+        and
+        kubelet_volume_stats_capacity_bytes > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is low on space"
+        description: |
+          PersistentVolumeClaim {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }}
+          has only {{ printf "%.1f" $value }}% free space remaining.
+
+          This PVC is used by pod {{ $labels.pod }}.
+
+          Action: Consider expanding the PVC or cleaning up data.
+
+          Troubleshooting:
+          1. kubectl exec -n {{ $labels.namespace }} {{ $labels.pod }} -- df -h
+          2. Check application logs for data growth patterns
+          3. Review retention policies for the application
+
+    - alert: PersistentVolumeSpaceCritical
+      expr: |
+        (kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes) * 100 < 10
+        and
+        kubelet_volume_stats_capacity_bytes > 0
+      for: 5m
+      labels:
+        severity: critical
+        component: storage
+      annotations:
+        summary: "CRITICAL: PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} nearly full"
+        description: |
+          PersistentVolumeClaim {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }}
+          has only {{ printf "%.1f" $value }}% free space remaining.
+
+          IMMEDIATE ACTION REQUIRED: Application may fail or lose data.
+
+          Known PVCs in this cluster:
+          - default/prometheus-kube-prometheus-stack-prometheus-db (50Gi)
+          - default/kube-prometheus-stack-grafana (5Gi)
+          - loki/storage-loki-0 (20Gi)
+          - trivy-system/trivy-server (5Gi)
+
+          Emergency steps:
+          1. kubectl get pvc -n {{ $labels.namespace }} {{ $labels.persistentvolumeclaim }}
+          2. For Prometheus: Check data retention (default 10d)
+          3. For Loki: Check log retention (default 168h)
+          4. Consider expanding PVC via StorageClass (if supported)
+
+    - alert: PersistentVolumeSpacePredicted
+      expr: |
+        predict_linear(kubelet_volume_stats_available_bytes[4h], 4*3600) < 0
+        and
+        kubelet_volume_stats_available_bytes > 0
+      for: 30m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} predicted full in 4h"
+        description: |
+          Based on current growth rate, PVC {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }}
+          is predicted to run out of space within 4 hours.
+
+          This is a predictive alert based on 4-hour trend analysis.
+
+          Action: Investigate data growth and consider:
+          1. Reducing retention periods
+          2. Expanding the PVC
+          3. Cleaning up old data
+
+  # Synology NAS Alerts (SNMP Metrics)
+  - name: synology_nas
+    interval: 60s
+    rules:
+    - alert: SynologyDiskStatusAbnormal
+      expr: diskStatus{job="snmp-synology"} != 1
+      for: 5m
+      labels:
+        severity: critical
+        component: storage
+      annotations:
+        summary: "Synology disk {{ $labels.diskID }} status abnormal"
+        description: |
+          Disk {{ $labels.diskID }} on Synology NAS has abnormal status.
+          Current status code: {{ $value }}
+
+          Status codes:
+          1 = Normal
+          2 = Initialized
+          3 = NotInitialized
+          4 = SystemPartitionFailed
+          5 = Crashed
+
+          IMMEDIATE ACTION REQUIRED: Check Synology DSM Storage Manager.
+
+          Troubleshooting:
+          1. Log into Synology DSM at https://10.0.1.204:5001
+          2. Open Storage Manager > HDD/SSD
+          3. Check S.M.A.R.T. status for disk {{ $labels.diskID }}
+          4. Review system logs for disk errors
+
+    - alert: SynologyDiskTemperatureHigh
+      expr: diskTemperature{job="snmp-synology"} > 50
+      for: 10m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "Synology disk {{ $labels.diskID }} temperature high ({{ $value }}C)"
+        description: |
+          Disk {{ $labels.diskID }} on Synology NAS is running hot at {{ $value }}C.
+          Recommended operating temperature: 25-45C
+
+          Sustained high temperatures can reduce disk lifespan.
+
+          Action: Check NAS ventilation and ambient temperature.
+
+          Troubleshooting:
+          1. Verify NAS fan operation in DSM Control Panel > Hardware & Power
+          2. Check ambient room temperature
+          3. Ensure adequate airflow around NAS
+
+    - alert: SynologyDiskTemperatureCritical
+      expr: diskTemperature{job="snmp-synology"} > 60
+      for: 5m
+      labels:
+        severity: critical
+        component: storage
+      annotations:
+        summary: "CRITICAL: Synology disk {{ $labels.diskID }} overheating ({{ $value }}C)"
+        description: |
+          Disk {{ $labels.diskID }} on Synology NAS is critically hot at {{ $value }}C.
+
+          IMMEDIATE ACTION REQUIRED: Risk of disk failure and data loss.
+
+          Emergency steps:
+          1. Check if NAS fans are working
+          2. Reduce workload on NAS temporarily
+          3. Consider shutting down NAS if temperature continues rising
+          4. Check for blocked ventilation
+
+    - alert: SynologyRAIDDegraded
+      expr: raidStatus{job="snmp-synology"} != 1
+      for: 5m
+      labels:
+        severity: critical
+        component: storage
+      annotations:
+        summary: "Synology RAID {{ $labels.raidName }} is degraded"
+        description: |
+          RAID volume {{ $labels.raidName }} on Synology NAS is not in normal state.
+          Current status code: {{ $value }}
+
+          Status codes:
+          1 = Normal
+          2 = Repairing
+          3 = Migrating
+          4 = Expanding
+          5 = Deleting
+          6 = Creating
+          11 = RAIDSyncing
+          12 = RAIDParityChecking
+          13 = RAIDAssembling
+          14 = Canceling
+
+          IMMEDIATE ACTION REQUIRED for codes other than repair/sync operations.
+
+          Troubleshooting:
+          1. Log into Synology DSM at https://10.0.1.204:5001
+          2. Open Storage Manager > Storage Pool
+          3. Check RAID status and any failed disks
+          4. If degraded, prepare replacement disk
+
+    - alert: SynologyVolumeSpaceLow
+      expr: |
+        (raidFreeSize{job="snmp-synology"} / raidTotalSize{job="snmp-synology"}) * 100 < 20
+        and
+        raidTotalSize{job="snmp-synology"} > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "Synology volume {{ $labels.raidName }} low on space"
+        description: |
+          Volume {{ $labels.raidName }} on Synology NAS has less than 20% free space.
+          Current free: {{ printf "%.1f" $value }}%
+
+          This volume provides iSCSI storage for Kubernetes PVCs.
+
+          Action: Review and clean up data on the NAS.
+
+          Troubleshooting:
+          1. Log into Synology DSM
+          2. Open File Station and review large folders
+          3. Check iSCSI LUN usage in SAN Manager
+          4. Consider expanding volume or adding disks
+
+    - alert: SynologyVolumeSpaceCritical
+      expr: |
+        (raidFreeSize{job="snmp-synology"} / raidTotalSize{job="snmp-synology"}) * 100 < 10
+        and
+        raidTotalSize{job="snmp-synology"} > 0
+      for: 5m
+      labels:
+        severity: critical
+        component: storage
+      annotations:
+        summary: "CRITICAL: Synology volume {{ $labels.raidName }} nearly full"
+        description: |
+          Volume {{ $labels.raidName }} on Synology NAS has less than 10% free space.
+          Current free: {{ printf "%.1f" $value }}%
+
+          IMMEDIATE ACTION REQUIRED: Kubernetes PVC provisioning will fail.
+
+          Emergency steps:
+          1. Identify largest consumers in DSM File Station
+          2. Delete old snapshots in SAN Manager
+          3. Check Velero backup retention
+          4. Consider emergency data cleanup
+
+    - alert: SynologySystemTemperatureHigh
+      expr: temperature{job="snmp-synology"} > 50
+      for: 10m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "Synology NAS system temperature high ({{ $value }}C)"
+        description: |
+          Synology NAS system temperature is {{ $value }}C.
+          Recommended operating temperature: below 40C
+
+          Action: Check NAS ventilation and ambient temperature.
+
+    - alert: SynologyBadSectorsDetected
+      expr: diskBadSector{job="snmp-synology"} > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "Bad sectors detected on Synology disk {{ $labels.diskID }}"
+        description: |
+          Disk {{ $labels.diskID }} on Synology NAS has {{ $value }} bad sectors.
+
+          Bad sectors indicate disk degradation. While the disk may continue to function,
+          this is an early warning sign of potential disk failure.
+
+          Action: Plan for disk replacement and ensure backups are current.
+
+          Troubleshooting:
+          1. Check S.M.A.R.T. status in DSM Storage Manager
+          2. Run Extended S.M.A.R.T. test
+          3. Order replacement disk if bad sector count increases
+          4. Verify Velero backups are completing successfully
+
+    - alert: SynologyPowerStatusAbnormal
+      expr: powerStatus{job="snmp-synology"} != 1
+      for: 1m
+      labels:
+        severity: critical
+        component: storage
+      annotations:
+        summary: "Synology NAS power status abnormal"
+        description: |
+          Synology NAS power supply status is abnormal.
+          Current status code: {{ $value }}
+
+          This may indicate:
+          - Power supply failure
+          - UPS issues (if connected)
+          - Power interruption
+
+          IMMEDIATE ACTION REQUIRED: Check physical power connections and UPS status.
