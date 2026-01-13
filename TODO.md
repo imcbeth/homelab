@@ -126,12 +126,16 @@
 - [ ] Create Grafana dashboard for vulnerability trends
 
 ### 8. **Secrets Management**
-- [ ] Evaluate **External Secrets Operator** vs **Sealed Secrets**
-- [ ] Deploy chosen secrets management solution
-- [ ] Migrate existing git-crypt secrets to managed solution
+- [x] **Evaluation Complete** - Sealed Secrets recommended for homelab (2026-01-13)
+  - Sealed Secrets: 1 pod, 9Mi RAM, simple, GitOps-native
+  - External Secrets: 3 pods, 69Mi RAM, complex, requires backend
+  - Both deployed for comparison, Sealed Secrets chosen for simplicity
+- [x] **Sealed Secrets Deployed** - bitnami-labs/sealed-secrets v2.16.2 (2026-01-13)
+- [x] **External Secrets Deployed** - For comparison/future use (2026-01-13)
+- [ ] Migrate existing git-crypt secrets to SealedSecrets
 - [ ] Set up secret rotation automation for certificates
 - [ ] Document secrets management procedures
-- [ ] Integrate with ArgoCD for automated secret sync
+- [ ] Remove External Secrets after migration complete (optional)
 
 ### 9. **Network Policies**
 - [ ] Define NetworkPolicies for namespace isolation
