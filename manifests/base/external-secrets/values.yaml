@@ -37,15 +37,15 @@ certController:
       cpu: 100m
       memory: 64Mi
 
-# Security context
+# Container security context (applied to containers)
 securityContext:
   runAsNonRoot: true
   runAsUser: 1000
-  fsGroup: 1000
 
-# Pod security context
+# Pod security context (applied to pod spec)
 podSecurityContext:
   runAsNonRoot: true
+  fsGroup: 1000
 
 # Prometheus metrics
 serviceMonitor:
