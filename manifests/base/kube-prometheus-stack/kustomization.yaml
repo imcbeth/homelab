@@ -18,4 +18,5 @@ resources:
   - snmp-exporter-configmap.yaml
   - snmp-exporter-deployment.yaml
   - snmp-exporter-service.yaml
+  - storage-alerts.yaml
   - velero-alerts.yaml
