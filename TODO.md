@@ -48,9 +48,9 @@
 - [x] **Velero Backup Alerts** - 7 PrometheusRule alerts for backup monitoring
 - [x] **HTML Email Templates** - Custom-formatted critical alert emails
 - [~] ~~Configure AlertManager webhook to Discord/Slack/Telegram~~ - Not used (email preferred)
-- [ ] Implement tiered alerting (warning → suppress, critical → email)
-- [ ] Set up predictive alerts for disk space (Prometheus, Loki, Synology)
-- [ ] Create alerts for NAS disk failures and high temperature
+- [x] Implement tiered alerting (warning → suppress, critical → email)
+- [x] **Predictive Disk Space Alerts** - Node filesystem, PVC, and Synology volume alerts with predict_linear() (2026-01-12)
+- [x] **NAS Health Alerts** - Disk failures, RAID degradation, temperature, bad sectors, power status (2026-01-12)
 - [ ] Create runbooks for common alert scenarios
 - [ ] Test alert routing and escalation
 
