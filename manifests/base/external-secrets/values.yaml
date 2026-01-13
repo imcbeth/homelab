@@ -1,0 +1,89 @@
+# External Secrets Operator - Pi Cluster Optimized Configuration
+# Chart: external-secrets/external-secrets v0.10.7
+# Purpose: Sync secrets from external providers (Kubernetes, Vault, cloud providers)
+
+# Install CRDs
+installCRDs: true
+
+# Controller (main operator)
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+# Webhook (validates ExternalSecret resources)
+webhook:
+  port: 10250
+  certCheckInterval: "5m"
+  lookaheadInterval: ""
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# Cert controller (manages webhook certificates)
+certController:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+
+# Prometheus metrics
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack
+  interval: 60s
+
+# Concurrency settings (reduced for Pi cluster)
+concurrent: 1
+
+# Log level
+logLevel: info
+
+# Leader election (for HA - not needed for single replica)
+leaderElect: false
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false
+
+# Network policy
+networkPolicy:
+  enabled: false
+
+# Tolerations for control plane nodes (not needed)
+tolerations: []
+
+# Node selector (optional - can target specific nodes)
+nodeSelector: {}
+
+# Affinity rules
+affinity: {}
+
+# Replicas (single for homelab)
+replicaCount: 1
+
+# Service account
+serviceAccount:
+  create: true
+  name: external-secrets
