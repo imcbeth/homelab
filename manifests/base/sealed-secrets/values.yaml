@@ -1,0 +1,62 @@
+# Sealed Secrets Controller - Pi Cluster Optimized Configuration
+# Chart: bitnami-labs/sealed-secrets v2.16.2
+# Purpose: Encrypt secrets client-side for GitOps-safe storage in Git
+
+# Controller configuration
+fullnameOverride: sealed-secrets-controller
+
+# Resource limits optimized for Raspberry Pi 5 cluster
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+
+# Metrics for Prometheus
+metrics:
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+    interval: 60s
+
+# Sealed secrets key management
+# IMPORTANT: The sealing key pair is auto-generated on first install
+# Backup the key for disaster recovery:
+#   kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > sealed-secrets-key-backup.yaml
+keyrenewperiod: "0"  # Disable automatic key rotation (manual control preferred)
+
+# Controller settings
+controller:
+  # Create ClusterRole for cluster-wide sealed secrets
+  create: true
+
+# Network policy (disabled - using Kubernetes NetworkPolicies separately if needed)
+networkPolicy:
+  enabled: false
+
+# Service account
+serviceAccount:
+  create: true
+  name: sealed-secrets-controller
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false  # Single replica, no PDB needed
+
+# Ingress (not needed - kubeseal CLI connects to controller service directly)
+ingress:
+  enabled: false
