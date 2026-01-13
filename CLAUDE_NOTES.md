@@ -2,7 +2,7 @@
 
 ## Quick Reference for AI Assistants Working in This Repository
 
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-01-13
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -59,6 +59,9 @@
 
 | Gotcha | Solution | Reference |
 |--------|----------|-----------|
+| Filename matching git-crypt `*secret*` pattern | Avoid "secret" in non-secret resource filenames | 2026-01-13 session |
+| fsGroup in container securityContext | Use `podSecurityContext` for fsGroup, not `securityContext` | 2026-01-13 session |
+| Empty kustomization.yaml fails ArgoCD | Add `resources: []` for valid empty kustomization | 2026-01-13 session |
 | Synology CSI v1.2.1 node plugin iscsiadm regression | Use v1.2.0 for node plugin, keep sidecars upgraded | 2026-01-07 late evening |
 | Trivy ServiceMonitor not discovered by Prometheus | Use `serviceMonitor.labels` (not `additionalLabels`) with `release: kube-prometheus-stack` | 2026-01-05 late evening |
 | snapshot-controller/csi-snapshotter v8.x RBAC | Add `patch` verb for volumesnapshotcontents and groupsnapshot API group | 2026-01-11 evening |
@@ -120,6 +123,93 @@ When documenting a new session in "Recent Updates", use this structure:
 ---
 
 ## 📋 Recent Updates
+
+### 2026-01-13 (Early Morning): Secrets Management Evaluation - Sealed Secrets vs External Secrets
+
+**Completed Work:**
+- ✅ **Sealed Secrets Deployed** - bitnami-labs/sealed-secrets v2.16.2 in kube-system
+- ✅ **External Secrets Operator Deployed** - external-secrets v0.10.7 with Kubernetes backend
+- ✅ **ClusterSecretStore Configured** - Kubernetes secrets backend for ESO
+- ✅ **Both Solutions Tested** - Successfully created and synced test secrets
+
+**Pull Requests:**
+- **PR #219:** [Merged] feat: Deploy Sealed Secrets and External Secrets Operator for evaluation
+- **PR #220:** [Merged] fix: Add empty resources list to sealed-secrets kustomization
+- **PR #221:** [Merged] fix: Rewrite cluster-secret-store.yaml to fix encoding issue
+- **PR #222:** [Merged] fix: Rename cluster-secret-store.yaml to avoid git-crypt encryption
+- **PR #223:** [Merged] fix: Move fsGroup to podSecurityContext for external-secrets
+
+**Evaluation Results:**
+
+| Criteria | Sealed Secrets | External Secrets Operator |
+|----------|---------------|---------------------------|
+| **Pods** | 1 | 3 (operator + webhook + cert-controller) |
+| **CPU Usage** | 1m | 6m total |
+| **Memory Usage** | 9Mi | 69Mi total |
+| **GitOps Native** | Yes (SealedSecret CRD in Git) | Yes (ExternalSecret CRD in Git) |
+| **Secret Rotation** | Manual (re-seal) | Automatic (refreshInterval) |
+| **Dependencies** | None (self-contained) | Requires backend (K8s, Vault, cloud) |
+| **CLI Required** | Yes (kubeseal) | No |
+| **Complexity** | Simple | Medium |
+
+**Recommendation: Sealed Secrets for Homelab**
+
+For this single-cluster homelab, **Sealed Secrets** is the recommended choice because:
+1. **7x less memory** (9Mi vs 69Mi)
+2. **Simpler architecture** (1 pod vs 3)
+3. **No external dependencies** - secrets encrypted in Git
+4. **Lower operational overhead** - just need kubeseal CLI
+5. **Better disaster recovery** - backup sealing key, secrets in Git
+
+External Secrets Operator would be better for:
+- Multi-cluster environments (centralized secrets)
+- Automatic secret rotation requirements
+- Integration with HashiCorp Vault or cloud providers
+
+**Issues Resolved:**
+
+**Issue 1: Empty kustomization.yaml**
+- Kustomize requires `resources: []` even for empty kustomizations
+- Fixed in PR #220
+
+**Issue 2: Git-crypt Encrypting Non-Secret Files**
+- File `cluster-secret-store.yaml` matched `*secret*` pattern
+- Renamed to `cluster-store.yaml` to avoid encryption
+- **Gotcha Added:** Avoid "secret" in filenames for non-secret resources
+
+**Issue 3: fsGroup in Wrong Security Context**
+- `fsGroup` is a pod-level field, not container-level
+- Moved from `securityContext` to `podSecurityContext`
+
+**Current State:**
+- ✅ Sealed Secrets: Controller running, kubeseal working
+- ✅ External Secrets: All 3 pods running, ClusterSecretStore valid
+- ✅ Both solutions tested and functional
+- 📋 Next: Full migration from git-crypt to Sealed Secrets
+
+**For Next Session:**
+- [ ] Begin migrating git-crypt secrets to SealedSecrets
+- [ ] Start with low-risk secret (e.g., unipoller-secret)
+- [ ] Create migration documentation
+- [ ] Consider removing External Secrets after evaluation complete
+
+**Files Modified:**
+- `manifests/applications/sealed-secrets.yaml` (new)
+- `manifests/applications/external-secrets.yaml` (new)
+- `manifests/base/sealed-secrets/values.yaml` (new)
+- `manifests/base/sealed-secrets/kustomization.yaml` (new)
+- `manifests/base/external-secrets/values.yaml` (new)
+- `manifests/base/external-secrets/kustomization.yaml` (new)
+- `manifests/base/external-secrets/cluster-store.yaml` (new)
+
+**Known Gotchas Added:**
+| Gotcha | Solution | Reference |
+|--------|----------|-----------|
+| Filename matching git-crypt pattern | Avoid "secret" in non-secret resource filenames | 2026-01-13 session |
+| fsGroup in container securityContext | Use podSecurityContext for fsGroup | 2026-01-13 session |
+| Empty kustomization.yaml | Add `resources: []` for valid empty kustomization | 2026-01-13 session |
+
+---
 
 ### 2026-01-12 (Evening): Predictive Disk Space & NAS Health Alerts
 
