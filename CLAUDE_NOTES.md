@@ -129,6 +129,57 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
+### 2026-01-14 (Evening): Sealed Secrets Operations Guide
+
+**Completed Work:**
+- ✅ **Created SEALED-SECRETS.md** - Comprehensive operations guide for secret rotation and key management
+- ✅ **Updated secrets/README.md** - Added reference to new operations guide
+
+**Pull Requests:**
+- **PR #240:** [Pending] docs: Add Sealed Secrets operations guide with rotation procedures
+
+**Documentation Created:**
+
+New file: `secrets/SEALED-SECRETS.md` - Complete operations guide including:
+- Architecture overview with diagram
+- Secret value rotation procedure (step-by-step)
+- Batch secret rotation script
+- Sealing key backup procedure
+- Sealing key rotation (manual and automatic options)
+- Re-seal all secrets script after key rotation
+- Sealing key restoration procedure
+- Disaster recovery scenarios:
+  - Cluster rebuilt with backup available
+  - Cluster rebuilt without backup (credential regeneration table)
+  - Single secret corruption recovery
+- Troubleshooting guide for common issues
+- Quick reference commands
+
+**Key Procedures Documented:**
+
+| Procedure | Use Case |
+|-----------|----------|
+| Rotate Secret Value | Password change, API token refresh, compromised credential |
+| Backup Sealing Key | Disaster recovery preparation |
+| Rotate Sealing Key | Security hygiene, suspected compromise |
+| Restore Sealing Key | Cluster rebuild, disaster recovery |
+| Re-seal All Secrets | After sealing key rotation |
+
+**Current State:**
+- ✅ Operations guide created in `secrets/SEALED-SECRETS.md`
+- ✅ README.md updated with link to operations guide
+- 📋 Sealing key backup recommended (documented procedure ready)
+
+**For Next Session:**
+- [ ] Perform sealing key backup using documented procedure
+- [ ] Store backup in secure location (password manager, encrypted storage)
+
+**Files Modified:**
+- `secrets/SEALED-SECRETS.md` (new - ~450 lines)
+- `secrets/README.md` (updated - added reference)
+
+---
+
 ### 2026-01-14 (Afternoon): Documentation Update - Sealed Secrets
 
 **Completed Work:**
