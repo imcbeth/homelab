@@ -129,6 +129,60 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
+### 2026-01-14 (Afternoon): Documentation Update - Sealed Secrets
+
+**Completed Work:**
+- ✅ **Created secrets-management.md** - Comprehensive Sealed Secrets documentation
+- ✅ **Added Security section to docs** - New category in sidebars
+- ✅ **Updated application docs** - cert-manager, external-dns, unipoller, synology-csi
+- ✅ **Updated intro.md** - Added January 2026 secrets migration info
+
+**Pull Requests:**
+- **PR #237:** [Merged] docs: Update CLAUDE_NOTES with secrets migration completion (homelab)
+- **PR #51:** [Merged] docs: Add Sealed Secrets documentation and update secret references (k8s-docs-n37)
+
+**Documentation Changes (k8s-docs-n37):**
+
+New file created:
+- `docs/security/secrets-management.md` - Complete Sealed Secrets guide including:
+  - Architecture diagram showing all 8 managed secrets
+  - kubeseal CLI usage instructions
+  - Backup and disaster recovery procedures
+  - Key rotation guidance
+  - Best practices for GitOps workflow
+
+Files updated:
+- `docs/applications/cert-manager.md` - SealedSecret references for cloudflare token
+- `docs/applications/external-dns.md` - Updated secret management workflow
+- `docs/applications/unipoller.md` - SealedSecret configuration instructions
+- `docs/storage/synology-csi.md` - Security section update
+- `docs/intro.md` - Added secrets migration to recent updates
+- `sidebars.ts` - Added Security category
+
+**Issue Resolved: MDX Parsing Error**
+- MDX doesn't like `<https://...>` URLs in certain contexts
+- Solution: Use backtick code formatting for URLs (e.g., `` `https://10.0.1.1` ``)
+
+**Current State:**
+- ✅ k8s-docs-n37 documentation fully updated for Sealed Secrets
+- ✅ All application docs reference SealedSecrets instead of git-crypt
+- ✅ New Security section visible in documentation site
+
+**For Next Session:**
+- Consider adding more security documentation (RBAC, network policies, etc.)
+- Consider documenting backup procedures for sealing key
+
+**Files Modified:**
+- `k8s-docs-n37/docs/security/secrets-management.md` (new)
+- `k8s-docs-n37/docs/applications/cert-manager.md`
+- `k8s-docs-n37/docs/applications/external-dns.md`
+- `k8s-docs-n37/docs/applications/unipoller.md`
+- `k8s-docs-n37/docs/storage/synology-csi.md`
+- `k8s-docs-n37/docs/intro.md`
+- `k8s-docs-n37/sidebars.ts`
+
+---
+
 ### 2026-01-14 (Morning): Secrets Migration Completion and Cleanup
 
 **Completed Work:**
