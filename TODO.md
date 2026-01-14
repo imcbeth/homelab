@@ -2,6 +2,11 @@
 
 ## ✅ **Recently Completed** (December 2025 - January 2026)
 
+### Secrets Management (January 2026)
+- **Sealed Secrets Migration** - Migrated 8 secrets from git-crypt to SealedSecrets (2026-01-14)
+- **External Secrets Removed** - Evaluation complete, Sealed Secrets chosen for simplicity (2026-01-14)
+- **Secrets Directory Cleanup** - Removed 15 obsolete files, only ArgoCD bootstrap secret remains
+
 ### Backup & Disaster Recovery (January 2026)
 - **Velero CSI Snapshots** - Configured Velero to use CSI snapshots exclusively (2026-01-05)
 - **snapshot-controller Fix** - Downgraded from v8.2.0 → v6.3.1 to resolve VolumeSnapshot failures (2026-01-05)
@@ -125,17 +130,20 @@
 - [ ] Compliance reporting and alerting
 - [ ] Create Grafana dashboard for vulnerability trends
 
-### 8. **Secrets Management**
+### 8. **Secrets Management** ✅ Complete
 - [x] **Evaluation Complete** - Sealed Secrets recommended for homelab (2026-01-13)
   - Sealed Secrets: 1 pod, 9Mi RAM, simple, GitOps-native
   - External Secrets: 3 pods, 69Mi RAM, complex, requires backend
-  - Both deployed for comparison, Sealed Secrets chosen for simplicity
 - [x] **Sealed Secrets Deployed** - bitnami-labs/sealed-secrets v2.16.2 (2026-01-13)
-- [x] **External Secrets Deployed** - For comparison/future use (2026-01-13)
-- [ ] Migrate existing git-crypt secrets to SealedSecrets
+- [x] **Secrets Migrated to SealedSecrets** (2026-01-14)
+  - unipoller-secret, external-dns (cloudflare + unifi), alertmanager-smtp-credentials
+  - snmp-exporter-credentials, cert-manager cloudflare token, synology-csi client-info
+  - pihole-web-password (8 secrets total)
+- [x] **External Secrets Operator Removed** - Evaluation complete, not needed (2026-01-14)
+- [x] **Secrets Directory Cleaned** - Only bootstrap secret (ArgoCD SSH key) remains (2026-01-14)
+- [x] **Documentation Updated** - CLAUDE_NOTES.md and secrets/README.md updated
 - [ ] Set up secret rotation automation for certificates
-- [ ] Document secrets management procedures
-- [ ] Remove External Secrets after migration complete (optional)
+- [ ] Create runbook for adding new SealedSecrets
 
 ### 9. **Network Policies**
 - [ ] Define NetworkPolicies for namespace isolation
@@ -314,11 +322,11 @@ Items are organized by priority, not by timeline. Focus on:
 3. Metrics server deployment
 4. Blackbox exporter for endpoint monitoring
 
-### **Phase 2: Security & Observability**
-1. Security scanning (Trivy Operator)
-2. Secrets management migration
-3. Blackbox exporter for endpoint monitoring
-4. Custom Grafana dashboards
+### **Phase 2: Security & Observability** ✅ Complete
+1. ✅ Security scanning (Trivy Operator)
+2. ✅ Secrets management migration (SealedSecrets)
+3. ✅ Blackbox exporter for endpoint monitoring
+4. ✅ Custom Grafana dashboards
 
 ### **Phase 3: Advanced Features**
 1. Service mesh evaluation and potential deployment
@@ -342,6 +350,7 @@ Items are organized by priority, not by timeline. Focus on:
 Wave -50: argocd (self-management)
 Wave -35: metal-lb, pi-hole (networking foundation)
 Wave -30: synology-csi (storage driver)
+Wave -25: sealed-secrets (secrets management)
 Wave -20: unipoller (UniFi metrics collection)
 Wave -15: kube-prometheus-stack (monitoring stack)
 Wave -12: loki (log aggregation)
