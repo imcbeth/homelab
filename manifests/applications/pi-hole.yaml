@@ -18,6 +18,10 @@ spec:
       path: manifests/base/pihole
       targetRevision: HEAD
       ref: pihole
+    # Additional resources (SealedSecrets)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/pihole
+      targetRevision: HEAD
   destination:
     server: https://kubernetes.default.svc
     namespace: pihole

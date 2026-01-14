@@ -1,0 +1,14 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: pihole-web-password
+  namespace: pihole
+spec:
+  encryptedData:
+    web_password: AgAkwGT07/5+AC28FEaAuktSSITc/KhzrYt/hVC6N+xNLDdJdB4879CaI/9vstQ2hVMwOVB6Mv0jViXzu7a3nH2VvEnSlX7kUc2/v4dwL2tpIkhlVeBcPmUoaT3xQfE5194Movj0Uz9l0mg/E7a+D4XDy+zu05zl3uTJ7F7Z8h8NoeAVJ5S68zRV5NSZTSMufgumdwoeUREB8oI8NnIeLR/9D3m0SHDkpRE4SND66mn8iZ5zuXuz4am16G9gwdqx5GovcsDR2A26+FZK17p8d6tC88XiyLOtmuKhUqkH6mjr3sjYd3LYaRYtGtgv9tr07ptltiR+5ejIfKMf3x5yxJEXH5zUW2YuNKjS41/AYDOqTcE5W/dAQXqRlyXXZm5GS7d5FwtxRVY3qpDQ7ujONokN2LeMy0GaUSMwIY4NuG4eTSjOSgyWAA+CsPtvVP2Zy2709sDghMfG6zpAf7U3w/BZ1A5db5rM9VCqfxKXwg2nw5Pb7oo0MgmNLBUmtqUYzmL+xeDj6nrcQjaKvcDKe2kv08uPlGJ4lflDuJF9NR7TCi68z3tFVEHbNJots2kXPOs3W/+4T8sPhU5DvT2SwcVlT0Dm6neYusKCmwGbC96KOVRr6ZOy/aBk3RGu5IagGAi9ot/fzgRbzuogCqEjU7vJv65rIouGMOlWGBejJbzAWNts7LHIXv9KS3WWZz8vThNTLiF1NFTgeow1vwnRZy3rnHUYZP79brZa
+  template:
+    metadata:
+      name: pihole-web-password
+      namespace: pihole
+    type: Opaque
