@@ -4,6 +4,7 @@ namespace: synology-csi
 resources:
   - github.com/kubernetes-csi/external-snapshotter/client/config/crd?ref=v8.4.0
   - github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller?ref=v8.4.0
+  - client-info-sealed.yaml
   - controller.yml
   - csi-driver.yml
   - namespace.yml
