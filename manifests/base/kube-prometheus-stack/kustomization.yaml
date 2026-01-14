@@ -9,6 +9,7 @@ bases:
 # Note: Secrets now managed via SealedSecrets (no manual apply needed)
 resources:
   - alertmanager-smtp-sealed.yaml
+  - grafana-sealed.yaml
   - snmp-exporter-sealed.yaml
   - blackbox-exporter-alerts.yaml
   - blackbox-exporter-configmap.yaml
