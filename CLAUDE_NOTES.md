@@ -129,14 +129,17 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
-### 2026-01-14 (Evening): Sealed Secrets Operations Guide
+### 2026-01-14 (Evening): Sealed Secrets Operations Guide & Key Backup
 
 **Completed Work:**
 - ✅ **Created SEALED-SECRETS.md** - Comprehensive operations guide for secret rotation and key management
 - ✅ **Updated secrets/README.md** - Added reference to new operations guide
+- ✅ **Updated k8s-docs-n37 secrets-management.md** - Added rotation procedures to documentation site
+- ✅ **Backed up sealing key** - Stored on Synology NAS
 
 **Pull Requests:**
-- **PR #240:** [Pending] docs: Add Sealed Secrets operations guide with rotation procedures
+- **PR #240:** [Merged] docs: Add Sealed Secrets operations guide with rotation procedures (homelab)
+- **PR #53:** [Merged] docs: Add comprehensive secret rotation procedures (k8s-docs-n37)
 
 **Documentation Created:**
 
@@ -165,18 +168,26 @@ New file: `secrets/SEALED-SECRETS.md` - Complete operations guide including:
 | Restore Sealing Key | Cluster rebuild, disaster recovery |
 | Re-seal All Secrets | After sealing key rotation |
 
+**Sealing Key Backup:**
+- Key name: `sealed-secrets-keyq2j4g`
+- Created: 2026-01-13T04:49:00Z
+- Backup location: `/Volumes/homes/imcbeth/Documents/sealed-secrets-key-backup-20260114.yaml`
+- Backup date: 2026-01-14
+
 **Current State:**
 - ✅ Operations guide created in `secrets/SEALED-SECRETS.md`
 - ✅ README.md updated with link to operations guide
-- 📋 Sealing key backup recommended (documented procedure ready)
+- ✅ k8s-docs-n37 documentation updated with rotation procedures
+- ✅ Sealing key backed up to Synology NAS
 
 **For Next Session:**
-- [ ] Perform sealing key backup using documented procedure
-- [ ] Store backup in secure location (password manager, encrypted storage)
+- Consider setting calendar reminder for periodic key backup (quarterly)
+- Monitor for any secret rotation needs
 
 **Files Modified:**
 - `secrets/SEALED-SECRETS.md` (new - ~450 lines)
 - `secrets/README.md` (updated - added reference)
+- `k8s-docs-n37/docs/security/secrets-management.md` (expanded - +230 lines)
 
 ---
 
