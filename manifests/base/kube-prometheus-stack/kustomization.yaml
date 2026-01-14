@@ -6,11 +6,10 @@ bases:
   - ../grafana/dashboards
 
 # Explicitly list resources to deploy
-# Excluded:
-#  - values.yaml (used by Helm chart source only)
-#  - grafana-secret.yaml (git-crypt encrypted, apply manually)
-#  - snmp-exporter-secret.yaml (git-crypt encrypted, apply manually)
+# Note: Secrets now managed via SealedSecrets (no manual apply needed)
 resources:
+  - alertmanager-smtp-sealed.yaml
+  - snmp-exporter-sealed.yaml
   - blackbox-exporter-alerts.yaml
   - blackbox-exporter-configmap.yaml
   - blackbox-exporter-deployment.yaml
