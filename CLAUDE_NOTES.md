@@ -38,12 +38,15 @@
   4. Merge PR
   5. ArgoCD auto-deploys within ~3 minutes
 
-**Git-crypt Encrypted Secrets:**
-- Files matching `*secret*` pattern are encrypted
-- ArgoCD **cannot read** encrypted files
-- Encrypted secrets must be:
-  1. Applied manually: `kubectl apply -f secrets/`
-  2. Excluded from `kustomization.yaml` resources list
+**Secrets Management (Sealed Secrets):**
+- Most secrets now managed via SealedSecrets (GitOps-compatible)
+- Encrypted SealedSecret YAML files stored in Git
+- Sealed Secrets controller decrypts at runtime
+- Use `kubeseal` CLI to encrypt new secrets:
+  ```bash
+  kubeseal --cert <(kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key=active -o jsonpath='{.items[0].data.tls\.crt}' | base64 -d) --format yaml < secret.yaml > sealed-secret.yaml
+  ```
+- Bootstrap secrets (ArgoCD SSH key) still require manual apply
 
 **Multi-source ArgoCD Applications:**
 - Chart source: Upstream Helm chart (versioned)
@@ -61,6 +64,8 @@
 |--------|----------|-----------|
 | Filename matching git-crypt `*secret*` pattern | Avoid "secret" in non-secret resource filenames | 2026-01-13 session |
 | fsGroup in container securityContext | Use `podSecurityContext` for fsGroup, not `securityContext` | 2026-01-13 session |
+| SealedSecret encryption corruption | Use `kubeseal ... > file.yaml`, not copy-paste | 2026-01-14 session |
+| Helm-managed secrets conflict with SealedSecret | Don't use SealedSecret for Helm chart secrets | 2026-01-14 session |
 | Empty kustomization.yaml fails ArgoCD | Add `resources: []` for valid empty kustomization | 2026-01-13 session |
 | Synology CSI v1.2.1 node plugin iscsiadm regression | Use v1.2.0 for node plugin, keep sidecars upgraded | 2026-01-07 late evening |
 | Trivy ServiceMonitor not discovered by Prometheus | Use `serviceMonitor.labels` (not `additionalLabels`) with `release: kube-prometheus-stack` | 2026-01-05 late evening |
@@ -123,6 +128,95 @@ When documenting a new session in "Recent Updates", use this structure:
 ---
 
 ## 📋 Recent Updates
+
+### 2026-01-14 (Early Morning): Secrets Migration from Git-crypt to Sealed Secrets
+
+**Completed Work:**
+- ✅ **Migrated 8 secrets** to SealedSecrets (GitOps-compatible)
+- ✅ **Fixed application file encryption** - Renamed seal-controller.yaml and eso.yaml
+- ✅ **Updated pre-commit config** - Added exclusions for `*-sealed.yaml` files
+- ✅ **Removed Grafana sealed secret** - Managed by Helm chart, caused conflicts
+
+**Pull Requests:**
+- **PR #224:** [Merged] fix: Rename application files to avoid git-crypt encryption
+- **PR #225:** [Merged] feat: Migrate unipoller-secret to SealedSecret
+- **PR #226:** [Merged] feat: Migrate external-dns secrets to SealedSecrets
+- **PR #227-228:** [Merged] fix: Regenerate unifi-credentials SealedSecret
+- **PR #229:** [Merged] feat: Migrate alertmanager and snmp-exporter secrets to SealedSecrets
+- **PR #230:** [Merged] feat: Migrate grafana, cert-manager, and synology-csi secrets to SealedSecrets
+- **PR #231:** [Merged] feat: Migrate pihole-web-password to SealedSecret
+- **PR #232:** [Merged] fix: Remove grafana sealed secret (managed by Helm)
+
+**Secrets Migrated to SealedSecrets:**
+
+| Secret Name | Namespace | Application |
+|-------------|-----------|-------------|
+| unipoller-secret | unipoller | UniPoller UniFi metrics |
+| cloudflare-api-token | external-dns | External DNS Cloudflare |
+| unifi-credentials | external-dns | External DNS UniFi webhook |
+| alertmanager-smtp-credentials | default | Alertmanager email alerts |
+| snmp-exporter-credentials | default | Synology NAS monitoring |
+| cloudflare-api-token-secret | cert-manager | DNS01 certificate challenges |
+| client-info-secret | synology-csi | Synology CSI driver |
+| pihole-web-password | pihole | Pi-hole web interface |
+
+**Secrets NOT Migrated (by design):**
+
+| Secret Name | Reason |
+|-------------|--------|
+| my-ssh-repo-secret-homelab | Critical ArgoCD bootstrap secret - must be manually applied |
+| kube-prometheus-stack-grafana | Managed by Helm chart (auto-generated password) |
+
+**Issues Resolved:**
+
+**Issue 1: Unintentional Git-crypt Encryption**
+- Files `sealed-secrets.yaml` and `external-secrets.yaml` were encrypted
+- Renamed to `seal-controller.yaml` and `eso.yaml` to avoid `*secret*` pattern
+
+**Issue 2: SealedSecret Encryption Corruption**
+- Initial unifi-credentials had corrupted encrypted values
+- Solution: Use `kubeseal ... > file.yaml` instead of copy-paste
+
+**Issue 3: Grafana Secret Conflict**
+- Helm chart creates grafana secret automatically
+- SealedSecret can't overwrite Helm-managed secrets
+- Solution: Don't manage Grafana password via SealedSecret
+
+**Current State:**
+- ✅ 8 SealedSecrets deployed and synced
+- ✅ All applications working with new secrets
+- ✅ Pre-commit excludes `*-sealed.yaml` from yamllint/gitleaks
+- 📋 ArgoCD SSH key remains manually applied (bootstrap requirement)
+- 📋 Grafana password is auto-generated by Helm
+
+**For Next Session:**
+- [ ] Consider removing External Secrets Operator (evaluation complete)
+- [ ] Update TODO.md with secrets migration status
+- [ ] Document secret rotation procedure for SealedSecrets
+- [ ] Clean up old git-crypt encrypted files from `secrets/` directory
+
+**Files Modified:**
+- `manifests/applications/seal-controller.yaml` (renamed from sealed-secrets.yaml)
+- `manifests/applications/eso.yaml` (renamed from external-secrets.yaml)
+- `manifests/applications/pi-hole.yaml` (added resource source)
+- `manifests/base/unipoller/unipoller-sealed.yaml` (new)
+- `manifests/base/external-dns/cloudflare-sealed.yaml` (new)
+- `manifests/base/external-dns/unifi-sealed.yaml` (new)
+- `manifests/base/kube-prometheus-stack/alertmanager-smtp-sealed.yaml` (new)
+- `manifests/base/kube-prometheus-stack/snmp-exporter-sealed.yaml` (new)
+- `manifests/base/cert-manager/cloudflare-sealed.yaml` (new)
+- `manifests/base/synology-csi/client-info-sealed.yaml` (new)
+- `manifests/base/pihole/pihole-web-sealed.yaml` (new)
+- `manifests/base/pihole/kustomization.yaml` (new)
+- `.pre-commit-config.yaml` (updated exclusions)
+
+**Known Gotchas Added:**
+| Gotcha | Solution | Reference |
+|--------|----------|-----------|
+| SealedSecret encryption corruption | Use kubeseal output redirect, not copy-paste | 2026-01-14 session |
+| Helm-managed secrets conflict | Don't use SealedSecret for Helm-managed secrets | 2026-01-14 session |
+
+---
 
 ### 2026-01-13 (Early Morning): Secrets Management Evaluation - Sealed Secrets vs External Secrets
 
