@@ -8,6 +8,7 @@
 - **Secrets Directory Cleanup** - Removed 15 obsolete files, only ArgoCD bootstrap secret remains
 
 ### Backup & Disaster Recovery (January 2026)
+- **Velero Backblaze B2 Migration** - Migrated from LocalStack to Backblaze B2 for production backups (2026-01-14, PR #239)
 - **Velero CSI Snapshots** - Configured Velero to use CSI snapshots exclusively (2026-01-05)
 - **snapshot-controller Fix** - Downgraded from v8.2.0 → v6.3.1 to resolve VolumeSnapshot failures (2026-01-05)
 - **Loki Memory Optimization** - Implemented GOMEMLIMIT, ingestion rate limits, reduced memory usage from 474Mi → 232Mi (2026-01-05)
@@ -70,7 +71,7 @@
 - [x] **Fixed VolumeSnapshot failures** - Upgraded snapshot-controller to v8.2.1, csi-snapshotter to v8.4.0 (2026-01-11)
 - [x] **LocalStack Sync Wave Fix** - LocalStack at wave -7, before Velero (-5) ✓
 - [ ] Schedule regular backup testing and restore procedures (monthly)
-- [ ] Migrate from LocalStack to Backblaze B2 for production backups
+- [x] **Migrate from LocalStack to Backblaze B2** - Production backup storage (2026-01-14, PR #239)
 - [ ] Test disaster recovery scenarios (single PVC, namespace, full cluster)
 - [ ] ArgoCD configuration backup automation
 
