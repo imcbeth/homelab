@@ -2,7 +2,7 @@
 
 ## Quick Reference for AI Assistants Working in This Repository
 
-**Last Updated:** 2026-01-13
+**Last Updated:** 2026-01-14
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -128,6 +128,109 @@ When documenting a new session in "Recent Updates", use this structure:
 ---
 
 ## 📋 Recent Updates
+
+### 2026-01-14 (Morning): Secrets Migration Completion and Cleanup
+
+**Completed Work:**
+- ✅ **Removed External Secrets Operator** - Evaluation complete, Sealed Secrets chosen
+- ✅ **Cleaned up secrets directory** - Removed 15 obsolete git-crypt files
+- ✅ **Updated secrets/README.md** - Documented bootstrap secrets and migration history
+- ✅ **Updated TODO.md** - Marked Secrets Management complete, updated sync wave order
+- ✅ **Cleaned up local git branches** - Deleted 107 local branches, pruned 85 stale remotes
+
+**Pull Requests:**
+- **PR #233:** [Merged] docs: Update CLAUDE_NOTES with secrets migration documentation
+- **PR #234:** [Merged] chore: Remove External Secrets Operator
+- **PR #235:** [Merged] chore: Clean up secrets directory after Sealed Secrets migration
+- **PR #236:** [Merged] docs: Update TODO.md with secrets management completion
+
+**External Secrets Operator Removal:**
+- Deleted `manifests/applications/eso.yaml`
+- Removed `manifests/base/external-secrets/` directory (values.yaml, kustomization.yaml, cluster-store.yaml)
+- Deleted namespace and CRDs from cluster
+
+**Secrets Directory Cleanup:**
+
+Files removed (migrated to SealedSecrets):
+- `alertmanager-smtp-credentials.yaml`
+- `cloudflare-api-token-secret.yaml`
+- `client-info-secret.yaml`
+- `pihole-web-password.yaml`
+- `snmp-exporter-secret.yaml`
+- `unipoller-secret.yaml`
+- `external-dns-cloudflare-credentials.yaml`
+- `external-dns-unifi-credentials.yaml`
+
+Files removed (obsolete/unused):
+- `grafana-admin-credentials.yaml` (Helm-managed)
+- `kube-prometheus-stack-grafana.yaml` (Helm-managed)
+- `cloudflare-credentials.yaml` (duplicate)
+- `argocd-git-access-template.yaml` (template only)
+- `sample-secret.yaml` (sample)
+- `example.yaml` (example)
+- `test-sealed-secret.yaml` (test artifact)
+
+Files retained:
+- `argocd-git-access.yaml` - Bootstrap secret (must be manually applied)
+- `README.md` - Updated documentation
+
+**TODO.md Updates:**
+- Added "Secrets Management" to Recently Completed section
+- Marked Section 8 (Secrets Management Migration) as complete
+- Marked Phase 2 (Enhanced Monitoring) as complete
+- Added `sealed-secrets` to sync wave order at position -25
+
+**Git Branch Cleanup:**
+- Deleted 107 local feature branches
+- Pruned 85 stale remote tracking references
+- Only `main` branch remains locally
+
+**Current State:**
+- ✅ All secrets GitOps-managed via Sealed Secrets
+- ✅ External Secrets Operator removed
+- ✅ secrets/ directory contains only bootstrap secret
+- ✅ TODO.md reflects current state
+- ✅ Repository clean (only main branch locally)
+
+**Secrets Management - Final Architecture:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Secrets Management                           │
+├─────────────────────────────────────────────────────────────────┤
+│ Sealed Secrets Controller (kube-system)                         │
+│   └─ Decrypts SealedSecret CRDs at runtime                     │
+│                                                                 │
+│ SealedSecrets in Git (8 total):                                │
+│   ├─ manifests/base/unipoller/unipoller-sealed.yaml            │
+│   ├─ manifests/base/external-dns/cloudflare-sealed.yaml        │
+│   ├─ manifests/base/external-dns/unifi-sealed.yaml             │
+│   ├─ manifests/base/kube-prometheus-stack/alertmanager-smtp-sealed.yaml │
+│   ├─ manifests/base/kube-prometheus-stack/snmp-exporter-sealed.yaml    │
+│   ├─ manifests/base/cert-manager/cloudflare-sealed.yaml        │
+│   ├─ manifests/base/synology-csi/client-info-sealed.yaml       │
+│   └─ manifests/base/pihole/pihole-web-sealed.yaml              │
+│                                                                 │
+│ Bootstrap Secret (manual apply):                               │
+│   └─ secrets/argocd-git-access.yaml                            │
+│                                                                 │
+│ Helm-Managed Secrets (auto-generated):                         │
+│   └─ kube-prometheus-stack-grafana                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**For Next Session:**
+- Consider documenting secret rotation procedure for SealedSecrets
+- Consider backing up sealing key for disaster recovery
+- Monitor Sealed Secrets controller health
+
+**Files Modified:**
+- `manifests/applications/eso.yaml` (deleted)
+- `manifests/base/external-secrets/` (directory deleted)
+- `secrets/` (15 files removed)
+- `secrets/README.md` (rewritten)
+- `TODO.md` (updated)
+
+---
 
 ### 2026-01-14 (Early Morning): Secrets Migration from Git-crypt to Sealed Secrets
 
