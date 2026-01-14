@@ -38,46 +38,34 @@ initContainers:
 
 # S3-compatible backup storage configuration
 configuration:
-  # S3 storage provider (works with AWS S3, Backblaze B2, Wasabi, MinIO, LocalStack)
+  # S3 storage provider - Backblaze B2 (production)
   backupStorageLocation:
     - name: default
       provider: aws
       default: true
-      bucket: velero-backups
+      bucket: velero-backups-homelab-n37
       config:
+        # Backblaze B2 configuration
+        region: us-west-004
+        s3Url: https://s3.us-west-004.backblazeb2.com
+
+        # Alternative providers (commented for reference):
+        #
         # For LocalStack (testing):
-        # Prerequisite:
-        #   - LocalStack must be deployed in the "localstack" namespace.
-        #   - A Kubernetes Service named "localstack" must exist in that namespace,
-        #     exposing port 4566 (the LocalStack edge port).
-        #   - The cloud-credentials Secret must be created with matching credentials
-        #     (e.g., aws_access_key_id=test, aws_secret_access_key=test).
-        #
-        # Before installing/applying Velero with this values file, verify that:
-        #   - the LocalStack service is running and reachable at the URL below
-        #   - the cloud-credentials Secret exists with credentials matching LocalStack
-        #   - otherwise, the backup storage location will show as "Unavailable"
-        #     and Velero backups to this S3 target will fail.
-        #
-        # If your LocalStack deployment uses a different namespace, service name, or port,
-        # update the s3Url below accordingly.
-        region: us-east-1
-        s3ForcePathStyle: "true"
-        s3Url: http://localstack.localstack:4566
-        insecureSkipTLSVerify: "true"
-
-        # For Backblaze B2 (production) - Uncomment when migrating:
-        # region: us-west-004
-        # s3Url: https://s3.us-west-004.backblazeb2.com
-
-        # For AWS S3 (production) - Uncomment when migrating:
+        # bucket: velero-backups
         # region: us-east-1
-
-        # For Wasabi (production) - Uncomment when migrating:
+        # s3ForcePathStyle: "true"
+        # s3Url: http://localstack.localstack:4566
+        # insecureSkipTLSVerify: "true"
+        #
+        # For AWS S3:
+        # region: us-east-1
+        #
+        # For Wasabi:
         # region: us-east-1
         # s3Url: https://s3.wasabisys.com
-
-        # For MinIO on Synology (self-hosted) - Uncomment when migrating:
+        #
+        # For MinIO on Synology (self-hosted):
         # region: us-east-1
         # s3ForcePathStyle: "true"
         # s3Url: http://minio.synology.local:9000
@@ -148,13 +136,13 @@ credentials:
   #   aws_access_key_id=<YOUR_KEY_ID>
   #   aws_secret_access_key=<YOUR_SECRET_KEY>
   #
+  # For Backblaze B2 production, credentials are managed via SealedSecret:
+  #   manifests/base/velero/b2-credentials-sealed.yaml
+  #
   # For LocalStack testing, create a Secret with test credentials:
   #   kubectl create secret generic cloud-credentials -n velero \
   #     --from-literal=cloud=$'[default]\naws_access_key_id=test\naws_secret_access_key=test'
-  #
-  # Override this value in a private, untracked values file to point to your Secret.
-  # For LocalStack testing, we reference the manually created cloud-credentials secret.
-  existingSecret: "cloud-credentials"
+  existingSecret: "velero-b2-credentials"
 
 # Node-agent (Kopia) configuration for file-level backups
 # NOTE: This section is disabled (deployNodeAgent: false above) as we use CSI snapshots exclusively.

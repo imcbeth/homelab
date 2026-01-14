@@ -21,6 +21,10 @@ spec:
       path: manifests/base/velero
       targetRevision: HEAD
       ref: values
+    # Additional resources (SealedSecrets for B2 credentials)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/velero
+      targetRevision: HEAD
   destination:
     server: https://kubernetes.default.svc
     namespace: velero
