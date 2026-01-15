@@ -260,6 +260,20 @@ schedules:
       snapshotVolumes: false
       storageLocation: default
 
+  # Daily ArgoCD configuration backup at 1:30 AM
+  daily-argocd:
+    disabled: false
+    schedule: "30 1 * * *"
+    useOwnerReferencesInBackup: false
+    template:
+      ttl: "720h"  # 30 days retention
+      includedNamespaces:
+        - argocd
+      includeClusterResources: false
+      defaultVolumesToFsBackup: false  # ArgoCD is stateless
+      snapshotVolumes: false           # No PVCs to snapshot
+      storageLocation: default
+
 # RBAC configuration
 rbac:
   create: true
