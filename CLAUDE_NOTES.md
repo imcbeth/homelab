@@ -129,7 +129,7 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
-### 2026-01-14 (Evening): Sealed Secrets Operations Guide, Key Backup & B2 Restore Test
+### 2026-01-14 (Evening): Sealed Secrets Ops Guide, Key Backup, B2 Restore & Monitoring Verification
 
 **Completed Work:**
 - ✅ **Created SEALED-SECRETS.md** - Comprehensive operations guide for secret rotation and key management
@@ -137,12 +137,15 @@ When documenting a new session in "Recent Updates", use this structure:
 - ✅ **Updated k8s-docs-n37 secrets-management.md** - Added rotation procedures to documentation site
 - ✅ **Backed up sealing key** - Stored on Synology NAS
 - ✅ **Tested Velero restore from Backblaze B2** - Full backup/restore cycle validated
+- ✅ **Verified AlertManager email delivery** - 121 emails sent, 0 failures
+- ✅ **Checked Trivy vulnerability posture** - 10 CRITICAL (blocked on upstream)
 
 **Pull Requests:**
 - **PR #240:** [Merged] docs: Add Sealed Secrets operations guide with rotation procedures (homelab)
 - **PR #53:** [Merged] docs: Add comprehensive secret rotation procedures (k8s-docs-n37)
 - **PR #241:** [Merged] docs: Update CLAUDE_NOTES with sealing key backup completion
 - **PR #242:** [Merged] docs: Mark Velero Backblaze B2 migration complete
+- **PR #243:** [Merged] docs: Add Velero B2 restore test results to CLAUDE_NOTES
 
 **Documentation Created:**
 
@@ -197,6 +200,27 @@ Test details:
 - SealedSecrets restored and decrypted correctly
 - Application functional immediately after restore
 
+**AlertManager Email Verification:**
+
+| Metric | Value |
+|--------|-------|
+| Total emails sent | 121 |
+| Failed requests | 0 |
+| Routing test | Critical alerts → `email-critical` receiver |
+
+SMTP configured for Gmail (`smtp.gmail.com:587`), sending to `imcbeth1980@gmail.com`.
+
+**Trivy Vulnerability Posture:**
+
+| Severity | Count | Top Affected Namespaces |
+|----------|-------|------------------------|
+| CRITICAL | 10 | synology-csi (9), trivy-system (1) |
+| HIGH | 357 | default (115), argocd (112), synology-csi (41) |
+
+All 10 CRITICAL vulnerabilities blocked on upstream fixes:
+- **Synology CSI** (9) - waiting for v1.2.2 release
+- **Trivy Server** (1) - waiting for Alpine base image update
+
 **Current State:**
 - ✅ Operations guide created in `secrets/SEALED-SECRETS.md`
 - ✅ README.md updated with link to operations guide
@@ -204,10 +228,13 @@ Test details:
 - ✅ Sealing key backed up to Synology NAS
 - ✅ Velero B2 restore tested and validated
 - ✅ Scheduled backups configured (daily PVCs 2 AM, weekly cluster 3 AM Sunday)
+- ✅ AlertManager email delivery working (121 sent, 0 failed)
+- ✅ Trivy scanning active, 10 CRITICAL tracked (upstream blocked)
 
 **For Next Session:**
 - Consider setting calendar reminder for periodic key backup (quarterly)
 - Monitor scheduled backup execution (first daily backup at 2 AM tomorrow)
+- Monitor Synology CSI v1.2.2 release for vulnerability fixes
 - Consider monthly restore test automation
 
 **Files Modified:**
