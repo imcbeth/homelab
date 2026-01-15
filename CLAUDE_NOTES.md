@@ -129,17 +129,20 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
-### 2026-01-14 (Evening): Sealed Secrets Operations Guide & Key Backup
+### 2026-01-14 (Evening): Sealed Secrets Operations Guide, Key Backup & B2 Restore Test
 
 **Completed Work:**
 - ✅ **Created SEALED-SECRETS.md** - Comprehensive operations guide for secret rotation and key management
 - ✅ **Updated secrets/README.md** - Added reference to new operations guide
 - ✅ **Updated k8s-docs-n37 secrets-management.md** - Added rotation procedures to documentation site
 - ✅ **Backed up sealing key** - Stored on Synology NAS
+- ✅ **Tested Velero restore from Backblaze B2** - Full backup/restore cycle validated
 
 **Pull Requests:**
 - **PR #240:** [Merged] docs: Add Sealed Secrets operations guide with rotation procedures (homelab)
 - **PR #53:** [Merged] docs: Add comprehensive secret rotation procedures (k8s-docs-n37)
+- **PR #241:** [Merged] docs: Update CLAUDE_NOTES with sealing key backup completion
+- **PR #242:** [Merged] docs: Mark Velero Backblaze B2 migration complete
 
 **Documentation Created:**
 
@@ -174,20 +177,44 @@ New file: `secrets/SEALED-SECRETS.md` - Complete operations guide including:
 - Backup location: `/Volumes/homes/imcbeth/Documents/sealed-secrets-key-backup-20260114.yaml`
 - Backup date: 2026-01-14
 
+**Velero B2 Restore Test:**
+
+Successfully validated Backblaze B2 backup/restore workflow:
+
+| Step | Result |
+|------|--------|
+| Backup Storage Location | Available (Backblaze B2) |
+| Create test backup (unipoller namespace) | Completed (~35 seconds) |
+| Restore to new namespace | Completed (25 items, ~35 seconds) |
+| Verify pod running | Running with restored secret |
+| Verify app functionality | API key decrypted, metrics exporting |
+| Cleanup test resources | Completed |
+
+Test details:
+- Backup: `test-restore-unipoller` → Backblaze B2
+- Restore: `test-restore-from-b2` → `unipoller-restore-test` namespace
+- Namespace remapping validated (restore to different namespace)
+- SealedSecrets restored and decrypted correctly
+- Application functional immediately after restore
+
 **Current State:**
 - ✅ Operations guide created in `secrets/SEALED-SECRETS.md`
 - ✅ README.md updated with link to operations guide
 - ✅ k8s-docs-n37 documentation updated with rotation procedures
 - ✅ Sealing key backed up to Synology NAS
+- ✅ Velero B2 restore tested and validated
+- ✅ Scheduled backups configured (daily PVCs 2 AM, weekly cluster 3 AM Sunday)
 
 **For Next Session:**
 - Consider setting calendar reminder for periodic key backup (quarterly)
-- Monitor for any secret rotation needs
+- Monitor scheduled backup execution (first daily backup at 2 AM tomorrow)
+- Consider monthly restore test automation
 
 **Files Modified:**
 - `secrets/SEALED-SECRETS.md` (new - ~450 lines)
 - `secrets/README.md` (updated - added reference)
 - `k8s-docs-n37/docs/security/secrets-management.md` (expanded - +230 lines)
+- `TODO.md` (marked B2 migration complete)
 
 ---
 
