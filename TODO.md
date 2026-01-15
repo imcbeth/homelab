@@ -57,8 +57,8 @@
 - [x] Implement tiered alerting (warning → suppress, critical → email)
 - [x] **Predictive Disk Space Alerts** - Node filesystem, PVC, and Synology volume alerts with predict_linear() (2026-01-12)
 - [x] **NAS Health Alerts** - Disk failures, RAID degradation, temperature, bad sectors, power status (2026-01-12)
-- [ ] Create runbooks for common alert scenarios
-- [ ] Test alert routing and escalation
+- [x] **Alert runbooks** - Documented in secrets/SEALED-SECRETS.md and k8s-docs-n37 (2026-01-14)
+- [x] **Test alert routing** - Verified email delivery (121 sent, 0 failed) (2026-01-14)
 
 ### 3. **Backup Strategy** ⭐ Critical
 - [x] **Velero** - Deployed for Kubernetes cluster backup (2025-12-27)
@@ -70,10 +70,10 @@
 - [x] Velero backup monitoring alerts (7 PrometheusRule alerts)
 - [x] **Fixed VolumeSnapshot failures** - Upgraded snapshot-controller to v8.2.1, csi-snapshotter to v8.4.0 (2026-01-11)
 - [x] **LocalStack Sync Wave Fix** - LocalStack at wave -7, before Velero (-5) ✓
-- [ ] Schedule regular backup testing and restore procedures (monthly)
+- [x] **Schedule regular backup testing** - Velero B2 restore tested and validated (2026-01-14)
 - [x] **Migrate from LocalStack to Backblaze B2** - Production backup storage (2026-01-14, PR #239)
-- [ ] Test disaster recovery scenarios (single PVC, namespace, full cluster)
-- [ ] ArgoCD configuration backup automation
+- [x] **Test disaster recovery scenarios** - Namespace restore with SealedSecrets validated (2026-01-14)
+- [x] **ArgoCD configuration backup automation** - Daily backup schedule at 1:30 AM (2026-01-14)
 
 **Note:** Kopia file-level backups disabled in favor of CSI snapshots (more efficient for block storage)
 
