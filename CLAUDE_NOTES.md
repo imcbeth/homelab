@@ -129,7 +129,7 @@ When documenting a new session in "Recent Updates", use this structure:
 
 ## 📋 Recent Updates
 
-### 2026-01-14 (Evening): Sealed Secrets Ops Guide, Key Backup, B2 Restore & Monitoring Verification
+### 2026-01-14 (Evening): Sealed Secrets Ops, Key Backup, B2 Restore, Monitoring & ArgoCD Backup
 
 **Completed Work:**
 - ✅ **Created SEALED-SECRETS.md** - Comprehensive operations guide for secret rotation and key management
@@ -139,6 +139,8 @@ When documenting a new session in "Recent Updates", use this structure:
 - ✅ **Tested Velero restore from Backblaze B2** - Full backup/restore cycle validated
 - ✅ **Verified AlertManager email delivery** - 121 emails sent, 0 failures
 - ✅ **Checked Trivy vulnerability posture** - 10 CRITICAL (blocked on upstream)
+- ✅ **Added ArgoCD daily backup schedule** - Velero schedule at 1:30 AM daily
+- ✅ **Updated TODO.md** - Marked all High Priority backup tasks complete
 
 **Pull Requests:**
 - **PR #240:** [Merged] docs: Add Sealed Secrets operations guide with rotation procedures (homelab)
@@ -146,6 +148,8 @@ When documenting a new session in "Recent Updates", use this structure:
 - **PR #241:** [Merged] docs: Update CLAUDE_NOTES with sealing key backup completion
 - **PR #242:** [Merged] docs: Mark Velero Backblaze B2 migration complete
 - **PR #243:** [Merged] docs: Add Velero B2 restore test results to CLAUDE_NOTES
+- **PR #244:** [Merged] docs: Add AlertManager and Trivy verification to CLAUDE_NOTES
+- **PR #245:** [Merged] feat: Add daily ArgoCD configuration backup schedule
 
 **Documentation Created:**
 
@@ -221,27 +225,43 @@ All 10 CRITICAL vulnerabilities blocked on upstream fixes:
 - **Synology CSI** (9) - waiting for v1.2.2 release
 - **Trivy Server** (1) - waiting for Alpine base image update
 
+**ArgoCD Backup Automation:**
+
+Added dedicated daily backup schedule for ArgoCD configuration:
+
+| Schedule | Time | Retention | Scope |
+|----------|------|-----------|-------|
+| `velero-daily-argocd` | 1:30 AM | 30 days | argocd namespace |
+| `velero-daily-critical-pvcs` | 2:00 AM | 30 days | default, loki, pihole (CSI snapshots) |
+| `velero-weekly-cluster-resources` | 3:00 AM Sun | 90 days | All namespaces |
+
+Test backup validated - ArgoCD configuration backs up to Backblaze B2 successfully.
+
 **Current State:**
 - ✅ Operations guide created in `secrets/SEALED-SECRETS.md`
 - ✅ README.md updated with link to operations guide
 - ✅ k8s-docs-n37 documentation updated with rotation procedures
 - ✅ Sealing key backed up to Synology NAS
 - ✅ Velero B2 restore tested and validated
-- ✅ Scheduled backups configured (daily PVCs 2 AM, weekly cluster 3 AM Sunday)
+- ✅ All backup schedules configured and operational:
+  - Daily ArgoCD config backup (1:30 AM)
+  - Daily critical PVC backup (2:00 AM)
+  - Weekly full cluster backup (3:00 AM Sunday)
 - ✅ AlertManager email delivery working (121 sent, 0 failed)
 - ✅ Trivy scanning active, 10 CRITICAL tracked (upstream blocked)
+- ✅ TODO.md Backup Strategy section 100% complete
 
 **For Next Session:**
-- Consider setting calendar reminder for periodic key backup (quarterly)
-- Monitor scheduled backup execution (first daily backup at 2 AM tomorrow)
+- Consider setting calendar reminder for periodic sealing key backup (quarterly)
 - Monitor Synology CSI v1.2.2 release for vulnerability fixes
-- Consider monthly restore test automation
+- Phase 3 priorities: Network Policies, Argo Workflows, Renovate
 
 **Files Modified:**
 - `secrets/SEALED-SECRETS.md` (new - ~450 lines)
 - `secrets/README.md` (updated - added reference)
 - `k8s-docs-n37/docs/security/secrets-management.md` (expanded - +230 lines)
-- `TODO.md` (marked B2 migration complete)
+- `manifests/base/velero/values.yaml` (added daily-argocd schedule)
+- `TODO.md` (marked all backup tasks complete)
 
 ---
 
