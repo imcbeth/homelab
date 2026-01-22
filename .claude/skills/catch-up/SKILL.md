@@ -1,13 +1,13 @@
 ---
 name: catch-up
-description: Reads CLAUDE_NOTES.md to provide context about recent work, decisions, and current state of the homelab repository. Use this skill when starting a new session, when asked about recent work, or when context is needed about previous sessions.
+description: Reads session notes to provide context about recent work, decisions, and current state of the homelab repository. Use this skill when starting a new session, when asked about recent work, or when context is needed about previous sessions.
 allowed-tools: Read, Grep, Glob
 ---
 
 # Catch-Up Skill
 
 ## Purpose
-Automatically reads CLAUDE_NOTES.md to provide comprehensive context about recent work in the homelab repository. This ensures continuity across sessions and helps answer questions about what's been done recently.
+Provides comprehensive context about recent work in the homelab repository. This ensures continuity across sessions and helps answer questions about what's been done recently.
 
 ## When to Use
 - User asks: "What have we been working on?"
@@ -16,82 +16,60 @@ Automatically reads CLAUDE_NOTES.md to provide comprehensive context about recen
 - When context is needed about previous decisions or implementations
 - At the start of a new session when user seems to be continuing previous work
 
+## File Structure
+
+```
+.claude/notes/
+├── CURRENT.md              # Last 3-5 sessions + current state (ALWAYS readable)
+├── REFERENCE.md            # Stable: gotchas, patterns, architecture
+└── sessions/               # Archived sessions (grep for historical lookups)
+    ├── 2025-12-26-monitoring-stack-fixes.md
+    ├── 2025-12-27-velero-alertmanager.md
+    └── ...
+```
+
 ## Instructions
 
-### 1. Locate and Read CLAUDE_NOTES.md
+### 1. Read CURRENT.md (Primary Context)
+
 ```
-- File location: /Users/imcbeth/homelab/CLAUDE_NOTES.md
-- Use Read tool to access the full file
+File: /Users/imcbeth/homelab/.claude/notes/CURRENT.md
 ```
+
+This file is designed to always be readable (under token limits) and contains:
+- Current state summary
+- Last 3-5 sessions with full detail
+- Session archive index
 
 ### 2. Extract Key Information
 
-Focus on the **most recent 3-5 sessions** from the "Recent Updates" section:
+From CURRENT.md, identify:
+- **Current State:** What's deployed, pending work, blockers
+- **Recent Sessions:** Last 3-5 sessions with completed work, PRs, issues resolved
+- **Next Steps:** Phase priorities from TODO.md
 
-**For each session, identify:**
-- Date and session title
-- Completed work (✅ items)
-- Pull requests created/merged
-- Issues resolved (with root causes and solutions)
-- Technical decisions and rationale
-- Current state and next steps
-- Files modified
+### 3. For Historical Lookups
 
-### 3. Summarize Recent Work
+If user asks about specific historical topics (e.g., "What did we do with Velero?"):
 
-Provide a structured summary:
-
-**Recent Sessions Overview:**
-- List last 3-5 sessions with dates
-- Highlight major accomplishments
-
-**Current State:**
-- What's in progress (pending PRs)
-- What's deployed and working
-- Any blocking issues
-
-**Technical Context:**
-- Important architectural decisions
-- Known limitations or workarounds
-- Configuration patterns established
-
-**Next Steps:**
-- User action items
-- Planned work
-- Open questions
-
-### 4. Answer User's Specific Question
-
-If the user asked a specific question (e.g., "What monitoring fixes did we do?"), focus the summary on that topic while providing relevant context from CLAUDE_NOTES.md.
-
-## Expected File Structure
-
-CLAUDE_NOTES.md is organized as:
+```bash
+# Search archived sessions
+grep -r "Velero" .claude/notes/sessions/
 ```
-# Claude Code - Homelab Repository Guide
 
-## Recent Updates
+### 4. For Patterns/Gotchas
 
-### 2025-XX-XX (Session Name): Brief Description
-**Completed Work:**
-- ✅ Item 1
-- ✅ Item 2
+If user needs reference information:
 
-**Pull Requests:**
-- PR #XX: [Status] Description
-
-**Issues Resolved:**
-- Problem/Root Cause/Solution
-
-**Technical Deep-Dives:**
-- Detailed explanations
-
-**Current State:**
-- What's deployed
-
-**Next Steps (User Action Required):**
-- Action items
 ```
+File: /Users/imcbeth/homelab/.claude/notes/REFERENCE.md
+```
+
+Contains:
+- Known gotchas and solutions table
+- Common patterns (multi-source ArgoCD, Kustomization, Sealed Secrets)
+- Sync wave order
+- Architecture diagrams
 
 ## Output Format
 
@@ -100,37 +78,40 @@ Provide a **concise but comprehensive** summary:
 ```
 ## Recent Work Summary
 
+**Current State:**
+- [What's deployed and working]
+- [Phase priorities]
+
 **Last 3 Sessions:**
 1. [Date] - [Session Name]: [Key accomplishments]
 2. [Date] - [Session Name]: [Key accomplishments]
 3. [Date] - [Session Name]: [Key accomplishments]
 
-**Current State:**
-- [What's deployed and working]
-- [Pending PRs: #XX, #YY]
-
 **Important Context:**
 - [Key decisions/architecture notes]
 
 **Next Steps:**
-- [User actions needed]
+- [Priorities from TODO.md]
 ```
 
 ## Examples
 
 **User**: "What have we been working on?"
-**Skill**: Reads CLAUDE_NOTES.md, summarizes last 3-5 sessions with focus on accomplishments and current state
+**Action**: Read CURRENT.md, summarize last 3-5 sessions with focus on accomplishments and current state
 
 **User**: "What monitoring changes did we make?"
-**Skill**: Reads CLAUDE_NOTES.md, focuses on monitoring-related sessions, provides technical context
+**Action**: Read CURRENT.md, grep sessions/ for "monitoring", provide focused technical context
 
 **User**: "Catch me up"
-**Skill**: Provides comprehensive summary of recent work, current state, and next steps
+**Action**: Read CURRENT.md, provide comprehensive summary of recent work, current state, and next steps
+
+**User**: "What are the known gotchas for this repo?"
+**Action**: Read REFERENCE.md, summarize the gotchas table
 
 ## Notes
 
-- Always read the FULL CLAUDE_NOTES.md file to ensure no context is missed
-- Focus on recent work (last 2-3 weeks) unless user asks for specific historical context
+- CURRENT.md is designed to always be readable in one Read call
+- Use grep on sessions/ only when historical context is needed
+- REFERENCE.md is stable and rarely needs to be read in full
 - Include PR numbers and status for easy reference
 - Highlight any user action items that are pending
-- Be concise but ensure all important decisions and context are captured
