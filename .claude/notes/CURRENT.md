@@ -43,6 +43,46 @@
 
 ## Recent Sessions
 
+### 2026-01-21 (Evening): Restructure CLAUDE_NOTES.md for Efficient Context
+
+**Completed Work:**
+- Restructured CLAUDE_NOTES.md into modular `.claude/notes/` system
+- Created CURRENT.md (242 lines) - last 5 sessions + current state
+- Created REFERENCE.md (164 lines) - stable gotchas, patterns, architecture
+- Created 14 individual session files in `sessions/` for historical lookup
+- Updated `/catch-up` skill to use new structure
+- Moved CLAUDE_NOTES_2025.md to sessions/ARCHIVE-2025.md
+- Deleted monolithic CLAUDE_NOTES.md (3,259 lines)
+
+**Pull Requests:**
+- **PR #247:** [Merged] refactor: Restructure CLAUDE_NOTES.md for efficient session context
+
+**Problem Solved:**
+CLAUDE_NOTES.md grew to 3,259 lines (~40K tokens) - exceeding Claude's 25K token read limit. The `/catch-up` skill could no longer read the full file.
+
+**New Structure:**
+```
+.claude/notes/
+├── CURRENT.md       # 242 lines - always readable
+├── REFERENCE.md     # 164 lines - stable patterns/gotchas
+└── sessions/        # 15 archived session files (grep-able)
+```
+
+**Benefits:**
+- 93% reduction in primary context file
+- Always-readable current context
+- Searchable history via grep
+- Sustainable growth through natural archiving
+
+**Files Modified:**
+- `.claude/notes/CURRENT.md` (new)
+- `.claude/notes/REFERENCE.md` (new)
+- `.claude/notes/sessions/*.md` (14 new files)
+- `.claude/skills/catch-up/SKILL.md` (updated)
+- `CLAUDE_NOTES.md` (deleted)
+
+---
+
 ### 2026-01-14 (Evening): Sealed Secrets Ops, Key Backup, B2 Restore, Monitoring & ArgoCD Backup
 
 **Completed Work:**
@@ -159,40 +199,11 @@ Helm-Managed Secrets (auto-generated):
 
 ---
 
-### 2026-01-13 (Early Morning): Secrets Management Evaluation - Sealed Secrets vs External Secrets
-
-**Completed Work:**
-- Sealed Secrets Deployed - bitnami-labs/sealed-secrets v2.16.2 in kube-system
-- External Secrets Operator Deployed - external-secrets v0.10.7 with Kubernetes backend
-- ClusterSecretStore Configured - Kubernetes secrets backend for ESO
-- Both Solutions Tested - Successfully created and synced test secrets
-
-**Pull Requests:**
-- **PR #219-223:** [Merged] Evaluation deployment and fixes
-
-**Evaluation Results:**
-
-| Criteria | Sealed Secrets | External Secrets Operator |
-|----------|---------------|---------------------------|
-| **Pods** | 1 | 3 |
-| **Memory Usage** | 9Mi | 69Mi total |
-| **GitOps Native** | Yes | Yes |
-| **Secret Rotation** | Manual | Automatic |
-| **Dependencies** | None | Requires backend |
-
-**Recommendation:** Sealed Secrets for homelab (7x less memory, simpler architecture)
-
-**Issues Resolved:**
-1. Empty kustomization.yaml fails ArgoCD → Add `resources: []`
-2. Git-crypt encrypting non-secret files → Avoid "secret" in filenames
-3. fsGroup in container securityContext → Use `podSecurityContext` for fsGroup
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-01-13 | Secrets Management Evaluation | Sealed Secrets vs ESO, memory comparison |
 | 2026-01-12 | Predictive Disk Space & NAS Health Alerts | storage-alerts, predict_linear(), SNMP |
 | 2026-01-11 | Major Vulnerability Remediation Day | ArgoCD, MetalLB, CSI upgrades |
 | 2026-01-07 | Promtail & Synology CSI Upgrades | Promtail 6.17.1, CSI rollback |
