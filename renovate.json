@@ -1,0 +1,97 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":separatePatchReleases"
+  ],
+  "timezone": "America/Vancouver",
+  "schedule": ["after 6am and before 9pm on saturday and sunday"],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
+  "labels": ["dependencies", "renovate"],
+  "assignees": ["imcbeth"],
+  "argocd": {
+    "fileMatch": ["manifests/applications/.*\\.yaml$"]
+  },
+  "packageRules": [
+    {
+      "description": "Group ArgoCD ecosystem updates",
+      "matchPackagePatterns": ["^argo"],
+      "groupName": "ArgoCD ecosystem",
+      "labels": ["dependencies", "renovate", "argocd"]
+    },
+    {
+      "description": "Group monitoring stack updates",
+      "matchPackageNames": [
+        "kube-prometheus-stack",
+        "loki",
+        "promtail",
+        "grafana"
+      ],
+      "groupName": "Monitoring stack",
+      "labels": ["dependencies", "renovate", "monitoring"]
+    },
+    {
+      "description": "Group security tools updates",
+      "matchPackageNames": ["trivy-operator", "sealed-secrets"],
+      "groupName": "Security tools",
+      "labels": ["dependencies", "renovate", "security"]
+    },
+    {
+      "description": "Group networking updates",
+      "matchPackageNames": ["metallb", "cert-manager", "external-dns"],
+      "groupName": "Networking",
+      "labels": ["dependencies", "renovate", "networking"]
+    },
+    {
+      "description": "Group backup tools updates",
+      "matchPackageNames": ["velero"],
+      "groupName": "Backup tools",
+      "labels": ["dependencies", "renovate", "backup"]
+    },
+    {
+      "description": "Automerge patch updates for non-critical tools",
+      "matchPackageNames": ["metrics-server", "localstack"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Hold major updates for manual review",
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "renovate", "major-update"],
+      "prPriority": -1
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update Docker image tags in Kubernetes manifests",
+      "fileMatch": ["manifests/base/.*\\.ya?ml$"],
+      "matchStrings": [
+        "image:\\s*['\"]?(?<depName>[^:@\\s'\"]+):(?<currentValue>[^@\\s'\"]+)['\"]?"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Update external-snapshotter refs in kustomization",
+      "fileMatch": ["manifests/base/synology-csi/kustomization\\.yaml$"],
+      "matchStrings": [
+        "github\\.com/kubernetes-csi/external-snapshotter/[^?]+\\?ref=(?<currentValue>v[\\d.]+)"
+      ],
+      "depNameTemplate": "kubernetes-csi/external-snapshotter",
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "ignoreDeps": [
+    "synology-csi"
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "vulnerability"]
+  }
+}
