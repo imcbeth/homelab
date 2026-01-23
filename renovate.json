@@ -8,7 +8,7 @@
   ],
   "timezone": "America/Vancouver",
   "schedule": ["after 6am and before 9pm on saturday and sunday"],
-  "prHourlyLimit": 5,
+  "prHourlyLimit": 10,
   "prConcurrentLimit": 10,
   "labels": ["dependencies", "renovate"],
   "assignees": ["imcbeth"],
@@ -27,8 +27,7 @@
       "matchPackageNames": [
         "kube-prometheus-stack",
         "loki",
-        "promtail",
-        "grafana"
+        "promtail"
       ],
       "groupName": "Monitoring stack",
       "labels": ["dependencies", "renovate", "monitoring"]
@@ -41,7 +40,7 @@
     },
     {
       "description": "Group networking updates",
-      "matchPackageNames": ["metallb", "cert-manager", "external-dns"],
+      "matchPackageNames": ["metallb", "cert-manager", "external-dns", "pihole"],
       "groupName": "Networking",
       "labels": ["dependencies", "renovate", "networking"]
     },
@@ -55,9 +54,9 @@
       "description": "Automerge patch updates for non-critical tools",
       "matchPackageNames": ["metrics-server", "localstack"],
       "matchUpdateTypes": ["patch"],
-      "automerge": true,
+      "automerge": false,
       "automergeType": "pr",
-      "platformAutomerge": true
+      "platformAutomerge": false
     },
     {
       "description": "Hold major updates for manual review",
@@ -79,7 +78,7 @@
     {
       "customType": "regex",
       "description": "Update external-snapshotter refs in kustomization",
-      "fileMatch": ["manifests/base/synology-csi/kustomization\\.yaml$"],
+      "fileMatch": ["manifests/base/.*/kustomization\\.ya?ml$"],
       "matchStrings": [
         "github\\.com/kubernetes-csi/external-snapshotter/[^?]+\\?ref=(?<currentValue>v[\\d.]+)"
       ],
