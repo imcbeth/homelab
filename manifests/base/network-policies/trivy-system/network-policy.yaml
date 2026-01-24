@@ -35,12 +35,19 @@ spec:
         - protocol: TCP
           port: 53
     # Allow Kubernetes API access (for scanning cluster resources)
+    # Service ClusterIP (10.96.0.1:443) and actual API server endpoint (10.0.10.0/24:6443)
     - to:
         - ipBlock:
-            cidr: 10.96.0.1/32  # Kubernetes API service
+            cidr: 10.96.0.1/32  # Kubernetes API service ClusterIP
       ports:
         - protocol: TCP
           port: 443
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24  # Control plane node network
+      ports:
+        - protocol: TCP
+          port: 6443  # API server port
     # Allow external HTTPS for vulnerability database updates
     # and container registry access (ghcr.io, docker.io, quay.io, etc.)
     - to:
