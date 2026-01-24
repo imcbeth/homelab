@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argo-workflows-ingress
+  namespace: argo-workflows
+  annotations:
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
+    external-dns.alpha.kubernetes.io/hostname: workflows.k8s.n37.ca
+    external-dns.alpha.kubernetes.io/ttl: "300"
+  labels:
+    app.kubernetes.io/name: argo-workflows
+    app.kubernetes.io/component: ingress
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - workflows.k8s.n37.ca
+      secretName: argo-workflows-tls
+  rules:
+    - host: workflows.k8s.n37.ca
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argo-workflows-server
+                port:
+                  number: 2746
