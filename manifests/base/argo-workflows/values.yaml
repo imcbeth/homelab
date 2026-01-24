@@ -80,7 +80,8 @@ server:
 # Uses existing SealedSecret for credentials
 useDefaultArtifactRepo: true
 artifactRepository:
-  archiveLogs: true
+  # TODO: Enable once B2 bucket permissions are fixed (need write access)
+  archiveLogs: false
   s3:
     bucket: homelab-workflows
     endpoint: s3.us-west-004.backblazeb2.com
