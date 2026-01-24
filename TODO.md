@@ -146,11 +146,19 @@
 - [ ] Set up secret rotation automation for certificates
 - [ ] Create runbook for adding new SealedSecrets
 
-### 9. **Network Policies**
-- [ ] Define NetworkPolicies for namespace isolation
-- [ ] Implement ingress/egress rules for sensitive workloads
-- [ ] Document network segmentation strategy
-- [ ] Test policy enforcement
+### 9. **Network Policies** ✅ PARTIALLY COMPLETED (2026-01-24)
+- [x] Define NetworkPolicies for namespace isolation (5 namespaces)
+- [x] Implement ingress/egress rules for sensitive workloads
+  - [x] localstack: Allow velero, ingress-nginx, prometheus; egress DNS only
+  - [x] unipoller: Allow prometheus; egress DNS + UniFi controller
+  - [x] loki: Allow promtail, prometheus, grafana; egress DNS + alertmanager
+  - [x] trivy-system: Allow prometheus; egress DNS + K8s API + registries
+  - [x] velero: Allow prometheus; egress DNS + localstack + B2 + K8s API
+- [x] Test policy enforcement (all tests passed)
+- [ ] Document network segmentation strategy in k8s-docs-n37
+- [ ] Expand to remaining namespaces (cert-manager, external-dns, metallb-system)
+
+**Configuration:** See `manifests/base/network-policies/` for all policy definitions.
 
 ---
 
@@ -338,7 +346,7 @@ Items are organized by priority, not by timeline. Focus on:
 
 ### **Phase 3: Advanced Features**
 1. ✅ GitOps enhancements (Renovate deployed 2026-01-23)
-2. Network policies implementation
+2. ✅ Network policies implementation (5 namespaces isolated 2026-01-24)
 3. Development tools and CI/CD (Argo Workflows)
 4. Service mesh evaluation and potential deployment
 

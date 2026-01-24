@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-01-23
+**Last Updated:** 2026-01-24
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -39,13 +39,51 @@
 - Weekend schedule (Sat/Sun 6am-9pm)
 - Grouped updates: ArgoCD, monitoring, networking, security, backup
 
+**Network Policies:** Partially Complete (5 namespaces)
+- localstack, unipoller, loki, trivy-system, velero isolated
+- ArgoCD Application at sync-wave -40
+- Remaining: cert-manager, external-dns, metallb-system
+
 **Phase 3 Priorities (from TODO.md):**
-- Network Policies
 - Argo Workflows
+- Service mesh evaluation
 
 ---
 
 ## Recent Sessions
+
+### 2026-01-24 (Evening): Network Policies Implementation
+
+**Completed Work:**
+- Implemented Kubernetes NetworkPolicies for 5 namespaces
+- Created ArgoCD Application for GitOps deployment (sync-wave -40)
+- Validated all policies don't break existing functionality
+- All tests passed: Prometheus scraping, Velero backups, Loki logs
+
+**Pull Requests:**
+- **PR #274:** [Merged] feat: Add NetworkPolicies for namespace isolation
+
+**NetworkPolicies Deployed:**
+| Namespace | Ingress Allowed | Egress Allowed |
+|-----------|-----------------|----------------|
+| localstack | velero, ingress-nginx, prometheus | DNS only |
+| unipoller | prometheus | DNS, UniFi (10.0.1.1) |
+| loki | promtail, prometheus, grafana | DNS, alertmanager |
+| trivy-system | prometheus | DNS, K8s API, registries |
+| velero | prometheus | DNS, localstack, B2, K8s API |
+
+**Files Created:**
+- `manifests/base/network-policies/kustomization.yaml`
+- `manifests/base/network-policies/{localstack,unipoller,loki,trivy-system,velero}/network-policy.yaml`
+- `manifests/applications/network-policies.yaml`
+
+**Verification Results:**
+- Prometheus → all namespace metrics: Working
+- Velero → B2 backup storage: Available
+- Promtail → Loki: Connected (label limit warning is pre-existing)
+- ArgoCD UI: HTTP 200
+
+---
 
 ### 2026-01-23 (Evening): Renovate PR Merge & Velero v1.17 Breaking Change Fix
 
@@ -179,46 +217,11 @@ CLAUDE_NOTES.md grew to 3,259 lines (~40K tokens) - exceeding Claude's 25K token
 
 ---
 
-### 2026-01-14 (Morning): Secrets Migration Completion and Cleanup
-
-**Completed Work:**
-- Removed External Secrets Operator - Evaluation complete, Sealed Secrets chosen
-- Cleaned up secrets directory - Removed 15 obsolete git-crypt files
-- Updated secrets/README.md - Documented bootstrap secrets and migration history
-- Updated TODO.md - Marked Secrets Management complete, updated sync wave order
-- Cleaned up local git branches - Deleted 107 local branches, pruned 85 stale remotes
-
-**Pull Requests:**
-- **PR #233-236:** [Merged] ESO removal, secrets cleanup, TODO update
-
-**Secrets Management - Final Architecture:**
-```
-Sealed Secrets Controller (kube-system)
-  └─ Decrypts SealedSecret CRDs at runtime
-
-SealedSecrets in Git (8 total):
-  ├─ manifests/base/unipoller/unipoller-sealed.yaml
-  ├─ manifests/base/external-dns/cloudflare-sealed.yaml
-  ├─ manifests/base/external-dns/unifi-sealed.yaml
-  ├─ manifests/base/kube-prometheus-stack/alertmanager-smtp-sealed.yaml
-  ├─ manifests/base/kube-prometheus-stack/snmp-exporter-sealed.yaml
-  ├─ manifests/base/cert-manager/cloudflare-sealed.yaml
-  ├─ manifests/base/synology-csi/client-info-sealed.yaml
-  └─ manifests/base/pihole/pihole-web-sealed.yaml
-
-Bootstrap Secret (manual apply):
-  └─ secrets/argocd-git-access.yaml
-
-Helm-Managed Secrets (auto-generated):
-  └─ kube-prometheus-stack-grafana
-```
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-01-14 | Secrets Migration Completion | ESO removal, 8 SealedSecrets final |
 | 2026-01-14 | Secrets Migration Git-crypt to Sealed | 8 secrets migrated, encryption fixes |
 | 2026-01-13 | Secrets Management Evaluation | Sealed Secrets vs ESO, memory comparison |
 | 2026-01-12 | Predictive Disk Space & NAS Health Alerts | storage-alerts, predict_linear(), SNMP |
