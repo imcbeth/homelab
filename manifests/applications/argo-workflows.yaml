@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-workflows
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-8"
+spec:
+  project: infrastructure
+  sources:
+    # Helm chart from Argo project
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-workflows
+      targetRevision: 0.47.1
+      helm:
+        releaseName: argo-workflows
+        valueFiles:
+          - $values/manifests/base/argo-workflows/values.yaml
+    # Values file reference
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/argo-workflows
+      targetRevision: HEAD
+      ref: values
+    # Additional resources (SealedSecret, WorkflowTemplates)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/argo-workflows
+      targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-workflows
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,0 +1,137 @@
+# Argo Workflows Configuration for Raspberry Pi 5 Kubernetes Homelab
+# Cluster: 5x Pi 5 nodes (16GB each, 80GB total)
+# Purpose: CI/CD pipeline automation engine
+# Artifact Storage: Backblaze B2 (primary), LocalStack (fallback)
+
+# =============================================================================
+# Controller Configuration
+# =============================================================================
+controller:
+  replicas: 1
+
+  # Resource limits optimized for Pi cluster
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
+
+  # Workflow defaults for all workflows
+  workflowDefaults:
+    spec:
+      # TTL strategy to automatically clean up completed workflows
+      ttlStrategy:
+        secondsAfterCompletion: 3600   # 1 hour
+        secondsAfterSuccess: 1800       # 30 minutes
+        secondsAfterFailure: 7200       # 2 hours
+      # Pod garbage collection
+      podGC:
+        strategy: OnPodCompletion
+
+  # Metrics configuration
+  metricsConfig:
+    enabled: true
+
+  # Service account for controller
+  serviceAccount:
+    create: true
+    name: argo-workflows-controller
+
+  # Container runtime executor
+  containerRuntimeExecutor: emissary
+
+# =============================================================================
+# Server Configuration
+# =============================================================================
+server:
+  replicas: 1
+
+  # Resource limits optimized for Pi cluster
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 50m
+      memory: 128Mi
+
+  # Authentication mode - server mode for internal use
+  # Note: For production, consider SSO integration
+  extraArgs:
+    - --auth-mode=server
+
+  # Service configuration
+  serviceType: ClusterIP
+  servicePort: 2746
+
+  # Service account for server
+  serviceAccount:
+    create: true
+    name: argo-workflows-server
+
+# =============================================================================
+# Artifact Repository Configuration
+# =============================================================================
+# Backblaze B2 as primary artifact storage
+# Uses existing SealedSecret for credentials
+useDefaultArtifactRepo: true
+artifactRepository:
+  archiveLogs: true
+  s3:
+    bucket: homelab-workflows
+    endpoint: s3.us-west-004.backblazeb2.com
+    region: us-west-004
+    # Credentials from SealedSecret
+    accessKeySecret:
+      name: argo-workflows-b2-credentials
+      key: access-key
+    secretKeySecret:
+      name: argo-workflows-b2-credentials
+      key: secret-key
+    # Use virtual-hosted style URLs (required for B2)
+    useSDKCreds: false
+    insecure: false
+
+# =============================================================================
+# Workflow Configuration
+# =============================================================================
+workflow:
+  serviceAccount:
+    create: true
+    name: argo-workflow
+
+  # RBAC for workflow execution
+  rbac:
+    create: true
+
+# =============================================================================
+# Monitoring - Prometheus Integration
+# =============================================================================
+# ServiceMonitor for Prometheus scraping
+mainContainer:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# Enable metrics
+controller.metricsConfig:
+  enabled: true
+
+# =============================================================================
+# RBAC Configuration
+# =============================================================================
+createAggregateRoles: true
+
+# =============================================================================
+# CRDs
+# =============================================================================
+# Let ArgoCD manage CRDs
+crds:
+  install: true
+  keep: true
