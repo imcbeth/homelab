@@ -47,8 +47,8 @@
 **Argo Workflows:** Deployed (2026-01-24)
 - Argo Workflows v3.7.8 (Helm chart 0.47.1) at sync-wave -8
 - 16 ArgoCD applications total, all Synced and Healthy
-- B2 artifact storage configured (pending permissions fix)
-- NetworkPolicy temporarily disabled (debugging API egress)
+- B2 artifact storage working (PRs #287-289 fixed credentials)
+- NetworkPolicy temporarily disabled (needs K8s API egress rules)
 
 **Phase 3 Status:** Complete
 - Service mesh evaluation (next priority)
@@ -82,7 +82,7 @@
 3. **B2 "not entitled" error** - Bucket permissions issue; disabled archiveLogs temporarily
 
 **Known Issues (to fix later):**
-- B2 bucket needs write permissions for artifact storage
+- ~~B2 bucket needs write permissions for artifact storage~~ **FIXED** (PRs #287-289)
 - NetworkPolicy needs proper K8s API egress rules
 
 **Files Created:**
