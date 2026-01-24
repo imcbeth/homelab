@@ -21,6 +21,8 @@ controller:
   # Workflow defaults for all workflows
   workflowDefaults:
     spec:
+      # Service account for workflow pods
+      serviceAccountName: argo-workflow
       # TTL strategy to automatically clean up completed workflows
       ttlStrategy:
         secondsAfterCompletion: 3600   # 1 hour
