@@ -41,7 +41,7 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
-        - podSelector:
+          podSelector:
             matchLabels:
               k8s-app: kube-dns
       ports:
@@ -50,12 +50,15 @@ spec:
         - protocol: TCP
           port: 53
     # Allow Kubernetes API access (for workflow management)
+    # Using broader CIDR to cover API server endpoints
     - to:
         - ipBlock:
-            cidr: 10.96.0.1/32  # Kubernetes API service
+            cidr: 10.96.0.0/16  # Kubernetes service CIDR
       ports:
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: 6443
     # Allow LocalStack S3 access (for testing/fallback)
     - to:
         - namespaceSelector:
