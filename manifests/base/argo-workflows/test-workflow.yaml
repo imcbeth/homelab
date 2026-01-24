@@ -13,7 +13,7 @@ spec:
   templates:
     - name: hello
       container:
-        image: busybox:1.36
+        image: busybox:1.37
         command: [echo]
         args: ["Hello from Argo Workflows on Raspberry Pi 5 Homelab!"]
         resources:
@@ -51,7 +51,7 @@ spec:
 
     - name: generate-artifact
       container:
-        image: busybox:1.36
+        image: busybox:1.37
         command: [sh, -c]
         args: ["echo 'Hello from artifact test!' > /tmp/message.txt"]
         resources:
@@ -72,7 +72,7 @@ spec:
           - name: message
             path: /tmp/message.txt
       container:
-        image: busybox:1.36
+        image: busybox:1.37
         command: [sh, -c]
         args: ["cat /tmp/message.txt && echo 'Artifact test successful!'"]
         resources:
