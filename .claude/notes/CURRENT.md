@@ -62,6 +62,7 @@
 
 **Pull Requests:**
 - **PR #274:** [Merged] feat: Add NetworkPolicies for namespace isolation
+- **PR #57:** [Merged] docs: Add Network Policies documentation (k8s-docs-n37)
 
 **NetworkPolicies Deployed:**
 | Namespace | Ingress Allowed | Egress Allowed |
