@@ -11,4 +11,5 @@ resources:
   # Phase 3: Security-sensitive namespaces
   - velero/network-policy.yaml
   # CI/CD namespaces
-  - argo-workflows/network-policy.yaml
+  # TODO: Fix network policy API egress rule - temporarily disabled
+  # - argo-workflows/network-policy.yaml
