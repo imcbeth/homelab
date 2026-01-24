@@ -1,0 +1,84 @@
+# Test WorkflowTemplate to validate Argo Workflows deployment
+# Run with: argo submit -n argo-workflows --from workflowtemplate/hello-world --watch
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: hello-world
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: argo-workflows
+    app.kubernetes.io/component: test-workflow
+spec:
+  entrypoint: hello
+  templates:
+    - name: hello
+      container:
+        image: busybox:1.36
+        command: [echo]
+        args: ["Hello from Argo Workflows on Raspberry Pi 5 Homelab!"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
+---
+# Multi-step workflow template for more comprehensive testing
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: artifact-test
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: argo-workflows
+    app.kubernetes.io/component: test-workflow
+spec:
+  entrypoint: main
+  templates:
+    - name: main
+      dag:
+        tasks:
+          - name: generate
+            template: generate-artifact
+          - name: consume
+            template: consume-artifact
+            dependencies: [generate]
+            arguments:
+              artifacts:
+                - name: message
+                  from: "{{tasks.generate.outputs.artifacts.message}}"
+
+    - name: generate-artifact
+      container:
+        image: busybox:1.36
+        command: [sh, -c]
+        args: ["echo 'Hello from artifact test!' > /tmp/message.txt"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
+      outputs:
+        artifacts:
+          - name: message
+            path: /tmp/message.txt
+
+    - name: consume-artifact
+      inputs:
+        artifacts:
+          - name: message
+            path: /tmp/message.txt
+      container:
+        image: busybox:1.36
+        command: [sh, -c]
+        args: ["cat /tmp/message.txt && echo 'Artifact test successful!'"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi

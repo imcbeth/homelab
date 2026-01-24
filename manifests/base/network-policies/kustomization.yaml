@@ -10,3 +10,5 @@ resources:
   - trivy-system/network-policy.yaml
   # Phase 3: Security-sensitive namespaces
   - velero/network-policy.yaml
+  # CI/CD namespaces
+  - argo-workflows/network-policy.yaml
