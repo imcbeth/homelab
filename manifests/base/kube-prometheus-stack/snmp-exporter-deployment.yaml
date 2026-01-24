@@ -18,7 +18,7 @@ spec:
     spec:
       initContainers:
       - name: config-processor
-        image: busybox:1.36
+        image: busybox:1.37
         env:
         - name: SNMP_USERNAME
           valueFrom:
