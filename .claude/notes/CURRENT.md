@@ -42,15 +42,61 @@
 **Network Policies:** Partially Complete (5 namespaces)
 - localstack, unipoller, loki, trivy-system, velero isolated
 - ArgoCD Application at sync-wave -40
-- Remaining: cert-manager, external-dns, metallb-system
+- Remaining: cert-manager, external-dns, metallb-system, argo-workflows
 
-**Phase 3 Priorities (from TODO.md):**
-- Argo Workflows
-- Service mesh evaluation
+**Argo Workflows:** Deployed (2026-01-24)
+- Argo Workflows v3.7.8 (Helm chart 0.47.1) at sync-wave -8
+- 16 ArgoCD applications total, all Synced and Healthy
+- B2 artifact storage configured (pending permissions fix)
+- NetworkPolicy temporarily disabled (debugging API egress)
+
+**Phase 3 Status:** Complete
+- Service mesh evaluation (next priority)
 
 ---
 
 ## Recent Sessions
+
+### 2026-01-24 (Night): Argo Workflows Deployment
+
+**Completed Work:**
+- Deployed Argo Workflows v3.7.8 (Helm chart 0.47.1) at sync-wave -8
+- Configured Pi-optimized resource limits (Controller: 100m/256Mi, Server: 50m/128Mi)
+- Created SealedSecret for B2 credentials (`homelab-workflows` bucket)
+- Added test WorkflowTemplates (hello-world, artifact-test)
+- Created NetworkPolicy for argo-workflows namespace (temporarily disabled)
+- Test workflow executed successfully
+
+**Pull Requests:**
+- **PR #277:** [Merged] feat: Add Argo Workflows for CI/CD pipeline automation
+- **PR #280:** [Merged] fix: Set default serviceAccountName for Argo Workflows
+- **PR #281:** [Merged] fix: Update Argo Workflows B2 credentials
+- **PR #282:** [Merged] fix: Correct NetworkPolicy DNS and API rules
+- **PR #283:** [Merged] fix: Temporarily disable argo-workflows NetworkPolicy
+- **PR #284:** [Merged] fix: Disable archiveLogs until B2 permissions are fixed
+- **PR #285:** [Merged] docs: Mark Argo Workflows as deployed in TODO.md
+
+**Issues Resolved:**
+1. **Workflow pods using wrong service account** - Added `serviceAccountName: argo-workflow` to workflowDefaults
+2. **NetworkPolicy blocking K8s API** - Temporarily disabled while debugging egress rules
+3. **B2 "not entitled" error** - Bucket permissions issue; disabled archiveLogs temporarily
+
+**Known Issues (to fix later):**
+- B2 bucket needs write permissions for artifact storage
+- NetworkPolicy needs proper K8s API egress rules
+
+**Files Created:**
+- `manifests/applications/argo-workflows.yaml`
+- `manifests/base/argo-workflows/values.yaml`
+- `manifests/base/argo-workflows/b2-credentials-sealed.yaml`
+- `manifests/base/argo-workflows/test-workflow.yaml`
+- `manifests/base/network-policies/argo-workflows/network-policy.yaml`
+
+**Final Cluster Status:**
+- 16/16 ArgoCD applications Synced and Healthy
+- Test workflow: Succeeded
+
+---
 
 ### 2026-01-24 (Evening): Network Policies Implementation
 
@@ -199,29 +245,11 @@ CLAUDE_NOTES.md grew to 3,259 lines (~40K tokens) - exceeding Claude's 25K token
 
 ---
 
-### 2026-01-14 (Afternoon): Documentation Update - Sealed Secrets
-
-**Completed Work:**
-- Created secrets-management.md - Comprehensive Sealed Secrets documentation
-- Added Security section to docs - New category in sidebars
-- Updated application docs - cert-manager, external-dns, unipoller, synology-csi
-- Updated intro.md - Added January 2026 secrets migration info
-
-**Pull Requests:**
-- **PR #237:** [Merged] docs: Update CLAUDE_NOTES with secrets migration completion
-- **PR #51:** [Merged] docs: Add Sealed Secrets documentation (k8s-docs-n37)
-
-**Files Modified:**
-- `k8s-docs-n37/docs/security/secrets-management.md` (new)
-- `k8s-docs-n37/docs/applications/*.md` (updated references)
-- `k8s-docs-n37/sidebars.ts` (added Security category)
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-01-14 | Documentation Update - Sealed Secrets | k8s-docs-n37, Security section |
 | 2026-01-14 | Secrets Migration Completion | ESO removal, 8 SealedSecrets final |
 | 2026-01-14 | Secrets Migration Git-crypt to Sealed | 8 secrets migrated, encryption fixes |
 | 2026-01-13 | Secrets Management Evaluation | Sealed Secrets vs ESO, memory comparison |
