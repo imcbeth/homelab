@@ -78,6 +78,7 @@
 | snapshot-controller/csi-snapshotter v8.x RBAC | Add `patch` verb for volumesnapshotcontents and groupsnapshot API group | 2026-01-11 |
 | VolumeSnapshot stuck with finalizers | Use `kubectl patch` to remove finalizers | 2026-01-05 |
 | Loki singleBinary + external caches | Use internal caching, disable chunksCache/resultsCache | 2026-01-05 |
+| NetworkPolicy K8s API egress with Calico | Allow BOTH ClusterIP (10.96.0.1/32:443) AND control plane network (10.0.10.0/24:6443) | 2026-01-24 |
 | Loki distributed mode conflict | Set `replicas: 0` for caches explicitly | 2026-01-05 |
 | Velero CSI + Kopia conflict | Use CSI exclusively, set `defaultVolumesToFsBackup: false` | 2026-01-05 |
 | CSI snapshots not working | Deploy snapshot-controller alongside CSI driver | 2026-01-05 |

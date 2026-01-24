@@ -50,6 +50,12 @@
 - 16 ArgoCD applications total, all Synced and Healthy
 - B2 artifact storage working (PRs #287-289 fixed credentials)
 - NetworkPolicy enabled (PR #291 fixed K8s API egress)
+- UI accessible at https://workflows.k8s.n37.ca (PR #293)
+
+**Known Issue:** external-dns-cloudflare stuck/not syncing
+- Pod starts but produces no sync logs after K8s client creation
+- A records may need manual addition to Cloudflare until resolved
+- Investigate: Cloudflare API token permissions or pod networking
 
 **Phase 3 Status:** Complete
 - Service mesh evaluation (next priority)
@@ -57,6 +63,38 @@
 ---
 
 ## Recent Sessions
+
+### 2026-01-24 (Late Night): Argo Workflows Completion & Ingress
+
+**Completed Work:**
+- Verified B2 artifact storage working (ran artifact-test workflow successfully)
+- Fixed NetworkPolicy K8s API egress - requires both ClusterIP AND control plane network
+- Added nginx ingress for Argo Workflows UI at workflows.k8s.n37.ca
+- Updated NetworkPolicies for velero and trivy-system with same API egress fix
+- Discovered external-dns-cloudflare not syncing (investigating)
+
+**Pull Requests:**
+- **PR #290:** [Merged] docs: Mark Argo Workflows B2 artifact storage as fixed
+- **PR #291:** [Merged] fix: Add control plane network to NetworkPolicy API egress rules
+- **PR #292:** [Merged] docs: Update session notes - NetworkPolicy fix complete
+- **PR #293:** [Merged] feat: Add nginx ingress for Argo Workflows UI
+
+**Key Discovery - NetworkPolicy K8s API Egress:**
+With Calico CNI, K8s API access requires BOTH:
+1. ClusterIP service: `10.96.0.1/32:443`
+2. Control plane network: `10.0.10.0/24:6443`
+
+**Files Created/Modified:**
+- `manifests/base/argo-workflows/ingress.yaml` (new)
+- `manifests/base/network-policies/argo-workflows/network-policy.yaml` (enabled + fixed)
+- `manifests/base/network-policies/velero/network-policy.yaml` (API egress fix)
+- `manifests/base/network-policies/trivy-system/network-policy.yaml` (API egress fix)
+
+**Known Issues:**
+- external-dns-cloudflare stuck after startup (no sync logs)
+- TLS certificate pending DNS-01 challenge (manual A record added)
+
+---
 
 ### 2026-01-24 (Night): Argo Workflows Deployment
 
@@ -79,12 +117,8 @@
 
 **Issues Resolved:**
 1. **Workflow pods using wrong service account** - Added `serviceAccountName: argo-workflow` to workflowDefaults
-2. **NetworkPolicy blocking K8s API** - Temporarily disabled while debugging egress rules
-3. **B2 "not entitled" error** - Bucket permissions issue; disabled archiveLogs temporarily
-
-**Known Issues (to fix later):**
-- ~~B2 bucket needs write permissions for artifact storage~~ **FIXED** (PRs #287-289)
-- ~~NetworkPolicy needs proper K8s API egress rules~~ **FIXED** (PR #291)
+2. **NetworkPolicy blocking K8s API** - Fixed in PR #291
+3. **B2 "not entitled" error** - Fixed in PRs #287-289
 
 **Files Created:**
 - `manifests/applications/argo-workflows.yaml`
