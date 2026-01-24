@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Phase 1: Low-risk namespaces
+  - localstack/network-policy.yaml
+  - unipoller/network-policy.yaml
+  # Phase 2: Monitoring namespaces
+  - loki/network-policy.yaml
+  - trivy-system/network-policy.yaml
+  # Phase 3: Security-sensitive namespaces
+  - velero/network-policy.yaml
