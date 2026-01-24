@@ -176,11 +176,18 @@
 ## 🏗️ **Infrastructure & DevOps**
 
 ### 12. **GitOps Enhancements**
-- [ ] **Renovate** - Automated dependency updates for Helm charts
+- [x] **Renovate** - Automated dependency updates for Helm charts (deployed 2026-01-23)
+  - [x] GitHub App installed and configured
+  - [x] ArgoCD Application manifest scanning (Helm charts)
+  - [x] Docker image tag updates in Kubernetes manifests
+  - [x] Grouped updates (ArgoCD, monitoring, networking, security, backup)
+  - [x] Weekend schedule (Sat/Sun 6am-9pm) to minimize disruption
 - [ ] Pre-commit hooks for Kubernetes manifest validation (kubeval, kustomize)
 - [ ] Automated testing pipeline for infrastructure changes
 - [ ] Expand GitOps workflow documentation
 - [ ] Consider multi-cluster ArgoCD setup for dev/staging
+
+**Configuration:** See `renovate.json` in repository root.
 
 ### 13. **Development & CI/CD Tools - Argo Workflows** ⭐ Planned
 
@@ -330,10 +337,10 @@ Items are organized by priority, not by timeline. Focus on:
 4. ✅ Custom Grafana dashboards
 
 ### **Phase 3: Advanced Features**
-1. Service mesh evaluation and potential deployment
-2. GitOps enhancements (Renovate)
-3. Network policies implementation
-4. Development tools and CI/CD
+1. ✅ GitOps enhancements (Renovate deployed 2026-01-23)
+2. Network policies implementation
+3. Development tools and CI/CD (Argo Workflows)
+4. Service mesh evaluation and potential deployment
 
 ### **Phase 4: Optimization & Expansion**
 1. Resource optimization and VPA
