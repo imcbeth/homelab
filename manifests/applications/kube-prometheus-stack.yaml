@@ -10,7 +10,7 @@ spec:
   sources:
     - repoURL: https://prometheus-community.github.io/helm-charts
       chart: kube-prometheus-stack
-      targetRevision: 80.14.4
+      targetRevision: 81.2.2
       helm:
         valueFiles:
           - $values/manifests/base/kube-prometheus-stack/values.yaml
