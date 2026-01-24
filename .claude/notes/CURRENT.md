@@ -39,16 +39,17 @@
 - Weekend schedule (Sat/Sun 6am-9pm)
 - Grouped updates: ArgoCD, monitoring, networking, security, backup
 
-**Network Policies:** Partially Complete (5 namespaces)
-- localstack, unipoller, loki, trivy-system, velero isolated
+**Network Policies:** Partially Complete (6 namespaces)
+- localstack, unipoller, loki, trivy-system, velero, argo-workflows isolated
 - ArgoCD Application at sync-wave -40
-- Remaining: cert-manager, external-dns, metallb-system, argo-workflows
+- Remaining: cert-manager, external-dns, metallb-system
+- **Gotcha:** K8s API egress requires both ClusterIP (10.96.0.1:443) AND control plane network (10.0.10.0/24:6443)
 
 **Argo Workflows:** Deployed (2026-01-24)
 - Argo Workflows v3.7.8 (Helm chart 0.47.1) at sync-wave -8
 - 16 ArgoCD applications total, all Synced and Healthy
 - B2 artifact storage working (PRs #287-289 fixed credentials)
-- NetworkPolicy temporarily disabled (needs K8s API egress rules)
+- NetworkPolicy enabled (PR #291 fixed K8s API egress)
 
 **Phase 3 Status:** Complete
 - Service mesh evaluation (next priority)
@@ -83,7 +84,7 @@
 
 **Known Issues (to fix later):**
 - ~~B2 bucket needs write permissions for artifact storage~~ **FIXED** (PRs #287-289)
-- NetworkPolicy needs proper K8s API egress rules
+- ~~NetworkPolicy needs proper K8s API egress rules~~ **FIXED** (PR #291)
 
 **Files Created:**
 - `manifests/applications/argo-workflows.yaml`
