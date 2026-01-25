@@ -1,0 +1,88 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metallb-network-policy
+  namespace: metallb-system
+  labels:
+    app.kubernetes.io/name: metallb
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}  # Apply to all pods in namespace
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Prometheus to scrape metrics from default namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 7472  # Controller metrics
+        - protocol: TCP
+          port: 7473  # Speaker metrics
+    # Allow internal namespace communication (speaker <-> controller memberlist)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: metallb-system
+      ports:
+        - protocol: TCP
+          port: 7946  # Memberlist
+        - protocol: UDP
+          port: 7946  # Memberlist
+        - protocol: TCP
+          port: 7472  # Controller metrics
+        - protocol: TCP
+          port: 7473  # Speaker metrics
+    # Allow webhook validation from kube-apiserver
+    - from:
+        - ipBlock:
+            cidr: 10.0.10.0/24  # Control plane nodes
+      ports:
+        - protocol: TCP
+          port: 9443  # Webhook port
+  egress:
+    # Allow DNS resolution via kube-dns
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow Kubernetes API access (for watching services, endpoints)
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32  # Kubernetes API service ClusterIP
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24  # Control plane node network
+      ports:
+        - protocol: TCP
+          port: 6443  # API server port
+    # Allow internal namespace communication (speaker <-> controller)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: metallb-system
+      ports:
+        - protocol: TCP
+          port: 7946  # Memberlist
+        - protocol: UDP
+          port: 7946  # Memberlist
+        - protocol: TCP
+          port: 7472  # Controller metrics
+        - protocol: TCP
+          port: 7473  # Speaker metrics
+    # Note: L2 ARP/GARP announcements operate at Layer 2 and are not affected
+    # by NetworkPolicy (which operates at Layer 3/4). No additional rules needed.
