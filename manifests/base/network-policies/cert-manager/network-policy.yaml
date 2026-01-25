@@ -1,0 +1,89 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cert-manager-network-policy
+  namespace: cert-manager
+  labels:
+    app.kubernetes.io/name: cert-manager
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}  # Apply to all pods in namespace
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow webhook validation from kube-apiserver
+    # The API server calls the webhook to validate Certificate resources
+    - from:
+        - ipBlock:
+            cidr: 10.0.10.0/24  # Control plane nodes
+      ports:
+        - protocol: TCP
+          port: 10250  # Webhook port
+    # Allow Prometheus to scrape metrics from default namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 9402  # cert-manager metrics
+    # Allow internal namespace communication (controller, webhook, cainjector)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cert-manager
+      ports:
+        - protocol: TCP
+          port: 10250  # Webhook
+        - protocol: TCP
+          port: 9402   # Metrics
+  egress:
+    # Allow DNS resolution via kube-dns
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow Kubernetes API access
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32  # Kubernetes API service ClusterIP
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24  # Control plane node network
+      ports:
+        - protocol: TCP
+          port: 6443  # API server port
+    # Allow HTTPS to external services (Let's Encrypt ACME, Cloudflare API)
+    # Exclude private IP ranges for security
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443  # HTTPS for Let's Encrypt and Cloudflare API
+    # Allow internal namespace communication
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cert-manager
+      ports:
+        - protocol: TCP
+          port: 10250
+        - protocol: TCP
+          port: 9402
