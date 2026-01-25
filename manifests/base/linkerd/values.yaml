@@ -1,0 +1,115 @@
+# Linkerd Control Plane Values
+# Optimized for Raspberry Pi 5 cluster (5 nodes, 80GB RAM, 20 ARM cores)
+#
+# Key decisions:
+# - Using edge release (free for homelab, stable builds require Buoyant Enterprise license)
+# - Resource limits tuned for Pi cluster with ~60GB headroom
+# - Automatic mTLS enabled by default
+# - Proxy resources minimized for sidecar efficiency
+
+# Identity trust anchor - auto-generated on first install
+# For production, generate and manage your own trust anchor
+identityTrustAnchorsPEM: ""
+
+# Proxy configuration (injected sidecars)
+# Rust-based micro-proxy, ~10MB per sidecar
+proxy:
+  # Resource requests/limits per sidecar
+  # 5 localstack pods = ~160MB total sidecar overhead
+  resources:
+    cpu:
+      request: 10m
+      limit: 100m
+    memory:
+      request: 32Mi
+      limit: 64Mi
+  # Enable protocol detection
+  enableExternalProfiles: true
+  # Log level (debug, info, warn, error)
+  logLevel: warn,linkerd=info
+  # Wait for proxy to be ready before starting app container
+  waitBeforeExitSeconds: 0
+
+# Proxy injector configuration
+proxyInjector:
+  # Resource limits for the injector webhook
+  resources:
+    cpu:
+      request: 20m
+      limit: 100m
+    memory:
+      request: 64Mi
+      limit: 128Mi
+
+# Destination controller
+# Handles service discovery and traffic routing
+destinationController:
+  resources:
+    cpu:
+      request: 25m
+      limit: 200m
+    memory:
+      request: 64Mi
+      limit: 128Mi
+
+# Identity controller
+# Manages certificate issuance for mTLS
+identity:
+  issuer:
+    # Use internal CA (auto-generated)
+    scheme: kubernetes.io/tls
+  resources:
+    cpu:
+      request: 20m
+      limit: 100m
+    memory:
+      request: 64Mi
+      limit: 128Mi
+
+# Heartbeat controller (sends usage data to Linkerd)
+# Disabled for privacy
+heartbeatSchedule: ""
+
+# Policy controller
+# Enforces authorization policies
+policyController:
+  resources:
+    cpu:
+      request: 20m
+      limit: 100m
+    memory:
+      request: 64Mi
+      limit: 128Mi
+
+# Control plane replica counts
+# Single replica sufficient for homelab
+controllerReplicas: 1
+
+# Enable high availability mode (false for homelab)
+enablePodAntiAffinity: false
+
+# Pod disruption budgets (disabled for single replica)
+enablePodDisruptionBudget: false
+
+# Prometheus scraping
+# Integrates with existing kube-prometheus-stack
+prometheusUrl: http://kube-prometheus-stack-prometheus.default.svc.cluster.local:9090
+
+# CNI plugin (disabled - using init container approach)
+# Could enable for better compatibility but adds complexity
+cniEnabled: false
+
+# Debug container (disabled for resource efficiency)
+debugContainer:
+  enabled: false
+
+# Proxy init container
+# Configures iptables for traffic interception
+proxyInit:
+  resources:
+    cpu:
+      request: 10m
+      limit: 100m
+    memory:
+      request: 32Mi
+      limit: 64Mi

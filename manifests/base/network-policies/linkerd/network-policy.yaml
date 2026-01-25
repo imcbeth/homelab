@@ -1,0 +1,136 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: linkerd-network-policy
+  namespace: linkerd
+  labels:
+    app.kubernetes.io/name: linkerd
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Intra-namespace communication (control plane components)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd
+      ports:
+        - protocol: TCP
+          port: 8443   # proxy-injector webhook
+        - protocol: TCP
+          port: 8089   # destination
+        - protocol: TCP
+          port: 9443   # policy validator webhook
+        - protocol: TCP
+          port: 9990   # admin
+        - protocol: TCP
+          port: 9996   # policy admin
+        - protocol: TCP
+          port: 9997   # policy grpc
+
+    # Webhook calls from Kubernetes API server (control plane nodes)
+    - from:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 8443   # proxy-injector webhook
+        - protocol: TCP
+          port: 9443   # policy validator webhook
+
+    # Prometheus scraping from default namespace (kube-prometheus-stack)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 9990   # admin metrics
+        - protocol: TCP
+          port: 9996   # policy admin metrics
+
+    # Proxy communication from meshed namespaces
+    # Proxies connect to destination controller for service discovery
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              linkerd.io/inject: enabled
+      ports:
+        - protocol: TCP
+          port: 8086   # destination grpc
+        - protocol: TCP
+          port: 8089   # destination
+
+    # Allow from any namespace that might be meshed (for service discovery)
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8086   # destination grpc
+        - protocol: TCP
+          port: 8089   # destination
+
+  egress:
+    # DNS resolution to kube-dns
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Kubernetes API server (ClusterIP)
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # Kubernetes API server (control plane nodes direct)
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    # Intra-namespace communication (control plane components)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd
+      ports:
+        - protocol: TCP
+          port: 8443
+        - protocol: TCP
+          port: 8089
+        - protocol: TCP
+          port: 9443
+        - protocol: TCP
+          port: 9990
+        - protocol: TCP
+          port: 9996
+        - protocol: TCP
+          port: 9997
+        - protocol: TCP
+          port: 8086
+
+    # Identity issuer needs to reach cert-manager if using external CA
+    # (Not needed for internal CA, but included for future flexibility)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cert-manager
+      ports:
+        - protocol: TCP
+          port: 9402
