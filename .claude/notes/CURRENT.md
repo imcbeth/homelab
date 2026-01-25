@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-01-24
+**Last Updated:** 2026-01-25
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -52,10 +52,10 @@
 - NetworkPolicy enabled (PR #291 fixed K8s API egress)
 - UI accessible at https://workflows.k8s.n37.ca (PR #293)
 
-**Known Issue:** external-dns-cloudflare stuck/not syncing
-- Pod starts but produces no sync logs after K8s client creation
-- A records may need manual addition to Cloudflare until resolved
-- Investigate: Cloudflare API token permissions or pod networking
+**External-DNS:** Fixed (2026-01-25)
+- Root cause: domain-filter=k8s.n37.ca rejected the n37.ca zone
+- Fix: Changed to domain-filter=n37.ca (PRs #295-296)
+- All 4 A records + TXT ownership records now auto-managed
 
 **Phase 3 Status:** Complete
 - Service mesh evaluation (next priority)
@@ -63,6 +63,34 @@
 ---
 
 ## Recent Sessions
+
+### 2026-01-25 (Early Morning): External-DNS Fix
+
+**Completed Work:**
+- Diagnosed external-dns-cloudflare not creating DNS records
+- Root cause: `--domain-filter=k8s.n37.ca` rejected the `n37.ca` Cloudflare zone
+- Fix: Changed to `--domain-filter=n37.ca` - ingresses specify exact hostnames
+- Verified all 4 A records + TXT ownership records created in Cloudflare
+- DNS resolution confirmed working for all *.k8s.n37.ca subdomains
+
+**Pull Requests:**
+- **PR #295:** [Merged] fix: Add zone-name-filter for external-dns Cloudflare (partial fix)
+- **PR #296:** [Merged] fix: Use n37.ca domain filter for external-dns Cloudflare (final fix)
+
+**Issues Resolved:**
+1. **external-dns not creating records** - Debug showed "zone n37.ca not in domain filter"
+   - Root cause: domain-filter=k8s.n37.ca fails because k8s.n37.ca is a subdomain, not the zone name
+   - Fix: Changed to domain-filter=n37.ca (the actual Cloudflare zone)
+   - Note: At info log level, no-op syncs don't produce logs (appears stuck but is working)
+
+**DNS Records Created:**
+- A records: argocd.k8s.n37.ca, grafana.k8s.n37.ca, localstack.k8s.n37.ca, workflows.k8s.n37.ca
+- TXT ownership: external-dns-a-*.k8s.n37.ca
+
+**Files Modified:**
+- `manifests/base/external-dns/deployment-cloudflare.yaml` (domain-filter fix)
+
+---
 
 ### 2026-01-24 (Late Night): Argo Workflows Completion & Ingress
 
