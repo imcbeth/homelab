@@ -50,6 +50,20 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # Allow Kubernetes API access (for Promtail pod discovery)
+    # Service ClusterIP (10.96.0.1:443) and actual API server endpoint (10.0.10.0/24:6443)
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32  # Kubernetes API service ClusterIP
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24  # Control plane node network
+      ports:
+        - protocol: TCP
+          port: 6443  # API server port
     # Allow Loki to send alerts to AlertManager in default namespace
     - to:
         - namespaceSelector:
