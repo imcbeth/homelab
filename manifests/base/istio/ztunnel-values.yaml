@@ -1,0 +1,52 @@
+# Ztunnel Values - Istio Ambient Mode L4 Data Plane
+# Optimized for Raspberry Pi 5 cluster (5 nodes, 80GB RAM, 20 ARM cores)
+#
+# Ztunnel is a Rust-based per-node proxy that handles:
+# - mTLS encryption/decryption
+# - L4 authorization policies
+# - Telemetry collection
+#
+# Deployed as DaemonSet (1 pod per node = 5 pods total)
+
+# Resource limits per ztunnel pod
+# 5 nodes × 128Mi = 640Mi total cluster overhead
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+# Logging configuration
+# Ztunnel is Rust-based, uses RUST_LOG format
+env:
+  # Info level for ztunnel, warn for dependencies
+  RUST_LOG: "info,ztunnel=info,hyper=warn"
+
+# Termination grace period
+terminationGracePeriodSeconds: 30
+
+# Pod priority (important for node stability)
+priorityClassName: system-node-critical
+
+# Tolerations to run on all nodes including control plane
+tolerations:
+  - operator: Exists
+    effect: NoSchedule
+  - operator: Exists
+    effect: NoExecute
+
+# Revision (empty for default)
+revision: ""
+
+# Image configuration (defaults to istio release images)
+# Using ARM64 compatible images
+image:
+  # Uses official Istio ztunnel image
+  hub: docker.io/istio
+  tag: ""  # Uses chart appVersion
+
+# Mesh configuration reference
+meshConfig:
+  defaultConfig: {}
