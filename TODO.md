@@ -155,18 +155,20 @@
 - [ ] Set up secret rotation automation for certificates
 - [ ] Create runbook for adding new SealedSecrets
 
-### 9. **Network Policies** ✅ PARTIALLY COMPLETED (2026-01-24)
-- [x] Define NetworkPolicies for namespace isolation (6 namespaces)
+### 9. **Network Policies** ✅ COMPLETE (2026-01-25)
+- [x] Define NetworkPolicies for namespace isolation (9 namespaces)
 - [x] Implement ingress/egress rules for sensitive workloads
   - [x] localstack: Allow velero, ingress-nginx, prometheus; egress DNS only
   - [x] unipoller: Allow prometheus; egress DNS + UniFi controller
-  - [x] loki: Allow promtail, prometheus, grafana; egress DNS + alertmanager
+  - [x] loki: Allow promtail, prometheus, grafana; egress DNS + alertmanager + K8s API
   - [x] trivy-system: Allow prometheus; egress DNS + K8s API + registries
   - [x] velero: Allow prometheus; egress DNS + localstack + B2 + K8s API
   - [x] argo-workflows: Allow ingress-nginx, prometheus; egress DNS + K8s API + B2 (2026-01-24)
+  - [x] cert-manager: Allow webhook validation, prometheus; egress DNS + K8s API + Let's Encrypt + Cloudflare (2026-01-25)
+  - [x] external-dns: Allow prometheus, internal webhook; egress DNS + K8s API + Cloudflare + UniFi (2026-01-25)
+  - [x] metallb-system: Allow prometheus, memberlist, webhook; egress DNS + K8s API (2026-01-25)
 - [x] Test policy enforcement (all tests passed)
 - [ ] Document network segmentation strategy in k8s-docs-n37
-- [ ] Expand to remaining namespaces (cert-manager, external-dns, metallb-system)
 
 **Configuration:** See `manifests/base/network-policies/` for all policy definitions.
 

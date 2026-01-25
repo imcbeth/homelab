@@ -39,10 +39,9 @@
 - Weekend schedule (Sat/Sun 6am-9pm)
 - Grouped updates: ArgoCD, monitoring, networking, security, backup
 
-**Network Policies:** Partially Complete (6 namespaces)
-- localstack, unipoller, loki, trivy-system, velero, argo-workflows isolated
+**Network Policies:** Complete (9 namespaces)
+- All namespaces isolated: localstack, unipoller, loki, trivy-system, velero, argo-workflows, cert-manager, external-dns, metallb-system
 - ArgoCD Application at sync-wave -40
-- Remaining: cert-manager, external-dns, metallb-system
 - **Gotcha:** K8s API egress requires both ClusterIP (10.96.0.1:443) AND control plane network (10.0.10.0/24:6443)
 
 **Argo Workflows:** Deployed (2026-01-24)
