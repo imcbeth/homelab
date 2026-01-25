@@ -50,3 +50,15 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # Allow Linkerd proxy to reach control plane
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd
+      ports:
+        - protocol: TCP
+          port: 8080  # identity
+        - protocol: TCP
+          port: 8086  # destination
+        - protocol: TCP
+          port: 8090  # policy
