@@ -35,6 +35,8 @@ spec:
 
         # Domain filtering
         - --domain-filter=k8s.n37.ca
+        # Zone name filter - k8s.n37.ca is a subdomain of the n37.ca Cloudflare zone
+        - --zone-name-filter=n37.ca
 
         # Policy - upsert-only (safe, won't delete records)
         - --policy=upsert-only
