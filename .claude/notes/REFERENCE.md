@@ -80,6 +80,7 @@
 | Loki singleBinary + external caches | Use internal caching, disable chunksCache/resultsCache | 2026-01-05 |
 | NetworkPolicy K8s API egress with Calico | Allow BOTH ClusterIP (10.96.0.1/32:443) AND control plane network (10.0.10.0/24:6443) | 2026-01-24 |
 | external-dns subdomain zone filtering | Use parent zone as domain-filter (n37.ca not k8s.n37.ca) - ingresses specify exact hostnames | 2026-01-25 |
+| Synology CSI fsGroup race with SQLite | Add `fsGroupChangePolicy: OnRootMismatch` to podSecurityContext | 2026-01-25 |
 | Loki distributed mode conflict | Set `replicas: 0` for caches explicitly | 2026-01-05 |
 | Velero CSI + Kopia conflict | Use CSI exclusively, set `defaultVolumesToFsBackup: false` | 2026-01-05 |
 | CSI snapshots not working | Deploy snapshot-controller alongside CSI driver | 2026-01-05 |

@@ -64,18 +64,18 @@
 
 ## Recent Sessions
 
-### 2026-01-25 (Early Morning): External-DNS Fix
+### 2026-01-25 (Early Morning): External-DNS & Grafana Fixes
 
 **Completed Work:**
-- Diagnosed external-dns-cloudflare not creating DNS records
-- Root cause: `--domain-filter=k8s.n37.ca` rejected the `n37.ca` Cloudflare zone
-- Fix: Changed to `--domain-filter=n37.ca` - ingresses specify exact hostnames
-- Verified all 4 A records + TXT ownership records created in Cloudflare
-- DNS resolution confirmed working for all *.k8s.n37.ca subdomains
+- Diagnosed and fixed external-dns-cloudflare not creating DNS records
+- Diagnosed and fixed Grafana pod mount failure (fsGroup race condition)
+- All 16 ArgoCD applications now Synced and Healthy
 
 **Pull Requests:**
 - **PR #295:** [Merged] fix: Add zone-name-filter for external-dns Cloudflare (partial fix)
 - **PR #296:** [Merged] fix: Use n37.ca domain filter for external-dns Cloudflare (final fix)
+- **PR #297:** [Merged] docs: Update session notes with external-dns fix
+- **PR #298:** [Merged] fix: Add fsGroupChangePolicy for Grafana to fix Synology CSI race
 
 **Issues Resolved:**
 1. **external-dns not creating records** - Debug showed "zone n37.ca not in domain filter"
@@ -83,12 +83,17 @@
    - Fix: Changed to domain-filter=n37.ca (the actual Cloudflare zone)
    - Note: At info log level, no-op syncs don't produce logs (appears stuck but is working)
 
+2. **Grafana pod FailedMount** - `applyFSGroup failed: lstat grafana.db-journal: no such file or directory`
+   - Root cause: Race condition between fsGroup recursive application and SQLite journal file lifecycle
+   - Fix: Added `fsGroupChangePolicy: OnRootMismatch` to skip recursive fsGroup traversal
+
 **DNS Records Created:**
 - A records: argocd.k8s.n37.ca, grafana.k8s.n37.ca, localstack.k8s.n37.ca, workflows.k8s.n37.ca
 - TXT ownership: external-dns-a-*.k8s.n37.ca
 
 **Files Modified:**
 - `manifests/base/external-dns/deployment-cloudflare.yaml` (domain-filter fix)
+- `manifests/base/kube-prometheus-stack/values.yaml` (fsGroupChangePolicy fix)
 
 ---
 
