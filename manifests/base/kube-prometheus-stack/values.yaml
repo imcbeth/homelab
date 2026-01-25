@@ -493,6 +493,9 @@ grafana:
     accessModes:
       - ReadWriteOnce
     size: 5Gi
+  # Fix fsGroup race condition with Synology CSI and SQLite journal files
+  podSecurityContext:
+    fsGroupChangePolicy: OnRootMismatch
   namespaceOverride: ""
   forceDeployDatasources: false
   forceDeployDashboards: false
