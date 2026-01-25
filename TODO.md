@@ -2,6 +2,14 @@
 
 ## ✅ **Recently Completed** (December 2025 - January 2026)
 
+### Infrastructure Fixes (January 2026)
+- **External-DNS Domain Filter Fix** - Fixed subdomain zone filtering (PRs #295-296, 2026-01-25)
+  - Root cause: `--domain-filter=k8s.n37.ca` rejected the `n37.ca` Cloudflare zone
+  - Solution: Use parent zone as domain-filter; ingresses specify exact hostnames
+- **Grafana fsGroup Race Condition** - Fixed mount failure with Synology CSI (PR #298, 2026-01-25)
+  - Root cause: SQLite journal file deleted during fsGroup recursive application
+  - Solution: Added `fsGroupChangePolicy: OnRootMismatch` to podSecurityContext
+
 ### Secrets Management (January 2026)
 - **Sealed Secrets Migration** - Migrated 8 secrets from git-crypt to SealedSecrets (2026-01-14)
 - **External Secrets Removed** - Evaluation complete, Sealed Secrets chosen for simplicity (2026-01-14)
@@ -25,8 +33,9 @@
 - **External-DNS Deployment** - Dual provider setup (Cloudflare + UniFi webhook) for split-horizon DNS (2025-12-27)
   - Cloudflare provider for public DNS records
   - kashalls/external-dns-unifi-webhook v0.7.0 for internal DNS
-  - Automatic DNS record creation for Ingresses (argocd.k8s.n37.ca, grafana.k8s.n37.ca, localstack.k8s.n37.ca)
+  - Automatic DNS record creation for Ingresses (argocd.k8s.n37.ca, grafana.k8s.n37.ca, localstack.k8s.n37.ca, workflows.k8s.n37.ca)
   - TXT registry for ownership tracking
+  - **Fixed domain-filter for subdomain zones** (PRs #295-296, 2026-01-25) - Use parent zone (n37.ca) as domain-filter
 
 ### Documentation
 - **Comprehensive Docs Site** - k8s-docs-n37 Docusaurus site with application guides
@@ -147,13 +156,14 @@
 - [ ] Create runbook for adding new SealedSecrets
 
 ### 9. **Network Policies** ✅ PARTIALLY COMPLETED (2026-01-24)
-- [x] Define NetworkPolicies for namespace isolation (5 namespaces)
+- [x] Define NetworkPolicies for namespace isolation (6 namespaces)
 - [x] Implement ingress/egress rules for sensitive workloads
   - [x] localstack: Allow velero, ingress-nginx, prometheus; egress DNS only
   - [x] unipoller: Allow prometheus; egress DNS + UniFi controller
   - [x] loki: Allow promtail, prometheus, grafana; egress DNS + alertmanager
   - [x] trivy-system: Allow prometheus; egress DNS + K8s API + registries
   - [x] velero: Allow prometheus; egress DNS + localstack + B2 + K8s API
+  - [x] argo-workflows: Allow ingress-nginx, prometheus; egress DNS + K8s API + B2 (2026-01-24)
 - [x] Test policy enforcement (all tests passed)
 - [ ] Document network segmentation strategy in k8s-docs-n37
 - [ ] Expand to remaining namespaces (cert-manager, external-dns, metallb-system)
@@ -202,17 +212,15 @@
 **Phase 1: Argo Workflows Deployment** ✅ Complete
 - [x] Deploy Argo Workflows v3.7.8 (Helm chart 0.47.1)
 - [x] Configure sync-wave: -8 (after LocalStack, before Velero)
-- [x] Set up artifact repository (Backblaze B2 - pending bucket permissions fix)
+- [x] Set up artifact repository (Backblaze B2) ✅ Fixed (PRs #287-289, 2026-01-24)
 - [x] Configure resource limits for Pi cluster constraints:
   - Controller: 50m CPU / 128Mi RAM (request), 100m / 256Mi (limit)
   - Server: 25m CPU / 64Mi RAM (request), 50m / 128Mi (limit)
 - [x] Enable Prometheus ServiceMonitor for workflow metrics
+- [x] NetworkPolicy enabled ✅ Fixed K8s API egress (PR #291, 2026-01-24)
+- [x] Ingress configured at https://workflows.k8s.n37.ca (PR #293, 2026-01-24)
 - [ ] Create Grafana dashboards for workflow monitoring
 - [ ] Set up AlertManager rules for workflow failures
-
-**Known Issues:**
-- B2 artifact storage returns "not entitled" - archiveLogs disabled temporarily
-- NetworkPolicy disabled temporarily while debugging API egress rules
 
 **Phase 2: Workflow Integration**
 - [ ] ARM64 container image build workflows
