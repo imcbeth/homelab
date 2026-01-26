@@ -7,6 +7,11 @@
 # - Resource limits tuned for Pi cluster
 # - ztunnel DaemonSet handles L4 mTLS (deployed separately)
 
+# Enable ambient mode (required for ztunnel to work)
+pilot:
+  env:
+    PILOT_ENABLE_AMBIENT: "true"
+
 # Resource limits for istiod
 resources:
   requests:
