@@ -27,30 +27,30 @@ spec:
           port: 9095   # Loki gRPC
         - protocol: TCP
           port: 7946   # Loki memberlist
-    # Allow Promtail to push logs (within same namespace - direct if not meshed)
+    # Allow intra-namespace communication (direct + HBONE tunneled)
+    # ztunnel uses transparent proxy so source IP is preserved from original pod
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: loki
       ports:
         - protocol: TCP
-          port: 3100  # Loki HTTP API
-    # Allow Prometheus to scrape metrics from default namespace
+          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
+        - protocol: TCP
+          port: 3100   # Loki HTTP API
+    # Allow Prometheus and Grafana from default namespace
+    # Include HBONE port for ztunnel transparent proxy
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: default
       ports:
         - protocol: TCP
-          port: 3100  # Loki metrics endpoint
-    # Allow Grafana to query logs from default namespace
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: default
-      ports:
+          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
         - protocol: TCP
-          port: 3100  # Loki query API
+          port: 3100   # Loki metrics and query endpoint
+        - protocol: TCP
+          port: 3101   # Promtail metrics port
   egress:
     # Allow DNS resolution via kube-dns
     - to:
@@ -88,11 +88,14 @@ spec:
         - protocol: TCP
           port: 9093  # AlertManager API
     # Allow internal communication within loki namespace (Loki components)
+    # Include HBONE port for ztunnel transparent proxy
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: loki
       ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
         - protocol: TCP
           port: 3100
         - protocol: TCP

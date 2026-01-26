@@ -23,13 +23,16 @@ spec:
         - protocol: TCP
           port: 8080   # Metrics port (ztunnel originates connection)
     # Allow Prometheus to scrape metrics from default namespace
+    # Include HBONE port for ztunnel transparent proxy
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: default
       ports:
         - protocol: TCP
-          port: 8080  # Trivy operator metrics port
+          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
+        - protocol: TCP
+          port: 8080   # Trivy operator metrics port
   egress:
     # Allow DNS resolution via kube-dns
     - to:
