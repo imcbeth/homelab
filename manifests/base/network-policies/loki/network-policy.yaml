@@ -12,6 +12,14 @@ spec:
     - Ingress
     - Egress
   ingress:
+    # Allow Istio ambient mesh HBONE traffic from all meshed namespaces
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              istio.io/dataplane-mode: ambient
+      ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS
     # Allow Promtail to push logs (within same namespace)
     - from:
         - namespaceSelector:
