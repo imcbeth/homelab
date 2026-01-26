@@ -7,80 +7,29 @@
 # - Resource limits tuned for Pi cluster
 # - ztunnel DaemonSet handles L4 mTLS (deployed separately)
 
-# Global settings
-global:
-  # Use ambient mode - sidecarless architecture
-  # Traffic is handled by ztunnel DaemonSet instead of sidecars
-  proxy:
-    # Disable sidecar injection by default (ambient mode)
-    autoInject: disabled
+# Environment variables for istiod
+env:
+  PILOT_ENABLE_AMBIENT: "true"
+  # Reduce memory usage
+  PILOT_ENABLE_STATUS: "false"
 
-  # Logging level
-  logging:
-    level: "default:info"
+# Resource limits for istiod
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    cpu: 200m
+    memory: 512Mi
 
-  # Enable ambient mode
-  # This configures istiod to work with ztunnel
-  # instead of traditional envoy sidecars
-  platform: ""
+# Single replica for homelab
+replicaCount: 1
 
-# Pilot (istiod) configuration
-pilot:
-  # Ambient mode flag
-  env:
-    PILOT_ENABLE_AMBIENT: "true"
-    # Reduce memory usage
-    PILOT_ENABLE_STATUS: "false"
-    # Disable unnecessary features for homelab
-    PILOT_ENABLE_ANALYSIS: "false"
+# Disable autoscaling
+autoscaleEnabled: false
 
-  # Resource limits for istiod
-  # More memory than Linkerd control plane but no per-pod overhead
-  resources:
-    requests:
-      cpu: 50m
-      memory: 256Mi
-    limits:
-      cpu: 200m
-      memory: 512Mi
-
-  # Single replica for homelab
-  replicaCount: 1
-
-  # Disable autoscaling
-  autoscaleEnabled: false
-
-  # Pod disruption budget (disabled for single replica)
-  podDisruptionBudget:
-    enabled: false
-
-  # Anti-affinity disabled for small cluster
-  affinity: {}
-
-# Meshconfig
-meshConfig:
-  # Enable access logging for debugging
-  accessLogFile: /dev/stdout
-  accessLogEncoding: JSON
-
-  # Default to ambient mode for new namespaces
-  # Namespaces need explicit label: istio.io/dataplane-mode=ambient
-  defaultConfig:
-    proxyMetadata: {}
-
-  # Prometheus integration
-  enablePrometheusMerge: true
-
-  # Trust domain for mTLS
-  trustDomain: cluster.local
-
-# Telemetry configuration
-telemetry:
-  enabled: true
+# Anti-affinity disabled for small cluster
+affinity: {}
 
 # Revision tag (empty for default)
 revision: ""
-
-# Service type
-service:
-  type: ClusterIP
