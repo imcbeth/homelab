@@ -12,11 +12,11 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Allow Istio ambient mesh HBONE traffic from all meshed namespaces
+    # Allow Istio ambient mesh HBONE traffic (from ztunnel in istio-system)
     - from:
         - namespaceSelector:
             matchLabels:
-              istio.io/dataplane-mode: ambient
+              kubernetes.io/metadata.name: istio-system
       ports:
         - protocol: TCP
           port: 15008  # HBONE mTLS
