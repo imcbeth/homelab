@@ -87,3 +87,15 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: argo-workflows
+    # Allow Istio ambient mesh communication (ztunnel, istiod)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 15008  # ztunnel HBONE
+        - protocol: TCP
+          port: 15012  # istiod gRPC
+        - protocol: TCP
+          port: 15017  # istiod webhook
