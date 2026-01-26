@@ -18,12 +18,6 @@ resources:
     cpu: 100m
     memory: 128Mi
 
-# Logging configuration
-# Ztunnel is Rust-based, uses RUST_LOG format
-env:
-  # Info level for ztunnel, warn for dependencies
-  RUST_LOG: "info,ztunnel=info,hyper=warn"
-
 # Termination grace period
 terminationGracePeriodSeconds: 30
 
