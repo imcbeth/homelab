@@ -10,7 +10,7 @@ spec:
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
       chart: cni
-      targetRevision: 1.24.2
+      targetRevision: 1.24.6
       helm:
         releaseName: istio-cni
         valueFiles:
