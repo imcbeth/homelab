@@ -1,0 +1,44 @@
+# Istio CNI Values - Ambient Mode
+# Optimized for Raspberry Pi 5 cluster (5 nodes, 80GB RAM, 20 ARM cores)
+#
+# The CNI plugin configures pod networking to redirect traffic to ztunnel
+# Deployed as DaemonSet (1 pod per node = 5 pods total)
+
+# Enable ambient mode for CNI
+cni:
+  # Ambient mode redirects traffic at CNI level
+  ambient:
+    enabled: true
+
+  # Resource limits per CNI pod
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+  # Logging level
+  logLevel: info
+
+  # CNI binary/config paths (Kubernetes defaults)
+  cniBinDir: /opt/cni/bin
+  cniConfDir: /etc/cni/net.d
+
+  # Repair functionality (fixes pod networking issues)
+  repair:
+    enabled: true
+
+# Tolerations to run on all nodes including control plane
+tolerations:
+  - operator: Exists
+    effect: NoSchedule
+  - operator: Exists
+    effect: NoExecute
+
+# Pod priority
+priorityClassName: system-node-critical
+
+# Revision (empty for default)
+revision: ""
