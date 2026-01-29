@@ -61,6 +61,7 @@
 - Namespaces: default, loki, argo-workflows, localstack, unipoller, trivy-system
 - Resource usage: ~38m CPU, ~145Mi memory (istiod + cni + ztunnel)
 - Waypoint proxies: Skipped (L4 mTLS sufficient, add later if L7 needed)
+- ArgoCD: 18/20 Synced (istio-cni, istiod show OutOfSync due to Helm chart label drift - cosmetic only)
 - **Gotcha:** Transparent proxy preserves source IPs; NetworkPolicies need HBONE port 15008 from source namespace
 
 **Phase 3 Status:** Complete
@@ -69,6 +70,34 @@
 ---
 
 ## Recent Sessions
+
+### 2026-01-28 (Evening): Istio ArgoCD Sync Fixes
+
+**Completed Work:**
+- Added `ignoreDifferences` to Istio ArgoCD applications for webhook caBundle drift
+- Switched from jsonPointers to jqPathExpressions for broader label/annotation matching
+- Added RespectIgnoreDifferences sync option
+- Cleaned up temporary `istio-1.24.2/` directory
+
+**Pull Requests:**
+- **PR #320:** [Merged] docs: Update CURRENT.md with Istio Ambient session
+- **PR #321:** [Merged] fix: Add ignoreDifferences for Istio webhook drift
+- **PR #322:** [Merged] fix: Improve Istio ignoreDifferences with jqPathExpressions
+
+**ArgoCD Status After Fixes:**
+- 18/20 applications Synced and Healthy
+- 2 apps (istio-cni, istiod) show OutOfSync but Healthy
+- OutOfSync is cosmetic - Istio Helm chart adds operator labels at runtime
+
+**Key Learning:**
+Istio's Helm chart dynamically adds labels like `install.operator.istio.io/owning-resource` and `operator.istio.io/component` that cause perpetual drift. Using `jqPathExpressions` with broad label ignores helps but doesn't fully resolve. The apps function correctly despite the OutOfSync status.
+
+**Files Modified:**
+- `manifests/applications/istio-base.yaml` (ignoreDifferences)
+- `manifests/applications/istio-cni.yaml` (ignoreDifferences + RespectIgnoreDifferences)
+- `manifests/applications/istiod.yaml` (ignoreDifferences + RespectIgnoreDifferences)
+
+---
 
 ### 2026-01-28: Istio Ambient NetworkPolicy Fixes
 
