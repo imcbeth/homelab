@@ -168,7 +168,7 @@
   - [x] external-dns: Allow prometheus, internal webhook; egress DNS + K8s API + Cloudflare + UniFi (2026-01-25)
   - [x] metallb-system: Allow prometheus, memberlist, webhook; egress DNS + K8s API (2026-01-25)
 - [x] Test policy enforcement (all tests passed)
-- [ ] Document network segmentation strategy in k8s-docs-n37
+- [x] Document network segmentation strategy in k8s-docs-n37 (PR #60, 2026-01-29)
 
 **Configuration:** See `manifests/base/network-policies/` for all policy definitions.
 
