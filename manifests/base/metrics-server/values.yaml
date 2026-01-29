@@ -99,13 +99,11 @@ service:
   labels: {}
 
 # Prometheus ServiceMonitor
+# NOTE: Disabled Helm-generated ServiceMonitor because it doesn't support
+# scheme: https and tlsConfig options required for metrics-server.
+# Using manual servicemonitor.yaml instead (applied via ArgoCD third source).
 serviceMonitor:
-  enabled: true
-  # Enable Prometheus scraping of metrics-server metrics
-  additionalLabels:
-    release: kube-prometheus-stack
-  interval: 1m
-  scrapeTimeout: 10s
+  enabled: false
 
 # Liveness probe
 livenessProbe:

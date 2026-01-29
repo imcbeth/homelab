@@ -12,6 +12,14 @@ spec:
     - Ingress
     - Egress
   ingress:
+    # Allow intra-namespace communication (scan jobs -> trivy-server)
+    - from:
+        - podSelector: {}  # Any pod in trivy-system namespace
+      ports:
+        - protocol: TCP
+          port: 4954   # Trivy server port
+        - protocol: TCP
+          port: 8080   # Metrics port
     # Allow Istio ambient mesh traffic (ztunnel proxies all connections in ambient mode)
     - from:
         - namespaceSelector:
@@ -34,6 +42,12 @@ spec:
         - protocol: TCP
           port: 8080   # Trivy operator metrics port
   egress:
+    # Allow intra-namespace communication (scan jobs -> trivy-server)
+    - to:
+        - podSelector: {}  # Any pod in trivy-system namespace
+      ports:
+        - protocol: TCP
+          port: 4954   # Trivy server port
     # Allow DNS resolution via kube-dns
     - to:
         - namespaceSelector:
