@@ -31,8 +31,9 @@
 
 **Monitoring:** Operational
 - AlertManager email: 121 sent, 0 failed
-- Trivy scanning: 10 CRITICAL (blocked on upstream)
-- All Prometheus targets healthy
+- Trivy scanning: VulnerabilityReports now generating (NetworkPolicy fixed)
+- All Prometheus targets healthy (metrics-server HTTPS scraping fixed)
+- Argo Workflows: Grafana dashboard deployed with ServiceMonitor
 - Promtail: Using selective labelmap to stay under Loki's 15 label limit
 - Blackbox-exporter: Uses hostAliases for internal HTTPS probes (hairpin NAT fix)
 
@@ -72,6 +73,55 @@
 ---
 
 ## Recent Sessions
+
+### 2026-01-29 (Evening): Monitoring Fixes & Network Policy Documentation
+
+**Completed Work:**
+- Created Argo Workflows Grafana dashboard with ServiceMonitor
+- Fixed metrics-server ServiceMonitor (was showing DOWN in Prometheus)
+- Fixed Trivy NetworkPolicy blocking vulnerability scans
+- Documented network segmentation strategy in k8s-docs-n37
+
+**Pull Requests:**
+- **PR #330:** [Merged] feat: Add Argo Workflows Grafana dashboard and enable ServiceMonitor
+- **PR #331:** [Merged] fix: Enable metrics-server HTTPS scraping and Trivy intra-namespace communication
+- **PR #332:** docs: Mark network policies documentation as complete
+- **PR #60 (k8s-docs-n37):** docs: Update NetworkPolicies documentation with current implementation
+
+**Issues Resolved:**
+
+1. **Metrics-Server ServiceMonitor DOWN**
+   - Root cause: Helm chart doesn't support `scheme: https` or `tlsConfig`
+   - Manual `servicemonitor.yaml` existed but wasn't applied (ArgoCD `ref:` only source)
+   - Fix: Disabled Helm ServiceMonitor, added third ArgoCD source to apply manual manifests
+
+2. **Trivy Dashboard Empty / No VulnerabilityReports**
+   - Root cause: NetworkPolicy blocked intra-namespace communication
+   - Scan jobs couldn't connect to trivy-server (port 4954)
+   - Fix: Added egress/ingress rules for intra-namespace traffic
+
+**Argo Workflows Dashboard Panels:**
+- Overview: Total/Running/Succeeded/Failed/Error counts, Controller health
+- Trends: Status over time, Operation duration percentiles (p50/p95/p99)
+- Controller: Memory, CPU, Goroutines
+- Queue: Depth and add rate
+- Pods: Workflow pod counts and status table
+
+**Network Policy Documentation (k8s-docs-n37):**
+- Updated from 5 to 9 protected namespaces
+- Added Istio Ambient mesh patterns (HBONE port 15008)
+- Added K8s API dual-egress pattern explanation
+- Architecture diagrams and troubleshooting guides
+
+**Files Modified:**
+- `manifests/base/argo-workflows/values.yaml` (ServiceMonitor config)
+- `manifests/base/grafana/dashboards/argo-workflows-dashboard.yaml` (new)
+- `manifests/base/grafana/dashboards/kustomization.yaml`
+- `manifests/applications/metrics-server.yaml` (third source)
+- `manifests/base/metrics-server/values.yaml` (disable Helm ServiceMonitor)
+- `manifests/base/network-policies/trivy-system/network-policy.yaml`
+
+---
 
 ### 2026-01-29 (Afternoon): Documentation Updates
 
