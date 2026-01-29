@@ -7,6 +7,21 @@ metadata:
     argocd.argoproj.io/sync-wave: "-44"
 spec:
   project: infrastructure
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      jsonPointers:
+        - /webhooks/0/clientConfig/caBundle
+        - /webhooks/0/failurePolicy
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jsonPointers:
+        - /webhooks/0/clientConfig/caBundle
+        - /webhooks/0/failurePolicy
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/template/metadata/labels/istio.io~1rev
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
       chart: istiod
