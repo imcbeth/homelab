@@ -176,13 +176,15 @@
 
 ## 🚀 **Platform Enhancements**
 
-### 10. **Service Mesh Evaluation**
-- [ ] Research lightweight service mesh options for Pi cluster
-- [ ] Evaluate **Linkerd** (lightweight, Pi-friendly)
-- [ ] Evaluate **Istio** (full-featured but resource-intensive)
-- [ ] Proof-of-concept deployment in test namespace
-- [ ] Performance impact analysis on Pi 5 cluster
-- [ ] Document decision and implementation plan
+### 10. **Service Mesh** ✅ DEPLOYED (2026-01-28)
+- [x] Research lightweight service mesh options for Pi cluster
+- [x] Evaluate **Linkerd** (lightweight, Pi-friendly) - Considered but Istio Ambient selected
+- [x] Evaluate **Istio** (full-featured but resource-intensive) - Istio Ambient mode chosen
+- [x] Proof-of-concept deployment in test namespace
+- [x] Performance impact analysis on Pi 5 cluster (~38m CPU, ~145Mi memory)
+- [x] Document decision and implementation plan
+- **Status:** Istio Ambient Mesh deployed with mTLS on 29 pods across 6 namespaces
+- **Note:** 18/20 ArgoCD apps Synced (istio-cni, istiod show cosmetic OutOfSync from Helm label drift)
 
 ### 11. **Ingress Enhancements**
 - [ ] Document current nginx-ingress configuration
@@ -221,7 +223,7 @@
 - [x] Enable Prometheus ServiceMonitor for workflow metrics
 - [x] NetworkPolicy enabled ✅ Fixed K8s API egress (PR #291, 2026-01-24)
 - [x] Ingress configured at https://workflows.k8s.n37.ca (PR #293, 2026-01-24)
-- [ ] Create Grafana dashboards for workflow monitoring
+- [x] Create Grafana dashboards for workflow monitoring (2026-01-29)
 - [ ] Set up AlertManager rules for workflow failures
 
 **Phase 2: Workflow Integration**
@@ -360,9 +362,9 @@ Items are organized by priority, not by timeline. Focus on:
 
 ### **Phase 3: Advanced Features** ✅ Complete
 1. ✅ GitOps enhancements (Renovate deployed 2026-01-23)
-2. ✅ Network policies implementation (5 namespaces isolated 2026-01-24)
+2. ✅ Network policies implementation (9 namespaces isolated 2026-01-25)
 3. ✅ Development tools and CI/CD (Argo Workflows deployed 2026-01-24)
-4. Service mesh evaluation and potential deployment
+4. ✅ Service mesh (Istio Ambient deployed 2026-01-28)
 
 ### **Phase 4: Optimization & Expansion**
 1. Resource optimization and VPA

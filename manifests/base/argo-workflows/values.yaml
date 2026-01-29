@@ -35,6 +35,19 @@ controller:
   # Metrics configuration
   metricsConfig:
     enabled: true
+    port: 9090
+    portName: metrics
+    servicePort: 8080
+    servicePortName: metrics
+
+  # ServiceMonitor for Prometheus scraping
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+    namespace: argo-workflows
+    interval: 60s
+    scrapeTimeout: 10s
 
   # Service account for controller
   serviceAccount:
@@ -109,9 +122,8 @@ workflow:
     create: true
 
 # =============================================================================
-# Monitoring - Prometheus Integration
+# Main Container Resources (for workflow pods)
 # =============================================================================
-# ServiceMonitor for Prometheus scraping
 mainContainer:
   resources:
     requests:
@@ -120,10 +132,6 @@ mainContainer:
     limits:
       cpu: 100m
       memory: 128Mi
-
-# Enable metrics
-controller.metricsConfig:
-  enabled: true
 
 # =============================================================================
 # RBAC Configuration
