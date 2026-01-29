@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-01-28
+**Last Updated:** 2026-01-29
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -34,6 +34,7 @@
 - Trivy scanning: 10 CRITICAL (blocked on upstream)
 - All Prometheus targets healthy
 - Promtail: Using selective labelmap to stay under Loki's 15 label limit
+- Blackbox-exporter: Uses hostAliases for internal HTTPS probes (hairpin NAT fix)
 
 **Dependency Management:** Complete
 - Renovate GitHub App deployed
@@ -71,6 +72,30 @@
 ---
 
 ## Recent Sessions
+
+### 2026-01-29: Blackbox-Exporter Hairpin NAT Fix
+
+**Completed Work:**
+- Diagnosed blackbox-exporter failing to probe internal HTTPS endpoints
+- Root cause: DNS resolves to external MetalLB IP (10.0.10.10), causing hairpin NAT timeout
+- Fix: Added `hostAliases` to resolve internal hostnames to ingress ClusterIP (10.98.168.24)
+
+**Pull Requests:**
+- **PR #327:** [Merged] fix: Add hostAliases to blackbox-exporter for hairpin NAT
+
+**Key Learning:**
+Pods inside the cluster cannot reach external IPs that route back to the same cluster (hairpin NAT). Solution: Use `hostAliases` to map hostnames directly to internal ClusterIPs.
+
+**Hostnames Fixed:**
+- argocd.k8s.n37.ca
+- grafana.k8s.n37.ca
+- workflows.k8s.n37.ca
+- localstack.k8s.n37.ca
+
+**Files Modified:**
+- `manifests/base/kube-prometheus-stack/blackbox-exporter-deployment.yaml`
+
+---
 
 ### 2026-01-28 (Late Night): Promtail Label Limit Fix
 
