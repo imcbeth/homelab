@@ -56,9 +56,13 @@ config:
           - source_labels:
               - __meta_kubernetes_pod_node_name
             target_label: node
-          # Add pod labels as Loki labels
+          # Add pod labels as Loki labels (selective to avoid label limit)
           - action: labelmap
             regex: __meta_kubernetes_pod_label_(.+)
+          # Drop noisy labels to stay under Loki's 15 label limit
+          # These labels have high cardinality or aren't useful for querying
+          - action: labeldrop
+            regex: (controller_revision_hash|pod_template_generation|pod_template_hash|helm_sh_chart|app_kubernetes_io_version|app_kubernetes_io_managed_by|statefulset_kubernetes_io_pod_name|apps_kubernetes_io_pod_index)
           # Set the log file path
           - source_labels:
               - __meta_kubernetes_pod_uid
