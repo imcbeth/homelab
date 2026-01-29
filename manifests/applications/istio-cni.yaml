@@ -7,6 +7,11 @@ metadata:
     argocd.argoproj.io/sync-wave: "-42"
 spec:
   project: infrastructure
+  ignoreDifferences:
+    - group: apps
+      kind: DaemonSet
+      jsonPointers:
+        - /spec/template/metadata/labels/istio.io~1rev
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
       chart: cni
