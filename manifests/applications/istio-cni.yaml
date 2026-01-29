@@ -10,8 +10,11 @@ spec:
   ignoreDifferences:
     - group: apps
       kind: DaemonSet
-      jsonPointers:
-        - /spec/template/metadata/labels/istio.io~1rev
+      jqPathExpressions:
+        - .metadata.labels
+        - .metadata.annotations
+        - .spec.template.metadata.labels
+        - .spec.template.metadata.annotations
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
       chart: cni
@@ -33,3 +36,4 @@ spec:
       selfHeal: true
     syncOptions:
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
