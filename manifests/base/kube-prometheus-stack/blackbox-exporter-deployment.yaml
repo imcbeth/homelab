@@ -20,50 +20,60 @@ spec:
         prometheus.io/port: "9115"
         prometheus.io/path: "/metrics"
     spec:
+      # Resolve internal hostnames to ingress ClusterIP to avoid hairpin NAT
+      # Note: Update this IP if ingress-nginx-controller service is recreated
+      # Get current IP: kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.clusterIP}'
+      hostAliases:
+        - ip: "10.98.168.24"  # ingress-nginx-controller ClusterIP (stable unless service recreated)
+          hostnames:
+            - "argocd.k8s.n37.ca"
+            - "grafana.k8s.n37.ca"
+            - "workflows.k8s.n37.ca"
+            - "localstack.k8s.n37.ca"
       containers:
-      - name: blackbox-exporter
-        image: prom/blackbox-exporter:v0.28.0
-        args:
-        - "--config.file=/config/blackbox.yml"
-        - "--log.level=info"
-        ports:
-        - name: http
-          containerPort: 9115
-          protocol: TCP
-        resources:
-          requests:
-            cpu: 50m
-            memory: 64Mi
-          limits:
-            cpu: 200m
-            memory: 128Mi
-        volumeMounts:
-        - name: config
-          mountPath: /config
-          readOnly: true
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: http
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: http
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        securityContext:
-          runAsNonRoot: true
-          runAsUser: 65534
-          readOnlyRootFilesystem: true
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-            add:
-            - NET_RAW  # Required for ICMP probes
+        - name: blackbox-exporter
+          image: prom/blackbox-exporter:v0.28.0
+          args:
+            - "--config.file=/config/blackbox.yml"
+            - "--log.level=info"
+          ports:
+            - name: http
+              containerPort: 9115
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_RAW  # Required for ICMP probes
       volumes:
-      - name: config
-        configMap:
-          name: blackbox-exporter-config
+        - name: config
+          configMap:
+            name: blackbox-exporter-config
