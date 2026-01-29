@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-01-25
+**Last Updated:** 2026-01-28
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -56,12 +56,52 @@
 - Fix: Changed to domain-filter=n37.ca (PRs #295-296)
 - All 4 A records + TXT ownership records now auto-managed
 
+**Istio Ambient Mesh:** Deployed (2026-01-28)
+- 29 pods across 6 namespaces with mTLS (HBONE protocol)
+- Namespaces: default, loki, argo-workflows, localstack, unipoller, trivy-system
+- Resource usage: ~38m CPU, ~145Mi memory (istiod + cni + ztunnel)
+- Waypoint proxies: Skipped (L4 mTLS sufficient, add later if L7 needed)
+- **Gotcha:** Transparent proxy preserves source IPs; NetworkPolicies need HBONE port 15008 from source namespace
+
 **Phase 3 Status:** Complete
-- Service mesh evaluation (next priority)
+- Service mesh deployed (Istio Ambient selected over Linkerd)
 
 ---
 
 ## Recent Sessions
+
+### 2026-01-28: Istio Ambient NetworkPolicy Fixes
+
+**Completed Work:**
+- Fixed critical NetworkPolicy issues for Istio Ambient transparent proxy
+- Updated all meshed namespace policies with HBONE port 15008 rules
+- 29 pods now have mTLS across 6 namespaces
+- Documented NetworkPolicy pattern for transparent proxy architecture
+
+**Pull Requests:**
+- **PR #315:** [Merged] fix: Add HBONE ingress rules for Istio ambient mesh
+- **PR #316:** [Merged] fix: Correct HBONE ingress selector for Istio ambient mesh
+- **PR #317:** [Merged] fix: Allow application ports from istio-system for ambient mesh
+- **PR #318:** [Merged] fix: Add HBONE port 15008 for Istio ambient transparent proxy
+- **PR #319:** [Merged] docs: Add session notes for Istio Ambient NetworkPolicy fixes
+
+**Key Technical Learning:**
+Istio Ambient uses transparent proxy (TPROXY) which preserves source IPs. NetworkPolicies must:
+1. Allow HBONE port 15008 from the actual source namespace (not just istio-system)
+2. Include port 15008 in both ingress AND egress rules for mesh communication
+3. Allow app ports from istio-system for ztunnel-terminated connections
+
+**Resource Usage:**
+| Component | Instances | CPU | Memory |
+|-----------|-----------|-----|--------|
+| istiod | 1 | ~3m | ~39Mi |
+| istio-cni-node | 5 | ~5m | ~68Mi |
+| ztunnel | 5 | ~30m | ~38Mi |
+
+**Files Modified:**
+- `manifests/base/network-policies/{loki,localstack,argo-workflows,unipoller,trivy-system}/network-policy.yaml`
+
+---
 
 ### 2026-01-25 (Early Morning): External-DNS, Grafana & Promtail Fixes
 
@@ -208,123 +248,13 @@ With Calico CNI, K8s API access requires BOTH:
 
 ---
 
-### 2026-01-23 (Evening): Renovate PR Merge & Velero v1.17 Breaking Change Fix
-
-**Completed Work:**
-- Reviewed and merged 20 Renovate PRs for automated dependency updates
-- Fixed Velero CrashLoopBackOff after v11.3.2 chart upgrade
-- Fixed ArgoCD apps not syncing new chart versions from git
-- All 14 ArgoCD applications now Synced and Healthy
-
-**Pull Requests:**
-- **PR #261-265:** [Merged] Grouped minor updates (ArgoCD, monitoring, networking, security, backup)
-- **PR #270:** [Merged] kube-prometheus-stack major update to v81.2.2
-- **PR #271:** [Merged] Velero major update to v11.3.2
-- **PR #254-260, #266-269:** [Merged] Docker image updates
-
-**Issues Resolved:**
-1. **Velero CrashLoopBackOff** - Error: `unknown flag: --keep-latest-maintenance-jobs`
-   - Root cause: Velero v1.17 removed this CLI flag (deprecated since v1.14)
-   - Fix: ArgoCD wasn't syncing new chart version; recreating the Application forced correct sync
-   - New approach: Uses `--repo-maintenance-job-configmap` instead of CLI flag
-
-2. **ArgoCD not syncing chart versions** - Apps showed old targetRevision despite git updates
-   - Fix: Delete and recreate ArgoCD Application to force sync from git
-   - Affected: velero, kube-prometheus-stack, sealed-secrets
-
-**Chart Version Updates:**
-| Chart | Old Version | New Version |
-|-------|-------------|-------------|
-| velero | 8.2.0 | 11.3.2 |
-| kube-prometheus-stack | 80.6.0 | 81.2.2 |
-| argocd | 7.8.2 | 7.8.7 |
-| loki | 6.27.0 | 6.28.0 |
-| promtail | 6.17.1 | 6.17.2 |
-| sealed-secrets | 2.17.1 | 2.17.2 |
-| trivy-operator | 0.28.1 | 0.28.2 |
-
-**Final Cluster Status:**
-- 14/14 applications Synced and Healthy
-- Velero v1.17.2 operational with B2 backups
-- All scheduled backups running successfully
-
----
-
-### 2026-01-21 (Evening): Restructure CLAUDE_NOTES.md for Efficient Context
-
-**Completed Work:**
-- Restructured CLAUDE_NOTES.md into modular `.claude/notes/` system
-- Created CURRENT.md (242 lines) - last 5 sessions + current state
-- Created REFERENCE.md (164 lines) - stable gotchas, patterns, architecture
-- Created 14 individual session files in `sessions/` for historical lookup
-- Updated `/catch-up` skill to use new structure
-- Moved CLAUDE_NOTES_2025.md to sessions/ARCHIVE-2025.md
-- Deleted monolithic CLAUDE_NOTES.md (3,259 lines)
-
-**Pull Requests:**
-- **PR #247:** [Merged] refactor: Restructure CLAUDE_NOTES.md for efficient session context
-
-**Problem Solved:**
-CLAUDE_NOTES.md grew to 3,259 lines (~40K tokens) - exceeding Claude's 25K token read limit. The `/catch-up` skill could no longer read the full file.
-
-**New Structure:**
-```
-.claude/notes/
-├── CURRENT.md       # 242 lines - always readable
-├── REFERENCE.md     # 164 lines - stable patterns/gotchas
-└── sessions/        # 15 archived session files (grep-able)
-```
-
-**Benefits:**
-- 93% reduction in primary context file
-- Always-readable current context
-- Searchable history via grep
-- Sustainable growth through natural archiving
-
-**Files Modified:**
-- `.claude/notes/CURRENT.md` (new)
-- `.claude/notes/REFERENCE.md` (new)
-- `.claude/notes/sessions/*.md` (14 new files)
-- `.claude/skills/catch-up/SKILL.md` (updated)
-- `CLAUDE_NOTES.md` (deleted)
-
----
-
-### 2026-01-14 (Evening): Sealed Secrets Ops, Key Backup, B2 Restore, Monitoring & ArgoCD Backup
-
-**Completed Work:**
-- Created SEALED-SECRETS.md - Comprehensive operations guide for secret rotation and key management
-- Updated secrets/README.md - Added reference to new operations guide
-- Updated k8s-docs-n37 secrets-management.md - Added rotation procedures to documentation site
-- Backed up sealing key - Stored on Synology NAS
-- Tested Velero restore from Backblaze B2 - Full backup/restore cycle validated
-- Verified AlertManager email delivery - 121 emails sent, 0 failures
-- Checked Trivy vulnerability posture - 10 CRITICAL (blocked on upstream)
-- Added ArgoCD daily backup schedule - Velero schedule at 1:30 AM daily
-- Updated TODO.md - Marked all High Priority backup tasks complete
-
-**Pull Requests:**
-- **PR #240:** [Merged] docs: Add Sealed Secrets operations guide with rotation procedures (homelab)
-- **PR #53:** [Merged] docs: Add comprehensive secret rotation procedures (k8s-docs-n37)
-- **PR #241-245:** [Merged] Various documentation updates and ArgoCD backup automation
-
-**Key Details:**
-- Sealing key backup location: `/Volumes/homes/imcbeth/Documents/sealed-secrets-key-backup-20260114.yaml`
-- Velero B2 restore validated with unipoller namespace test
-- ArgoCD backup schedule: `velero-daily-argocd` at 1:30 AM, 30-day retention
-
-**Files Modified:**
-- `secrets/SEALED-SECRETS.md` (new - ~450 lines)
-- `secrets/README.md` (updated)
-- `manifests/base/velero/values.yaml` (added daily-argocd schedule)
-- `TODO.md` (marked backup tasks complete)
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-01-23 | Renovate PR Merge & Velero Fix | 20 PRs merged, Velero v1.17 breaking change |
+| 2026-01-21 | Restructure CLAUDE_NOTES.md | Modular notes system, 93% reduction |
+| 2026-01-14 | Sealed Secrets Ops & Backups | Key backup, B2 restore test, ArgoCD backup |
 | 2026-01-14 | Documentation Update - Sealed Secrets | k8s-docs-n37, Security section |
 | 2026-01-14 | Secrets Migration Completion | ESO removal, 8 SealedSecrets final |
 | 2026-01-14 | Secrets Migration Git-crypt to Sealed | 8 secrets migrated, encryption fixes |
