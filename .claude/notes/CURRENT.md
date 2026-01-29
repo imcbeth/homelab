@@ -33,6 +33,7 @@
 - AlertManager email: 121 sent, 0 failed
 - Trivy scanning: 10 CRITICAL (blocked on upstream)
 - All Prometheus targets healthy
+- Promtail: Using selective labelmap to stay under Loki's 15 label limit
 
 **Dependency Management:** Complete
 - Renovate GitHub App deployed
@@ -70,6 +71,38 @@
 ---
 
 ## Recent Sessions
+
+### 2026-01-28 (Late Night): Promtail Label Limit Fix
+
+**Completed Work:**
+- Fixed promtail errors: "has 17 label names; limit 15"
+- Istio pods (ztunnel, istio-cni-node) have 17+ Kubernetes labels
+- Initial `labeldrop` approach failed (relabel_configs process original labels)
+- Implemented selective `labelmap` to only capture essential labels
+
+**Pull Requests:**
+- **PR #324:** [Merged] fix: Drop noisy labels in promtail (didn't work)
+- **PR #325:** [Merged] fix: Use selective labelmap in promtail for Loki label limit
+
+**Key Learning:**
+Promtail `labeldrop` in relabel_configs doesn't work after `labelmap` because relabel_configs process against the original label set, not transformed labels. Solution: use selective `labelmap` regex to only capture needed labels.
+
+**Selective Labelmap Pattern:**
+```yaml
+- action: labelmap
+  regex: __meta_kubernetes_pod_label_(app|app_kubernetes_io_name|app_kubernetes_io_instance|app_kubernetes_io_component|app_kubernetes_io_part_of|k8s_app|service_name)
+```
+
+**Label Count After Fix:**
+- Fixed: namespace, pod, container, node (4)
+- Mapped: up to 7 essential labels
+- Auto: filename, stream (2)
+- **Total: max 13 labels** (under 15 limit)
+
+**Files Modified:**
+- `manifests/base/promtail/values.yaml`
+
+---
 
 ### 2026-01-28 (Evening): Istio ArgoCD Sync Fixes
 
