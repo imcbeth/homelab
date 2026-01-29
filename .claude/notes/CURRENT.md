@@ -73,7 +73,25 @@
 
 ## Recent Sessions
 
-### 2026-01-29: Blackbox-Exporter Hairpin NAT Fix
+### 2026-01-29 (Afternoon): Documentation Updates
+
+**Completed Work:**
+- Updated k8s-docs-n37 documentation with recent fixes
+- Added hairpin NAT troubleshooting to blackbox-exporter.md
+- Added Promtail selective labelmap section to loki.md
+- Expanded Istio ArgoCD OutOfSync fix in istio.md
+- Extracted reusable patterns as learned skills
+
+**Pull Requests:**
+- **PR #59 (k8s-docs-n37):** docs: Add troubleshooting sections for recent fixes
+
+**Learned Skills Extracted:**
+- `~/.claude/skills/learned/kubernetes-hairpin-nat-workaround.md`
+- `~/.claude/skills/learned/promtail-loki-label-limit.md`
+
+---
+
+### 2026-01-29 (Morning): Blackbox-Exporter Hairpin NAT Fix
 
 **Completed Work:**
 - Diagnosed blackbox-exporter failing to probe internal HTTPS endpoints
