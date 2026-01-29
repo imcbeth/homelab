@@ -10,9 +10,9 @@ spec:
   ignoreDifferences:
     - group: admissionregistration.k8s.io
       kind: ValidatingWebhookConfiguration
-      jsonPointers:
-        - /webhooks/0/clientConfig/caBundle
-        - /webhooks/0/failurePolicy
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+        - .webhooks[].failurePolicy
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
       chart: base
