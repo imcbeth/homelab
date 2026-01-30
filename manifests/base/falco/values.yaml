@@ -54,10 +54,6 @@ falco:
     enabled: true
     url: ""
 
-  # gRPC output for sidekick
-  grpcOutput:
-    enabled: true
-
   # Syscall event drops - buffer tuning
   syscallEventDrops:
     threshold: 0.1
@@ -111,12 +107,6 @@ customRules:
       override:
         enabled: replace
       enabled: false
-
-    # Reduce priority of package management (common in dev/test)
-    - rule: Launch Package Management Process in Container
-      override:
-        priority: replace
-      priority: WARNING
 
     # Custom rule: Detect cryptocurrency mining
     - rule: Detect Cryptocurrency Mining
