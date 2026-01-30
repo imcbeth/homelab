@@ -58,6 +58,16 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # Allow DNS to internal recursive nameserver (10.0.10.1 - Gateway)
+    # Used for ACME DNS-01 challenge propagation checks
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.1/32
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
     # Allow Kubernetes API access
     - to:
         - ipBlock:
