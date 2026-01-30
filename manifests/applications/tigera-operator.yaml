@@ -64,6 +64,6 @@ spec:
     # CRDs have runtime fields that differ from upstream
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
-      jsonPointers:
-        - /metadata/annotations
-        - /spec/preserveUnknownFields
+      jqPathExpressions:
+        - .metadata.annotations
+        - .spec.preserveUnknownFields
