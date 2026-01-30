@@ -1,0 +1,157 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argo-workflows-alerts
+  namespace: argo-workflows
+  labels:
+    app: argo-workflows
+    prometheus: kube-prometheus
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: argo_workflows
+    interval: 60s
+    rules:
+    - alert: ArgoWorkflowFailed
+      expr: increase(argo_workflows_gauge{status="Failed"}[1h]) > 0
+      for: 1m
+      labels:
+        severity: warning
+        component: workflows
+      annotations:
+        summary: "Argo Workflow failed"
+        description: |
+          {{ $value }} workflow(s) failed in the last hour.
+
+          Troubleshooting:
+          1. argo list -n argo-workflows --status Failed
+          2. argo get -n argo-workflows <workflow-name>
+          3. argo logs -n argo-workflows <workflow-name>
+
+    - alert: ArgoWorkflowError
+      expr: increase(argo_workflows_gauge{status="Error"}[1h]) > 0
+      for: 1m
+      labels:
+        severity: critical
+        component: workflows
+      annotations:
+        summary: "Argo Workflow errored"
+        description: |
+          {{ $value }} workflow(s) ended in error state in the last hour.
+          Error state indicates a system-level failure (not workflow logic failure).
+
+          Troubleshooting:
+          1. argo list -n argo-workflows --status Error
+          2. kubectl logs -n argo-workflows -l app.kubernetes.io/name=argo-workflows-workflow-controller
+          3. kubectl get events -n argo-workflows --sort-by='.lastTimestamp'
+
+    - alert: ArgoWorkflowControllerErrors
+      expr: increase(argo_workflows_error_count[15m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: workflows
+      annotations:
+        summary: "Argo Workflow controller errors"
+        description: |
+          Controller error: {{ $labels.cause }}
+          Error count in last 15m: {{ $value }}
+
+          Troubleshooting:
+          1. kubectl logs -n argo-workflows -l app.kubernetes.io/name=argo-workflows-workflow-controller
+          2. kubectl get events -n argo-workflows --sort-by='.lastTimestamp'
+
+    - alert: ArgoWorkflowStuck
+      expr: argo_workflows_gauge{status="Running"} > 0 and argo_workflows_queue_longest_running > 3600
+      for: 10m
+      labels:
+        severity: warning
+        component: workflows
+      annotations:
+        summary: "Argo Workflow running for over 1 hour"
+        description: |
+          A workflow has been running for {{ $value | humanizeDuration }}.
+          This may indicate a stuck or hung workflow.
+
+          Troubleshooting:
+          1. argo list -n argo-workflows --running
+          2. argo get -n argo-workflows <workflow-name>
+          3. kubectl get pods -n argo-workflows -l workflows.argoproj.io/workflow
+
+    - alert: ArgoWorkflowQueueBacklog
+      expr: argo_workflows_queue_unfinished_work > 10
+      for: 15m
+      labels:
+        severity: warning
+        component: workflows
+      annotations:
+        summary: "Argo Workflow queue backlog"
+        description: |
+          {{ $value }} items waiting in the workflow queue.
+          This may indicate controller resource constraints or slow processing.
+
+          Troubleshooting:
+          1. kubectl top pod -n argo-workflows
+          2. kubectl logs -n argo-workflows -l app.kubernetes.io/name=argo-workflows-workflow-controller
+          3. Check controller resource limits
+
+    - alert: ArgoWorkflowControllerNotLeader
+      expr: argo_workflows_is_leader == 0
+      for: 5m
+      labels:
+        severity: critical
+        component: workflows
+      annotations:
+        summary: "Argo Workflow controller not leader"
+        description: |
+          The workflow controller has lost leadership.
+          No workflows will be processed until leadership is regained.
+
+          Troubleshooting:
+          1. kubectl get pods -n argo-workflows -l app.kubernetes.io/name=argo-workflows-workflow-controller
+          2. kubectl logs -n argo-workflows -l app.kubernetes.io/name=argo-workflows-workflow-controller
+          3. kubectl get lease -n argo-workflows
+
+    - alert: ArgoWorkflowControllerDown
+      expr: absent(argo_workflows_is_leader)
+      for: 5m
+      labels:
+        severity: critical
+        component: workflows
+      annotations:
+        summary: "Argo Workflow controller metrics absent"
+        description: |
+          No metrics received from the Argo Workflow controller.
+          The controller may be down or not scraping properly.
+
+          Troubleshooting:
+          1. kubectl get pods -n argo-workflows
+          2. kubectl logs -n argo-workflows -l app.kubernetes.io/name=argo-workflows-workflow-controller
+          3. kubectl get servicemonitor -n argo-workflows
+
+    - alert: ArgoWorkflowHighFailureRate
+      expr: |
+        (
+          increase(argo_workflows_gauge{status="Failed"}[24h]) +
+          increase(argo_workflows_gauge{status="Error"}[24h])
+        ) / (
+          increase(argo_workflows_gauge{status="Succeeded"}[24h]) +
+          increase(argo_workflows_gauge{status="Failed"}[24h]) +
+          increase(argo_workflows_gauge{status="Error"}[24h]) + 1
+        ) > 0.3
+      for: 30m
+      labels:
+        severity: warning
+        component: workflows
+      annotations:
+        summary: "High Argo Workflow failure rate"
+        description: |
+          More than 30% of workflows are failing over the last 24 hours.
+          Current failure rate: {{ $value | humanizePercentage }}
+
+          Troubleshooting:
+          1. argo list -n argo-workflows --status Failed,Error
+          2. Review recent workflow changes
+          3. Check for common failure patterns in logs

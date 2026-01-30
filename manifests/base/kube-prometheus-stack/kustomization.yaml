@@ -10,6 +10,7 @@ bases:
 resources:
   - alertmanager-smtp-sealed.yaml
   - snmp-exporter-sealed.yaml
+  - argo-workflows-alerts.yaml
   - blackbox-exporter-alerts.yaml
   - blackbox-exporter-configmap.yaml
   - blackbox-exporter-deployment.yaml
