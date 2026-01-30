@@ -29,14 +29,25 @@ spec:
     nodeAddressAutodetectionV4:
       kubernetes: NodeInternalIP
 
-  # Container IP forwarding
-  containerIPForwarding: Enabled
-
   # Registry for Calico images
   registry: docker.io
 
   # Control plane replicas (single for homelab)
   controlPlaneReplicas: 1
+
+  # Typha configuration - run on all nodes for local connectivity
+  # Fixes node02/node03 timeout connecting to remote Typha
+  typhaDeployment:
+    spec:
+      template:
+        spec:
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector:
+                matchLabels:
+                  k8s-app: calico-typha
 
   # Component resource limits for Pi cluster
   calicoNodeDaemonSet:
