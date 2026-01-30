@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: unifi-poller
-        image: golift/unifi-poller:v2.21.0
+        image: golift/unifi-poller:v2.28.0
         ports:
         - containerPort: 9130
           name: tcp
