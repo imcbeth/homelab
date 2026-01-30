@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tigera-operator
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Deploy early - CNI is foundational infrastructure
+    argocd.argoproj.io/sync-wave: "-100"
+spec:
+  project: infrastructure
+  sources:
+    # Tigera operator from official GitHub release
+    - repoURL: https://github.com/projectcalico/calico.git
+      targetRevision: v3.29.2
+      path: manifests
+      directory:
+        include: 'tigera-operator.yaml'
+    # Installation CR from homelab repository
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/tigera-operator
+      targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    # Operator creates its own namespace from manifest
+    namespace: tigera-operator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    # Calico modifies these resources at runtime
+    - group: crd.projectcalico.org
+      kind: IPPool
+      jsonPointers:
+        - /metadata/annotations
+    - group: operator.tigera.io
+      kind: Installation
+      jsonPointers:
+        - /status

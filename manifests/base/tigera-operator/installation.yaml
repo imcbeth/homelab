@@ -1,0 +1,68 @@
+---
+# Tigera Calico Installation CR
+# Configures Calico CNI via the Tigera operator
+# Migrates from manifest-based Calico to operator-managed
+# Existing config: 192.168.0.0/16 with IPIP encapsulation
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  # Calico variant (open source)
+  variant: Calico
+
+  # Network configuration - matches existing setup
+  calicoNetwork:
+    # BGP enabled (bird backend)
+    bgp: Enabled
+
+    # Pod CIDR - matches kubeadm and existing IPPool
+    ipPools:
+      - name: default-ipv4-ippool
+        cidr: 192.168.0.0/16
+        encapsulation: IPIP
+        natOutgoing: Enabled
+        nodeSelector: all()
+        blockSize: 26
+
+    # Node addressing - use kubernetes internal IP
+    nodeAddressAutodetectionV4:
+      kubernetes: NodeInternalIP
+
+  # Container IP forwarding
+  containerIPForwarding: Enabled
+
+  # Registry for Calico images
+  registry: docker.io
+
+  # Control plane replicas (single for homelab)
+  controlPlaneReplicas: 1
+
+  # Component resource limits for Pi cluster
+  calicoNodeDaemonSet:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: calico-node
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+
+  calicoKubeControllersDeployment:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: calico-kube-controllers
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 256Mi
