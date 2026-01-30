@@ -25,14 +25,15 @@ controller:
 
 # Repository server
 repoServer:
-  # Resource limits for repo-server (actual usage ~100Mi)
+  # Resource limits for repo-server
+  # Spikes to 400Mi+ when generating large manifests (tigera-operator, kube-prometheus-stack)
   resources:
     requests:
       cpu: 25m
-      memory: 128Mi
-    limits:
-      cpu: 200m
       memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 # Redis (used for caching)
 redis:
