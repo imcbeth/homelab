@@ -55,6 +55,7 @@ spec:
         - /spec/logging
         - /spec/nodeUpdateStrategy
         - /spec/nonPrivileged
+        - /spec/registry
         - /spec/calicoNetwork/hostPorts
         - /spec/calicoNetwork/linuxDataplane
         - /spec/calicoNetwork/linuxPolicySetupTimeoutSeconds

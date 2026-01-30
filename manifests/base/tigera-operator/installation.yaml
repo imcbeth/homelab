@@ -29,8 +29,8 @@ spec:
     nodeAddressAutodetectionV4:
       kubernetes: NodeInternalIP
 
-  # Registry for Calico images
-  registry: docker.io
+  # Registry for Calico images (trailing slash required - operator normalizes it)
+  registry: docker.io/
 
   # Control plane replicas (single for homelab)
   controlPlaneReplicas: 1

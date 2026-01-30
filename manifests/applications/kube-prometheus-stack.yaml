@@ -28,3 +28,16 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+  ignoreDifferences:
+    # Grafana generates random admin password on each render if not using existingSecret
+    - group: ""
+      kind: Secret
+      name: kube-prometheus-stack-grafana
+      jsonPointers:
+        - /data/admin-password
+    - group: apps
+      kind: Deployment
+      name: kube-prometheus-stack-grafana
+      jsonPointers:
+        # Checksum annotation changes when secret changes
+        - /spec/template/metadata/annotations/checksum~1secret
