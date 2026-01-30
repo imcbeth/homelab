@@ -11,62 +11,42 @@ metadata:
     release: kube-prometheus-stack
 spec:
   groups:
-  - name: trivy_vulnerabilities
+  - name: trivy_rbac_security
     interval: 60s
     rules:
-    # Critical vulnerability alerts
-    - alert: CriticalVulnerabilitiesDetected
-      expr: trivy_image_vulnerabilities{severity="Critical"} > 0
+    # Critical RBAC issues on ClusterRoles
+    - alert: CriticalClusterRoleRBACIssues
+      expr: sum(trivy_clusterrole_clusterrbacassessments{severity="Critical"}) > 0
       for: 10m
       labels:
-        severity: critical
+        severity: warning
       annotations:
-        summary: "Critical vulnerabilities detected in {{ $labels.namespace }}/{{ $labels.resource_name }}"
+        summary: "Critical RBAC issues detected in ClusterRoles"
         description: |
-          Container image {{ $labels.image_repository }}:{{ $labels.image_tag }} has {{ $value }} CRITICAL vulnerabilities.
-          Namespace: {{ $labels.namespace }}
-          Resource: {{ $labels.resource_kind }}/{{ $labels.resource_name }}
-          Container: {{ $labels.container_name }}
-          Registry: {{ $labels.image_registry }}
+          {{ $value }} ClusterRoles have CRITICAL RBAC security issues.
+          Review ClusterRbacAssessmentReports for details.
+          These may indicate overly permissive roles.
 
-    - alert: HighVulnerabilityCount
-      expr: trivy_image_vulnerabilities{severity="High"} > 20
+    - alert: HighClusterRoleRBACIssues
+      expr: sum(trivy_clusterrole_clusterrbacassessments{severity="High"}) > 10
       for: 30m
-      labels:
-        severity: warning
-      annotations:
-        summary: "High number of vulnerabilities in {{ $labels.namespace }}/{{ $labels.resource_name }}"
-        description: |
-          Container image {{ $labels.image_repository }}:{{ $labels.image_tag }} has {{ $value }} HIGH vulnerabilities.
-          Namespace: {{ $labels.namespace }}
-          Resource: {{ $labels.resource_kind }}/{{ $labels.resource_name }}
-          Container: {{ $labels.container_name }}
-          Consider updating the image or reviewing the vulnerability report.
-
-    # Cluster-wide vulnerability metrics
-    - alert: ClusterCriticalVulnerabilityThresholdExceeded
-      expr: sum(trivy_image_vulnerabilities{severity="Critical"}) > 100
-      for: 1h
-      labels:
-        severity: warning
-      annotations:
-        summary: "Cluster has high number of critical vulnerabilities"
-        description: |
-          The cluster has {{ $value }} total CRITICAL vulnerabilities across all images.
-          Current threshold: 100 critical vulnerabilities.
-          Review vulnerability reports and plan image updates.
-
-    - alert: ClusterHighVulnerabilityThresholdExceeded
-      expr: sum(trivy_image_vulnerabilities{severity="High"}) > 1000
-      for: 1h
       labels:
         severity: info
       annotations:
-        summary: "Cluster has high number of high-severity vulnerabilities"
+        summary: "High number of RBAC issues in ClusterRoles"
         description: |
-          The cluster has {{ $value }} total HIGH vulnerabilities across all images.
-          Current threshold: 1000 high vulnerabilities.
-          Consider planning a security audit and image update cycle.
+          {{ $value }} ClusterRoles have HIGH severity RBAC issues.
+          Review ClusterRbacAssessmentReports and apply principle of least privilege.
+
+  # NOTE: trivy_image_vulnerabilities alerts are disabled due to Trivy Operator v0.29.0 bug
+  # The vulnerability scanner is not creating VulnerabilityReports.
+  # Re-enable these alerts after upgrading to a fixed version.
+  # - name: trivy_vulnerabilities
+  #   interval: 60s
+  #   rules:
+  #   - alert: CriticalVulnerabilitiesDetected
+  #     expr: trivy_image_vulnerabilities{severity="Critical"} > 0
+  #     ...etc
 
   - name: trivy_configuration_audit
     interval: 60s

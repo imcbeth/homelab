@@ -25,12 +25,79 @@ data:
           }
         ]
       },
-      "description": "Trivy Operator vulnerability and security scanning dashboard for Kubernetes cluster",
+      "description": "Trivy Operator security scanning dashboard - Compliance, Config Audits, and RBAC Assessments",
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 0,
       "links": [],
       "panels": [
+        {
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "id": 20,
+          "panels": [],
+          "title": "Compliance Overview",
+          "type": "row"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 1
+          },
+          "id": 1,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "9.0.0",
+          "targets": [
+            {
+              "expr": "sum(trivy_cluster_compliance{status=\"Pass\"})",
+              "refId": "A"
+            }
+          ],
+          "title": "Compliance Checks Passed",
+          "type": "stat"
+        },
         {
           "datasource": {
             "type": "prometheus",
@@ -61,13 +128,13 @@ data:
           "gridPos": {
             "h": 4,
             "w": 6,
-            "x": 0,
-            "y": 0
+            "x": 6,
+            "y": 1
           },
-          "id": 1,
+          "id": 2,
           "options": {
             "colorMode": "value",
-            "graphMode": "area",
+            "graphMode": "none",
             "justifyMode": "auto",
             "orientation": "auto",
             "reduceOptions": {
@@ -82,11 +149,11 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "sum(trivy_image_vulnerabilities{severity=\"Critical\"})",
+              "expr": "sum(trivy_cluster_compliance{status=\"Fail\"})",
               "refId": "A"
             }
           ],
-          "title": "Total Critical Vulnerabilities",
+          "title": "Compliance Checks Failed",
           "type": "stat"
         },
         {
@@ -108,66 +175,8 @@ data:
                     "value": null
                   },
                   {
-                    "color": "yellow",
-                    "value": 100
-                  },
-                  {
-                    "color": "orange",
-                    "value": 500
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 6,
-            "x": 6,
-            "y": 0
-          },
-          "id": 2,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "area",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "textMode": "auto"
-          },
-          "pluginVersion": "9.0.0",
-          "targets": [
-            {
-              "expr": "sum(trivy_image_vulnerabilities{severity=\"High\"})",
-              "refId": "A"
-            }
-          ],
-          "title": "Total High Vulnerabilities",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "blue",
-                    "value": null
+                    "color": "red",
+                    "value": 1
                   }
                 ]
               }
@@ -178,12 +187,12 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 0
+            "y": 1
           },
           "id": 3,
           "options": {
             "colorMode": "value",
-            "graphMode": "area",
+            "graphMode": "none",
             "justifyMode": "auto",
             "orientation": "auto",
             "reduceOptions": {
@@ -198,11 +207,11 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "sum(trivy_image_vulnerabilities{severity=\"Medium\"})",
+              "expr": "sum(trivy_clusterrole_clusterrbacassessments{severity=\"Critical\"})",
               "refId": "A"
             }
           ],
-          "title": "Total Medium Vulnerabilities",
+          "title": "Critical RBAC Issues",
           "type": "stat"
         },
         {
@@ -222,6 +231,10 @@ data:
                   {
                     "color": "green",
                     "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
                   }
                 ]
               }
@@ -232,7 +245,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 0
+            "y": 1
           },
           "id": 4,
           "options": {
@@ -252,11 +265,11 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "count(count by (image_repository, image_tag) (trivy_image_vulnerabilities))",
+              "expr": "sum(trivy_image_exposedsecrets)",
               "refId": "A"
             }
           ],
-          "title": "Images Scanned",
+          "title": "Exposed Secrets",
           "type": "stat"
         },
         {
@@ -286,7 +299,35 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Value #Critical"
+                  "options": "Value #Pass"
+                },
+                "properties": [
+                  {
+                    "id": "custom.displayMode",
+                    "value": "color-background"
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Passed"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Value #Fail"
                 },
                 "properties": [
                   {
@@ -311,65 +352,17 @@ data:
                   },
                   {
                     "id": "displayName",
-                    "value": "Critical"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Value #High"
-                },
-                "properties": [
-                  {
-                    "id": "custom.displayMode",
-                    "value": "color-background"
-                  },
-                  {
-                    "id": "thresholds",
-                    "value": {
-                      "mode": "absolute",
-                      "steps": [
-                        {
-                          "color": "green",
-                          "value": null
-                        },
-                        {
-                          "color": "orange",
-                          "value": 1
-                        },
-                        {
-                          "color": "red",
-                          "value": 10
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "id": "displayName",
-                    "value": "High"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Value #Medium"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Medium"
+                    "value": "Failed"
                   }
                 ]
               }
             ]
           },
           "gridPos": {
-            "h": 10,
+            "h": 8,
             "w": 24,
             "x": 0,
-            "y": 4
+            "y": 5
           },
           "id": 5,
           "options": {
@@ -378,43 +371,37 @@ data:
               "reducer": [
                 "sum"
               ],
-              "show": false
+              "show": true
             },
             "showHeader": true,
             "sortBy": [
               {
                 "desc": true,
-                "displayName": "Critical"
+                "displayName": "Failed"
               }
             ]
           },
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "trivy_image_vulnerabilities{severity=\"Critical\"}",
+              "expr": "trivy_cluster_compliance{status=\"Pass\"}",
               "format": "table",
               "instant": true,
-              "refId": "Critical"
+              "refId": "Pass"
             },
             {
-              "expr": "trivy_image_vulnerabilities{severity=\"High\"}",
+              "expr": "trivy_cluster_compliance{status=\"Fail\"}",
               "format": "table",
               "instant": true,
-              "refId": "High"
-            },
-            {
-              "expr": "trivy_image_vulnerabilities{severity=\"Medium\"}",
-              "format": "table",
-              "instant": true,
-              "refId": "Medium"
+              "refId": "Fail"
             }
           ],
-          "title": "Vulnerabilities by Image",
+          "title": "Compliance Status by Benchmark",
           "transformations": [
             {
               "id": "seriesToColumns",
               "options": {
-                "byField": "image_repository"
+                "byField": "title"
               }
             },
             {
@@ -424,75 +411,47 @@ data:
                   "Time": true,
                   "Time 1": true,
                   "Time 2": true,
-                  "Time 3": true,
                   "__name__": true,
                   "__name__ 1": true,
                   "__name__ 2": true,
-                  "__name__ 3": true,
-                  "container_name": false,
-                  "container_name 1": true,
-                  "container_name 2": true,
-                  "container_name 3": true,
-                  "image_digest": true,
-                  "image_digest 1": true,
-                  "image_digest 2": true,
-                  "image_digest 3": true,
-                  "image_registry": false,
-                  "image_registry 1": true,
-                  "image_registry 2": true,
-                  "image_registry 3": true,
-                  "image_tag": false,
-                  "image_tag 1": true,
-                  "image_tag 2": true,
-                  "image_tag 3": true,
+                  "description": true,
+                  "description 1": true,
+                  "description 2": true,
+                  "instance": true,
+                  "instance 1": true,
+                  "instance 2": true,
                   "job": true,
                   "job 1": true,
                   "job 2": true,
-                  "job 3": true,
-                  "name": true,
-                  "name 1": true,
-                  "name 2": true,
-                  "name 3": true,
-                  "namespace": false,
-                  "namespace 1": true,
-                  "namespace 2": true,
-                  "namespace 3": true,
-                  "resource_kind": true,
-                  "resource_kind 1": true,
-                  "resource_kind 2": true,
-                  "resource_kind 3": true,
-                  "resource_name": false,
-                  "resource_name 1": true,
-                  "resource_name 2": true,
-                  "resource_name 3": true,
-                  "severity": true,
-                  "severity 1": true,
-                  "severity 2": true,
-                  "severity 3": true
+                  "status": true,
+                  "status 1": true,
+                  "status 2": true
                 },
                 "indexByName": {
-                  "Value #Critical": 6,
-                  "Value #High": 7,
-                  "Value #Medium": 8,
-                  "container_name": 4,
-                  "image_registry": 0,
-                  "image_repository": 1,
-                  "image_tag": 2,
-                  "namespace": 3,
-                  "resource_name": 5
+                  "Value #Fail": 2,
+                  "Value #Pass": 1,
+                  "title": 0
                 },
                 "renameByName": {
-                  "container_name": "Container",
-                  "image_registry": "Registry",
-                  "image_repository": "Image",
-                  "image_tag": "Tag",
-                  "namespace": "Namespace",
-                  "resource_name": "Resource"
+                  "title": "Benchmark"
                 }
               }
             }
           ],
           "type": "table"
+        },
+        {
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 13
+          },
+          "id": 21,
+          "panels": [],
+          "title": "RBAC Assessments",
+          "type": "row"
         },
         {
           "datasource": {
@@ -513,7 +472,68 @@ data:
               },
               "mappings": []
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Critical"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "High"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "orange",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Medium"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "yellow",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Low"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "blue",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 8,
@@ -525,7 +545,7 @@ data:
           "options": {
             "displayLabels": [
               "name",
-              "percent"
+              "value"
             ],
             "legend": {
               "displayMode": "table",
@@ -551,11 +571,489 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "sum by (severity) (trivy_image_vulnerabilities)",
+              "expr": "sum by (severity) (trivy_clusterrole_clusterrbacassessments)",
+              "legendFormat": "{{severity}}",
               "refId": "A"
             }
           ],
-          "title": "Vulnerabilities by Severity",
+          "title": "ClusterRole RBAC Issues by Severity",
+          "type": "piechart"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                }
+              },
+              "mappings": []
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Critical"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "High"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "orange",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Medium"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "yellow",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Low"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "blue",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 14
+          },
+          "id": 7,
+          "options": {
+            "displayLabels": [
+              "name",
+              "value"
+            ],
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "values": [
+                "value"
+              ]
+            },
+            "pieType": "pie",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.0.0",
+          "targets": [
+            {
+              "expr": "sum by (severity) (trivy_role_rbacassessments)",
+              "legendFormat": "{{severity}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Role RBAC Issues by Severity",
+          "type": "piechart"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "displayMode": "auto",
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Critical"
+                },
+                "properties": [
+                  {
+                    "id": "custom.displayMode",
+                    "value": "color-background"
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "red",
+                          "value": 1
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "High"
+                },
+                "properties": [
+                  {
+                    "id": "custom.displayMode",
+                    "value": "color-background"
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "orange",
+                          "value": 1
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Medium"
+                },
+                "properties": [
+                  {
+                    "id": "custom.displayMode",
+                    "value": "color-background"
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 1
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 22
+          },
+          "id": 8,
+          "options": {
+            "footer": {
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": true
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": true,
+                "displayName": "Critical"
+              }
+            ]
+          },
+          "pluginVersion": "9.0.0",
+          "targets": [
+            {
+              "expr": "trivy_clusterrole_clusterrbacassessments{severity=\"Critical\"} > 0",
+              "format": "table",
+              "instant": true,
+              "refId": "Critical"
+            },
+            {
+              "expr": "trivy_clusterrole_clusterrbacassessments{severity=\"High\"} > 0",
+              "format": "table",
+              "instant": true,
+              "refId": "High"
+            },
+            {
+              "expr": "trivy_clusterrole_clusterrbacassessments{severity=\"Medium\"} > 0",
+              "format": "table",
+              "instant": true,
+              "refId": "Medium"
+            }
+          ],
+          "title": "ClusterRoles with RBAC Issues",
+          "transformations": [
+            {
+              "id": "seriesToColumns",
+              "options": {
+                "byField": "resource_name"
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Time 1": true,
+                  "Time 2": true,
+                  "Time 3": true,
+                  "__name__": true,
+                  "__name__ 1": true,
+                  "__name__ 2": true,
+                  "__name__ 3": true,
+                  "instance": true,
+                  "instance 1": true,
+                  "instance 2": true,
+                  "instance 3": true,
+                  "job": true,
+                  "job 1": true,
+                  "job 2": true,
+                  "job 3": true,
+                  "name": true,
+                  "name 1": true,
+                  "name 2": true,
+                  "name 3": true,
+                  "resource_kind": true,
+                  "resource_kind 1": true,
+                  "resource_kind 2": true,
+                  "resource_kind 3": true,
+                  "severity": true,
+                  "severity 1": true,
+                  "severity 2": true,
+                  "severity 3": true
+                },
+                "indexByName": {
+                  "Value #Critical": 1,
+                  "Value #High": 2,
+                  "Value #Medium": 3,
+                  "resource_name": 0
+                },
+                "renameByName": {
+                  "Value #Critical": "Critical",
+                  "Value #High": "High",
+                  "Value #Medium": "Medium",
+                  "resource_name": "ClusterRole"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 32
+          },
+          "id": 22,
+          "panels": [],
+          "title": "Config Audit Findings",
+          "type": "row"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                }
+              },
+              "mappings": []
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Critical"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "High"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "orange",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Medium"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "yellow",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Low"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "blue",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 33
+          },
+          "id": 9,
+          "options": {
+            "displayLabels": [
+              "name",
+              "value"
+            ],
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "values": [
+                "value"
+              ]
+            },
+            "pieType": "pie",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.0.0",
+          "targets": [
+            {
+              "expr": "sum by (severity) (trivy_resource_configaudits)",
+              "legendFormat": "{{severity}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Config Audit Issues by Severity",
           "type": "piechart"
         },
         {
@@ -583,9 +1081,9 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 14
+            "y": 33
           },
-          "id": 7,
+          "id": 10,
           "options": {
             "displayLabels": [
               "name",
@@ -615,12 +1113,68 @@ data:
           "pluginVersion": "9.0.0",
           "targets": [
             {
-              "expr": "sum by (namespace) (trivy_image_vulnerabilities{severity=~\"Critical|High\"})",
+              "expr": "sum by (namespace) (trivy_resource_configaudits{severity=~\"Critical|High\"})",
+              "legendFormat": "{{namespace}}",
               "refId": "A"
             }
           ],
-          "title": "Critical + High Vulnerabilities by Namespace",
+          "title": "Critical + High Config Issues by Namespace",
           "type": "piechart"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Note: Vulnerability scanning metrics (trivy_image_vulnerabilities) are currently unavailable due to a Trivy Operator v0.29.0 issue where the vulnerability scanner is not creating reports.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 24,
+            "x": 0,
+            "y": 41
+          },
+          "id": 11,
+          "options": {
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "name"
+          },
+          "pluginVersion": "9.0.0",
+          "targets": [
+            {
+              "expr": "vector(0)",
+              "refId": "A"
+            }
+          ],
+          "title": "Vulnerability Scanning Status: trivy_image_vulnerabilities metric unavailable (Trivy Operator bug)",
+          "type": "stat"
         }
       ],
       "refresh": "30s",
@@ -629,7 +1183,8 @@ data:
       "tags": [
         "security",
         "trivy",
-        "vulnerabilities"
+        "compliance",
+        "rbac"
       ],
       "templating": {
         "list": []
@@ -642,6 +1197,6 @@ data:
       "timezone": "",
       "title": "Trivy Security Scanning",
       "uid": "trivy-security-dashboard",
-      "version": 1,
+      "version": 2,
       "weekStart": ""
     }
