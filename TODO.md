@@ -238,7 +238,7 @@
 - [x] NetworkPolicy enabled ✅ Fixed K8s API egress (PR #291, 2026-01-24)
 - [x] Ingress configured at https://workflows.k8s.n37.ca (PR #293, 2026-01-24)
 - [x] Create Grafana dashboards for workflow monitoring (2026-01-29)
-- [ ] Set up AlertManager rules for workflow failures
+- [x] Set up AlertManager rules for workflow failures (2026-01-30, PR #354)
 
 **Phase 2: Workflow Integration**
 - [ ] ARM64 container image build workflows

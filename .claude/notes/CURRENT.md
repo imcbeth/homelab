@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-01-29
+**Last Updated:** 2026-01-30
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -59,20 +59,72 @@
 - Fix: Changed to domain-filter=n37.ca (PRs #295-296)
 - All 4 A records + TXT ownership records now auto-managed
 
-**Istio Ambient Mesh:** Deployed (2026-01-28)
+**Istio Ambient Mesh:** Updated (2026-01-30)
+- Upgraded from 1.24.2 → 1.28.3 (PR #308)
 - 29 pods across 6 namespaces with mTLS (HBONE protocol)
 - Namespaces: default, loki, argo-workflows, localstack, unipoller, trivy-system
 - Resource usage: ~38m CPU, ~145Mi memory (istiod + cni + ztunnel)
 - Waypoint proxies: Skipped (L4 mTLS sufficient, add later if L7 needed)
-- ArgoCD: 18/20 Synced (istio-cni, istiod show OutOfSync due to Helm chart label drift - cosmetic only)
+- ArgoCD: 22 apps total, all Healthy (3 show OutOfSync - cosmetic ServerSideApply quirk)
 - **Gotcha:** Transparent proxy preserves source IPs; NetworkPolicies need HBONE port 15008 from source namespace
 
-**Phase 3 Status:** Complete
-- Service mesh deployed (Istio Ambient selected over Linkerd)
+**Argo Workflows Alerting:** Complete (2026-01-30)
+- 8 PrometheusRule alerts deployed (PR #354)
+- Alerts: Failed, Error, ControllerErrors, Stuck, QueueBacklog, NotLeader, Down, HighFailureRate
+- All alerts active in Prometheus, currently inactive (healthy state)
+
+**Phase 4 Status:** In Progress
+- Argo Workflows alerting complete
+- Next: Storage performance dashboard, OPA Gatekeeper, Ingress hardening
 
 ---
 
 ## Recent Sessions
+
+### 2026-01-30: Dependency Updates, Documentation Sync & Argo Workflows Alerting
+
+**Completed Work:**
+- Merged 5 Renovate PRs for dependency updates
+- Updated k8s-docs-n37 documentation to match current cluster state
+- Created and deployed Argo Workflows AlertManager rules
+- Upgraded Istio from 1.24.2 to 1.28.3
+
+**Pull Requests:**
+- **PR #278:** [Merged] chore(deps): ArgoCD ecosystem patch (argo-workflows 0.47.1→0.47.2, argocd 9.3.4→9.3.7)
+- **PR #279:** [Merged] chore(deps): busybox 1.36→1.37
+- **PR #305:** [Merged] chore(deps): UniFi Poller v2.21.0→v2.28.0
+- **PR #307:** [Merged] chore(deps): Istio 1.24.2→1.24.6 (patch)
+- **PR #308:** [Merged] chore(deps): Istio 1.24→1.28.3 (minor)
+- **PR #354:** [Merged] feat: Add Argo Workflows AlertManager rules
+
+**k8s-docs-n37 Updates:**
+- New: `docs/applications/argo-workflows.md` - Argo Workflows v0.47.1 documentation
+- New: `docs/applications/localstack.md` - LocalStack AWS emulator docs
+- Updated: `docs/applications/kube-prometheus-stack.md` - Version 81.2.2, ignoreDifferences config
+- Updated: `docs/intro.md` - CNI migration, Service Mesh, Runtime Security sections
+
+**Argo Workflows Alerts Created:**
+| Alert | Severity | Description |
+|-------|----------|-------------|
+| ArgoWorkflowFailed | warning | Workflows ending in Failed state |
+| ArgoWorkflowError | critical | Workflows in Error state (system failures) |
+| ArgoWorkflowControllerErrors | warning | Controller errors by cause |
+| ArgoWorkflowStuck | warning | Workflows running >1 hour |
+| ArgoWorkflowQueueBacklog | warning | Queue depth >10 items for 15m |
+| ArgoWorkflowControllerNotLeader | critical | Lost leader election |
+| ArgoWorkflowControllerDown | critical | Controller metrics absent |
+| ArgoWorkflowHighFailureRate | warning | >30% failure rate over 24h |
+
+**Cluster Status:**
+- 22 ArgoCD applications, all Healthy
+- 3 OutOfSync (istio-cni, istiod, tigera-operator) - cosmetic ServerSideApply quirk
+- All Argo Workflows alerts active in Prometheus, currently inactive (healthy)
+
+**Files Created/Modified:**
+- `manifests/base/kube-prometheus-stack/argo-workflows-alerts.yaml` (new)
+- `manifests/base/kube-prometheus-stack/kustomization.yaml` (added alerts)
+
+---
 
 ### 2026-01-29 (Evening): Monitoring Fixes & Network Policy Documentation
 
