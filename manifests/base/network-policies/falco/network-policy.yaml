@@ -43,6 +43,15 @@ spec:
         - protocol: TCP
           port: 2802  # Sidekick WebUI
 
+    # Allow ingress-nginx for UI access
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 2802  # Sidekick WebUI
+
   egress:
     # Allow DNS resolution
     - to:
