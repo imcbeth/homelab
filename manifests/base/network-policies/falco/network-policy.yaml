@@ -42,6 +42,8 @@ spec:
           port: 2801  # Sidekick HTTP
         - protocol: TCP
           port: 2802  # Sidekick WebUI
+        - protocol: TCP
+          port: 6379  # Redis (Sidekick UI)
 
     # Allow ingress-nginx for UI access
     - from:
@@ -109,6 +111,8 @@ spec:
           port: 2801  # Sidekick HTTP
         - protocol: TCP
           port: 2802  # Sidekick WebUI
+        - protocol: TCP
+          port: 6379  # Redis (Sidekick UI)
 
     # Allow HTTPS for downloading Falco rules
     - to:
