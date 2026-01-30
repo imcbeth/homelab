@@ -19,13 +19,14 @@ spec:
           image: localstack/localstack:4.12.0
           ports:
             - containerPort: 4566 # Default LocalStack port
+          # Right-sized resources (actual usage ~89Mi)
           resources:
             requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
               cpu: 500m
               memory: 512Mi
-            limits:
-              cpu: 1000m
-              memory: 1Gi
           env:
             - name: SERVICES
               value: iam,s3,sns,sqs,lambda,dynamodb,ec2,elb # Enabled Services

@@ -80,14 +80,15 @@ serviceMonitor:
 trivyServer:
   enabled: true                                    # Enable built-in server
 
-  # Resource limits for Trivy server
+  # Resource limits for Trivy server (actual usage ~22Mi)
+  # Right-sized from 256Mi/512Mi to match actual usage with headroom
   resources:
     requests:
-      cpu: 100m                                    # Reduced from default 200m
-      memory: 256Mi                                # Reduced from default 512Mi
+      cpu: 50m                                     # Reduced from 100m
+      memory: 64Mi                                 # Reduced from 256Mi (actual ~22Mi)
     limits:
-      cpu: 500m                                    # Reduced from default 1 CPU
-      memory: 512Mi                                # Reduced from default 1Gi
+      cpu: 300m                                    # Reduced from 500m
+      memory: 256Mi                                # Reduced from 512Mi
 
   # Security context
   podSecurityContext:

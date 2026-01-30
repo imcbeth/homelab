@@ -27,13 +27,14 @@ spec:
           name: tcp
           protocol: TCP
         imagePullPolicy: IfNotPresent
+        # Right-sized resources (actual usage ~8Mi)
         resources:
           requests:
-            cpu: 100m
-            memory: 256Mi
+            cpu: 25m
+            memory: 64Mi
           limits:
-            cpu: 200m
-            memory: 512Mi
+            cpu: 100m
+            memory: 128Mi
         env:
         - name: UP_UNIFI_CONTROLLER_0_API_KEY
           valueFrom:
