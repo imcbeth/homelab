@@ -19,7 +19,7 @@ spec:
             cidr: 10.0.10.0/24  # Control plane nodes
       ports:
         - protocol: TCP
-          port: 10250  # Webhook port
+          port: 10250  # Webhook target port
     # Allow Prometheus to scrape metrics from default namespace
     - from:
         - namespaceSelector:
@@ -35,9 +35,15 @@ spec:
               kubernetes.io/metadata.name: cert-manager
       ports:
         - protocol: TCP
-          port: 10250  # Webhook
+          port: 10250  # Webhook target port
         - protocol: TCP
           port: 9402   # Metrics
+    # Allow any pod to reach the webhook (API server uses pod network)
+    # Required because kube-apiserver may call webhook from various IPs
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 10250  # Webhook target port
   egress:
     # Allow DNS resolution via kube-dns
     - to:
@@ -77,13 +83,20 @@ spec:
       ports:
         - protocol: TCP
           port: 443  # HTTPS for Let's Encrypt and Cloudflare API
-    # Allow internal namespace communication
+    # Allow internal namespace communication (controller -> webhook)
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: cert-manager
       ports:
         - protocol: TCP
-          port: 10250
+          port: 10250  # Webhook target port
         - protocol: TCP
-          port: 9402
+          port: 9402   # Metrics
+    # Allow reaching webhook via service ClusterIP
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.0/12  # Service ClusterIP range
+      ports:
+        - protocol: TCP
+          port: 443  # Webhook service port
