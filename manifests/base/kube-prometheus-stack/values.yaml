@@ -447,7 +447,14 @@ alertmanager:
     tlsConfig: {}
     paused: false
     nodeSelector: {}
-    resources: {}
+    # Resource limits for Alertmanager (actual usage ~30Mi)
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
     podAntiAffinity: "soft"
     podAntiAffinityTopologyKey: kubernetes.io/hostname
     affinity: {}
@@ -496,6 +503,14 @@ grafana:
   # Fix fsGroup race condition with Synology CSI and SQLite journal files
   podSecurityContext:
     fsGroupChangePolicy: OnRootMismatch
+  # Resource limits for Grafana (actual usage ~269Mi)
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   namespaceOverride: ""
   forceDeployDatasources: false
   forceDeployDashboards: false
@@ -897,6 +912,14 @@ kubeStateMetrics:
 kube-state-metrics:
   releaseLabel: true
   prometheusScrape: false
+  # Resource limits for kube-state-metrics (actual usage ~50Mi)
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
   prometheus:
     monitor:
       enabled: true
@@ -921,6 +944,14 @@ prometheus-node-exporter:
   releaseLabel: true
   hostNetwork: false
   hostPID: true
+  # Resource limits for node-exporter (actual usage ~25Mi per node)
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
   extraArgs:
     - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/containerd/.+|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
     - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|erofs)$
@@ -1173,7 +1204,14 @@ prometheusOperator:
     scrapeTimeout: ""
     metricRelabelings: []
     relabelings: []
-  resources: {}
+  # Resource limits for Prometheus Operator (actual usage ~50Mi)
+  resources:
+    requests:
+      cpu: 25m
+      memory: 100Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
   env:
     GOGC: "30"
   hostNetwork: false
@@ -1466,7 +1504,14 @@ prometheus:
     remoteWrite: []
     additionalRemoteWrite: []
     remoteWriteDashboards: false
-    resources: {}
+    # Resource limits for Prometheus (actual usage ~1.2Gi)
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1536Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
     storageSpec:
       volumeClaimTemplate:
         spec:

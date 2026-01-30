@@ -2,6 +2,14 @@
 
 # Enable metrics for the controller and speaker components
 controller:
+  # Resource limits for MetalLB controller
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
   metrics:
     enabled: true
     serviceMonitor:
@@ -12,6 +20,14 @@ controller:
       enabled: true
 
 speaker:
+  # Resource limits for MetalLB speaker (runs on each node)
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
   metrics:
     enabled: true
     serviceMonitor:
