@@ -1,0 +1,114 @@
+---
+# Falco Runtime Security NetworkPolicy
+# Purpose: Restrict Falco and Falcosidekick network access
+# Created: 2026-01-29
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: falco-network-policy
+  namespace: falco
+  labels:
+    app.kubernetes.io/name: falco
+    app.kubernetes.io/component: security
+spec:
+  # Apply to all Falco pods
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Prometheus to scrape metrics from Falco and Sidekick
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8765  # Falco metrics
+        - protocol: TCP
+          port: 2801  # Falcosidekick metrics
+
+    # Allow internal communication within falco namespace
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5060  # gRPC (Falco to Sidekick)
+        - protocol: TCP
+          port: 2801  # Sidekick HTTP
+        - protocol: TCP
+          port: 2802  # Sidekick WebUI
+
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow Kubernetes API access (for metadata enrichment)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    # Allow Falcosidekick to send alerts to Alertmanager
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alertmanager
+      ports:
+        - protocol: TCP
+          port: 9093
+
+    # Allow Falcosidekick to send logs to Loki
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: loki
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: loki
+      ports:
+        - protocol: TCP
+          port: 3100
+
+    # Allow internal communication within falco namespace
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5060  # gRPC
+        - protocol: TCP
+          port: 2801  # Sidekick HTTP
+        - protocol: TCP
+          port: 2802  # Sidekick WebUI
+
+    # Allow HTTPS for downloading Falco rules
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443

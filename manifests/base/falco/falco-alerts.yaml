@@ -1,0 +1,139 @@
+---
+# Falco Security Alerts
+# Purpose: Alert on critical runtime security events
+# Created: 2026-01-29
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: falco-security-alerts
+  namespace: falco
+  labels:
+    app: falco
+    prometheus: kube-prometheus
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: falco_critical_security
+      interval: 30s
+      rules:
+        # Critical security events require immediate attention
+        - alert: FalcoCriticalSecurityEvent
+          expr: increase(falco_events{priority="Critical"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Critical security event detected by Falco"
+            description: |
+              Falco detected {{ $value }} critical security event(s) in the last 5 minutes.
+              Rule: {{ $labels.rule }}
+              Namespace: {{ $labels.k8s_ns_name }}
+              Pod: {{ $labels.k8s_pod_name }}
+              IMMEDIATE ACTION REQUIRED: Investigate and remediate.
+
+        # Error-level security events
+        - alert: FalcoErrorSecurityEvent
+          expr: increase(falco_events{priority="Error"}[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Error-level security event detected by Falco"
+            description: |
+              Falco detected {{ $value }} error-level security event(s) in the last 5 minutes.
+              Rule: {{ $labels.rule }}
+              Namespace: {{ $labels.k8s_ns_name }}
+              Pod: {{ $labels.k8s_pod_name }}
+              Review and assess the security implications.
+
+    - name: falco_threat_detection
+      interval: 60s
+      rules:
+        # High volume of security events may indicate an attack
+        - alert: FalcoHighEventRate
+          expr: sum(rate(falco_events[5m])) > 10
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Unusually high rate of Falco security events"
+            description: |
+              Falco is generating {{ $value | printf "%.1f" }} events per second.
+              This may indicate an ongoing attack or misconfiguration.
+              Review the events and investigate the source.
+
+        # Specific threat: Reverse shell detection
+        - alert: FalcoReverseShellDetected
+          expr: increase(falco_events{rule=~".*[Rr]everse.*[Ss]hell.*"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Reverse shell attempt detected"
+            description: |
+              A reverse shell attempt was detected by Falco.
+              Namespace: {{ $labels.k8s_ns_name }}
+              Pod: {{ $labels.k8s_pod_name }}
+              CRITICAL: This is a common attack technique. Isolate and investigate immediately.
+
+        # Specific threat: Cryptocurrency mining
+        - alert: FalcoCryptominingDetected
+          expr: increase(falco_events{rule=~".*[Cc]rypto.*[Mm]in.*"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Cryptocurrency mining detected"
+            description: |
+              Cryptocurrency mining activity was detected by Falco.
+              Namespace: {{ $labels.k8s_ns_name }}
+              Pod: {{ $labels.k8s_pod_name }}
+              CRITICAL: Your cluster may be compromised. Investigate immediately.
+
+    - name: falco_system_health
+      interval: 60s
+      rules:
+        # Falco instance down
+        - alert: FalcoDown
+          expr: up{job=~".*falco.*"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Falco instance is down"
+            description: |
+              Falco instance {{ $labels.instance }} has been down for more than 5 minutes.
+              Runtime security monitoring is not active on this node.
+              Investigate and restart Falco.
+
+        # High event drop rate indicates performance issues
+        - alert: FalcoHighDropRate
+          expr: |
+            (
+              sum(rate(falcosecurity_scap_n_drops_buffer_total[5m]))
+              /
+              sum(rate(falcosecurity_scap_n_evts[5m]))
+            ) > 0.01
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Falco is dropping events"
+            description: |
+              Falco is dropping {{ $value | printf "%.2f" }}% of events.
+              This may indicate resource constraints or high system activity.
+              Consider increasing buffer size or investigating the load.
+
+        # Falco not generating any events (may indicate a problem)
+        - alert: FalcoNoEvents
+          expr: sum(rate(falcosecurity_scap_n_evts[10m])) == 0
+          for: 15m
+          labels:
+            severity: info
+          annotations:
+            summary: "Falco is not processing any syscall events"
+            description: |
+              Falco has not processed any syscall events in the last 15 minutes.
+              This may indicate a driver issue or very low system activity.
+              Verify Falco is functioning correctly.
