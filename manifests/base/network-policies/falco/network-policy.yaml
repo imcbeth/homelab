@@ -18,11 +18,11 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Allow Prometheus to scrape metrics from Falco and Sidekick
+    # Allow Prometheus to scrape metrics from Falco and Sidekick (in default namespace)
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: monitoring
+              kubernetes.io/metadata.name: default
           podSelector:
             matchLabels:
               app.kubernetes.io/name: prometheus
@@ -66,11 +66,11 @@ spec:
         - protocol: TCP
           port: 6443
 
-    # Allow Falcosidekick to send alerts to Alertmanager
+    # Allow Falcosidekick to send alerts to Alertmanager (in default namespace)
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: monitoring
+              kubernetes.io/metadata.name: default
           podSelector:
             matchLabels:
               app.kubernetes.io/name: alertmanager

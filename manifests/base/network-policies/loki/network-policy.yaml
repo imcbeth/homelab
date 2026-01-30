@@ -51,6 +51,14 @@ spec:
           port: 3100   # Loki metrics and query endpoint
         - protocol: TCP
           port: 3101   # Promtail metrics port
+    # Allow Falcosidekick to push security events
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: falco
+      ports:
+        - protocol: TCP
+          port: 3100   # Loki push API
   egress:
     # Allow DNS resolution via kube-dns
     - to:
