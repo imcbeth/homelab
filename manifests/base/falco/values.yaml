@@ -1,0 +1,248 @@
+# Falco Runtime Security Configuration for Raspberry Pi 5 Kubernetes Homelab
+# Cluster: 5x Pi 5 nodes (16GB each, 80GB total)
+# Purpose: Runtime threat detection and security monitoring
+
+# =============================================================================
+# Driver Configuration
+# =============================================================================
+# Use modern eBPF driver (more efficient than kernel module on ARM64)
+driver:
+  kind: modern_ebpf
+  modernEbpf:
+    # Optimized buffer size for Pi cluster
+    bufSizePreset: 4
+
+# =============================================================================
+# Falco DaemonSet Configuration
+# =============================================================================
+# Resource limits optimized for Pi cluster
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Tolerations to run on all nodes including control-plane
+tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+
+# =============================================================================
+# Falco Configuration
+# =============================================================================
+falco:
+  # JSON output for structured logging
+  jsonOutput: true
+  jsonIncludeOutputProperty: true
+  jsonIncludeTagsProperty: true
+
+  # Log level (info is good balance for production)
+  logLevel: info
+
+  # Priority threshold - only alert on notice and above
+  # Reduces noise from debug/info events
+  priority: notice
+
+  # Enable metrics endpoint for Prometheus
+  httpOutput:
+    enabled: true
+    url: ""
+
+  # gRPC output for sidekick
+  grpcOutput:
+    enabled: true
+
+  # Syscall event drops - buffer tuning
+  syscallEventDrops:
+    threshold: 0.1
+    actions:
+      - log
+      - alert
+    rate: 0.03333
+    maxBurst: 1
+
+  # Output buffering
+  bufferedOutputs: true
+  outputs:
+    rate: 0
+    maxBurst: 1000
+
+  # Metadata settings
+  metadataDownload:
+    maxMb: 100
+    chunkWaitUs: 1000
+    watchFreqSec: 1
+
+# =============================================================================
+# Rules Configuration
+# =============================================================================
+# Load default rules but customize for homelab
+falcoctl:
+  artifact:
+    install:
+      enabled: true
+    follow:
+      enabled: true
+  config:
+    artifact:
+      allowedTypes:
+        - rulesfile
+      install:
+        refs:
+          - falco-rules:3
+      follow:
+        refs:
+          - falco-rules:3
+
+# Custom rules to reduce noise in homelab environment
+customRules:
+  homelab-rules.yaml: |-
+    # Homelab-specific rule overrides
+    # These rules are tuned for a Kubernetes homelab environment to reduce noise
+
+    # Disable noisy rules that generate many false positives in homelab
+    - rule: Terminal shell in container
+      enabled: false
+
+    # Allow kubectl exec for troubleshooting (common in homelab)
+    - rule: Attach/Exec Pod
+      enabled: false
+
+    # Reduce priority of package management (common in dev/test)
+    - rule: Launch Package Management Process in Container
+      priority: WARNING
+      enabled: true
+
+    # Custom rule: Detect cryptocurrency mining
+    - rule: Detect Cryptocurrency Mining
+      desc: Detect cryptocurrency mining processes
+      condition: >
+        spawned_process and
+        (proc.name in (xmrig, minerd, minergate, cpuminer, cgminer, bfgminer, ethminer) or
+         proc.cmdline contains "stratum+tcp" or
+         proc.cmdline contains "pool.minergate")
+      output: >
+        Cryptocurrency mining detected
+        (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
+        container_id=%container.id container_name=%container.name image=%container.image.repository)
+      priority: CRITICAL
+      tags: [cryptomining, mitre_execution]
+
+    # Custom rule: Detect reverse shell attempts
+    - rule: Reverse Shell Detected
+      desc: Detect reverse shell connections
+      condition: >
+        spawned_process and
+        ((proc.name = "bash" or proc.name = "sh") and
+         (proc.cmdline contains "/dev/tcp" or
+          proc.cmdline contains "nc -e" or
+          proc.cmdline contains "ncat -e" or
+          proc.cmdline contains "python" and proc.cmdline contains "socket"))
+      output: >
+        Reverse shell detected
+        (user=%user.name command=%proc.cmdline container_id=%container.id
+        container_name=%container.name image=%container.image.repository)
+      priority: CRITICAL
+      tags: [shell, mitre_execution]
+
+# =============================================================================
+# Prometheus Metrics
+# =============================================================================
+metrics:
+  enabled: true
+  service:
+    port: 8765
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack
+  interval: 30s
+
+# =============================================================================
+# Falcosidekick Configuration
+# =============================================================================
+# Sidekick handles alert routing and integrations
+falcosidekick:
+  enabled: true
+
+  # Resource limits for sidekick
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+  # Web UI for viewing alerts
+  webui:
+    enabled: true
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+  # Prometheus metrics for sidekick
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+
+  # Output configuration
+  config:
+    # Debug logging disabled for production
+    debug: false
+
+    # Prometheus metrics output
+    prometheus:
+      extralabels: ""
+
+    # Alertmanager integration
+    alertmanager:
+      hostport: "http://alertmanager-operated.monitoring:9093"
+      minimumpriority: warning
+      mutetimestamps: false
+
+    # Loki integration for log aggregation
+    loki:
+      hostport: "http://loki.loki:3100"
+      minimumpriority: notice
+      tenant: ""
+      endpoint: "/loki/api/v1/push"
+
+# =============================================================================
+# Security Context
+# =============================================================================
+podSecurityContext:
+  runAsNonRoot: false  # Falco needs root for syscall monitoring
+
+containerSecurityContext:
+  privileged: true  # Required for syscall monitoring
+
+# =============================================================================
+# Additional Configuration
+# =============================================================================
+# Service account
+serviceAccount:
+  create: true
+  name: falco
+
+# Pod priority (security monitoring is important)
+priorityClassName: ""
+
+# Affinity rules (none - run everywhere)
+affinity: {}
+
+# Node selector (none - run on all nodes)
+nodeSelector: {}

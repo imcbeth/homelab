@@ -29,6 +29,7 @@ resources:
 
   # Security Dashboards
   - trivy-security-dashboard.yaml
+  - falco-security-dashboard.yaml
 
   # CI/CD Dashboards
   - argo-workflows-dashboard.yaml
