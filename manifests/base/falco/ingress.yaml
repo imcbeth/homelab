@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: falco-ui-ingress
+  namespace: falco
+  annotations:
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
+    external-dns.alpha.kubernetes.io/hostname: falco.k8s.n37.ca
+    external-dns.alpha.kubernetes.io/ttl: "300"
+  labels:
+    app.kubernetes.io/name: falco
+    app.kubernetes.io/component: ingress
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - falco.k8s.n37.ca
+      secretName: falco-ui-tls
+  rules:
+    - host: falco.k8s.n37.ca
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: falco-falcosidekick-ui
+                port:
+                  number: 2802
