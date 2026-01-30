@@ -67,8 +67,7 @@ falco:
     rate: 0.03333
     maxBurst: 1
 
-  # Output buffering
-  bufferedOutputs: true
+  # Output settings
   outputs:
     rate: 0
     maxBurst: 1000
@@ -105,19 +104,19 @@ customRules:
   homelab-rules.yaml: |-
     # Homelab-specific rule overrides
     # These rules are tuned for a Kubernetes homelab environment to reduce noise
+    # Using Falco 0.40+ override syntax
 
     # Disable noisy rules that generate many false positives in homelab
     - rule: Terminal shell in container
-      enabled: false
-
-    # Allow kubectl exec for troubleshooting (common in homelab)
-    - rule: Attach/Exec Pod
+      override:
+        enabled: replace
       enabled: false
 
     # Reduce priority of package management (common in dev/test)
     - rule: Launch Package Management Process in Container
+      override:
+        priority: replace
       priority: WARNING
-      enabled: true
 
     # Custom rule: Detect cryptocurrency mining
     - rule: Detect Cryptocurrency Mining
@@ -210,7 +209,7 @@ falcosidekick:
 
     # Alertmanager integration
     alertmanager:
-      hostport: "http://alertmanager-operated.monitoring:9093"
+      hostport: "http://alertmanager-operated.default:9093"
       minimumpriority: warning
       mutetimestamps: false
 
