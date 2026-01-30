@@ -33,11 +33,13 @@ kubectl apply -f manifests/applications/
 
 ### Core Infrastructure
 - **Container Runtime:** containerd
-- **CNI:** Calico with VLAN segmentation
-- **GitOps:** ArgoCD managing 25+ applications
+- **CNI:** Calico via Tigera Operator (ArgoCD-managed, IPIP encapsulation)
+- **Service Mesh:** Istio Ambient (mTLS for 29 pods across 6 namespaces)
+- **GitOps:** ArgoCD managing 27+ applications
 - **Monitoring:** Prometheus + Grafana + AlertManager
 - **Logging:** Loki + Promtail with 7-day retention
-- **Backup:** Velero with Kopia for PVC backups
+- **Security:** Trivy Operator (vulnerability scanning) + Falco (runtime security)
+- **Backup:** Velero with Backblaze B2 for PVC backups
 - **DNS:** External-DNS with Cloudflare + UniFi providers
 
 ### Network Architecture
@@ -83,9 +85,13 @@ kubectl apply -f manifests/applications/
 
 ## Key Documentation Files
 
+### Architecture Documentation
+- **[docs/CODEMAPS/INDEX.md](docs/CODEMAPS/INDEX.md)** - Architecture overview and codemap index
+- **[docs/CODEMAPS/networking.md](docs/CODEMAPS/networking.md)** - CNI, service mesh, network policies
+- **[docs/CODEMAPS/security.md](docs/CODEMAPS/security.md)** - Trivy, Falco, security monitoring
+
 ### Project Management
 - **[TODO.md](TODO.md)** - Project roadmap and completion tracking
-- **[CLAUDE_NOTES.md](CLAUDE_NOTES.md)** - AI assistant session history and troubleshooting guide
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development setup and contribution guidelines
 - **[CODEOWNERS](CODEOWNERS)** - Code review assignments
 
@@ -101,31 +107,34 @@ kubectl apply -f manifests/applications/
 
 ## Project Completion Status
 
-**Overall Progress: ~25% Complete**
+**Overall Progress: ~60% Complete**
 
 Based on the [TODO.md](TODO.md) roadmap:
-- **✅ Recently Completed (December 2025):** 41 tasks
+- **Recently Completed (January 2026):**
+  - Tigera Operator migration (Calico CNI now ArgoCD-managed)
+  - Istio Ambient mesh (mTLS across 6 namespaces)
+  - Falco runtime security monitoring
+  - Trivy Operator vulnerability scanning
+  - Network policies for all namespaces
+  - Argo Workflows CI/CD platform
+  - Renovate automated dependency updates
+  - Sealed Secrets migration from git-crypt
+  - Velero with Backblaze B2 storage
+
+- **Completed (December 2025):**
   - SNMP monitoring for Synology NAS
   - Log aggregation with Loki + Promtail
   - External-DNS dual provider setup
   - Blackbox Exporter endpoint monitoring
   - Metrics Server deployment
-  - Custom Grafana dashboards (4 new, 30 total)
-  - Log-based alerting with Loki Ruler
+  - Custom Grafana dashboards (30 total)
   - AlertManager SMTP email notifications
-  - Velero backup solution
-
-- **🔄 Currently In Progress & Planned:** 126 remaining tasks
-  - Trivy Operator for vulnerability scanning
-  - Falco for runtime security
-  - Istio/Linkerd service mesh
-  - GitOps automation improvements
 
 ### High-Priority Next Steps
-1. **LocalStack Sync Wave Fix** - Resolve Velero dependency issues
-2. **Backup Testing** - Validate disaster recovery procedures
-3. **Security Scanning** - Deploy Trivy Operator
-4. **Predictive Alerting** - Disk space and performance monitoring
+1. **Observability Maturity** - SLOs, distributed tracing, anomaly detection
+2. **Disaster Recovery Testing** - Monthly DR drills, chaos engineering
+3. **Resource Optimization** - VPA, right-sizing analysis
+4. **Documentation** - Operational runbooks, network topology diagrams
 
 ## Related Repositories
 

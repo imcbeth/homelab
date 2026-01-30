@@ -3,6 +3,12 @@
 ## ✅ **Recently Completed** (December 2025 - January 2026)
 
 ### Infrastructure Fixes (January 2026)
+- **Tigera Operator Migration** - Migrated Calico CNI to GitOps-managed Tigera operator (PRs #346-352, 2026-01-30)
+  - Calico now managed by Tigera operator in calico-system namespace
+  - ArgoCD Application with multi-source (operator from GitHub, Installation CR from homelab)
+  - Typha topology spread constraints for node distribution
+  - Established ignoreDifferences patterns for operator-managed resources
+  - ArgoCD repo-server memory increased to 512Mi for large manifest generation
 - **External-DNS Domain Filter Fix** - Fixed subdomain zone filtering (PRs #295-296, 2026-01-25)
   - Root cause: `--domain-filter=k8s.n37.ca` rejected the `n37.ca` Cloudflare zone
   - Solution: Use parent zone as domain-filter; ingresses specify exact hostnames
@@ -134,7 +140,15 @@
   - [x] ServiceMonitor configured for Prometheus metrics
   - [x] VulnerabilityReports available via kubectl
   - [x] Scanning all cluster images automatically
-- [ ] **Falco** - Runtime security monitoring and threat detection
+  - [x] Node-collector tolerations for control-plane scanning (PR #345, 2026-01-30)
+- [x] **Falco** - Runtime security monitoring (deployed 2026-01-29, chart 4.20.1)
+  - [x] Modern eBPF driver for ARM64 efficiency
+  - [x] DaemonSet running on all nodes including control-plane
+  - [x] Falcosidekick with AlertManager and Loki integration
+  - [x] Web UI at falco.k8s.n37.ca (PR #340)
+  - [x] Custom rules for homelab (cryptocurrency mining, reverse shell detection)
+  - [x] PrometheusRules for security alerts
+  - [x] NetworkPolicy configured (PR #339, #344)
 - [ ] **OPA Gatekeeper** - Policy enforcement and admission control
 - [ ] Security policy definitions for workloads
 - [ ] Compliance reporting and alerting
@@ -376,21 +390,22 @@ Items are organized by priority, not by timeline. Focus on:
 
 ## 🔄 **ArgoCD Sync Wave Optimization**
 
-### Current Sync Wave Order (Validated 2026-01-11)
+### Current Sync Wave Order (Updated 2026-01-30)
 
 ```
-Wave -50: argocd (self-management)
-Wave -35: metal-lb, pi-hole (networking foundation)
-Wave -30: synology-csi (storage driver)
-Wave -25: sealed-secrets (secrets management)
-Wave -20: unipoller (UniFi metrics collection)
-Wave -15: kube-prometheus-stack (monitoring stack)
-Wave -12: loki (log aggregation)
-Wave -11: promtail (log collection)
-Wave -10: cert-manager, external-dns, metrics-server (certificates & DNS & metrics)
-Wave  -8: argo-workflows (CI/CD) ✅
-Wave  -7: localstack (S3 mock for Velero)
-Wave  -5: velero (backup solution)
+Wave -100: tigera-operator (CNI foundation - ArgoCD-managed)
+Wave  -50: argocd (self-management)
+Wave  -35: metal-lb, pi-hole (networking foundation)
+Wave  -30: synology-csi (storage driver)
+Wave  -25: sealed-secrets (secrets management)
+Wave  -20: unipoller (UniFi metrics collection)
+Wave  -15: kube-prometheus-stack (monitoring stack)
+Wave  -12: loki (log aggregation)
+Wave  -11: promtail (log collection)
+Wave  -10: cert-manager, external-dns, metrics-server (certificates & DNS & metrics)
+Wave   -8: argo-workflows (CI/CD)
+Wave   -7: localstack (S3 mock for Velero)
+Wave   -5: velero, falco (backup, runtime security)
 ```
 
 ### ✅ Resolved Issues
@@ -410,18 +425,20 @@ Wave  -5: velero (backup solution)
 - **Analysis**: Could move to -10 or -5 (no critical dependencies)
 - **Decision**: Keep at -20 (metrics available when Prometheus starts)
 
-### ✅ Validated Dependencies
+### Validated Dependencies
 
-- ✅ **ArgoCD** (-50) → Deploys itself first (correct)
-- ✅ **MetalLB** (-35) → Provides LoadBalancer IPs before services need them
-- ✅ **Synology CSI** (-30) → Storage driver available before PVCs
-- ✅ **kube-prometheus-stack** (-15) → Uses CSI for 50Gi Prometheus PVC
-- ✅ **Loki** (-12) → Uses CSI for 20Gi log storage PVC
-- ✅ **Promtail** (-11) → Depends on Loki being available
-- ✅ **cert-manager** (-10) → Independent, issues certs on-demand
-- ✅ **external-dns** (-10) → Works with TLS Ingresses (safe timing)
-- ✅ **LocalStack** (-7) → S3 mock available before Velero
-- ✅ **Velero** (-5) → Uses CSI and LocalStack S3
+- **Tigera Operator** (-100) → CNI available before all other workloads
+- **ArgoCD** (-50) → Deploys itself after CNI is ready
+- **MetalLB** (-35) → Provides LoadBalancer IPs before services need them
+- **Synology CSI** (-30) → Storage driver available before PVCs
+- **kube-prometheus-stack** (-15) → Uses CSI for 50Gi Prometheus PVC
+- **Loki** (-12) → Uses CSI for 20Gi log storage PVC
+- **Promtail** (-11) → Depends on Loki being available
+- **cert-manager** (-10) → Independent, issues certs on-demand
+- **external-dns** (-10) → Works with TLS Ingresses (safe timing)
+- **LocalStack** (-7) → S3 mock available before Velero
+- **Velero** (-5) → Uses CSI and LocalStack S3
+- **Falco** (-5) → Runtime security after monitoring is ready
 
 ### 🎯 Recommended Actions
 
