@@ -140,6 +140,12 @@ nodeCollector:
       cpu: 300m
       memory: 300Mi
 
+  # Tolerations for node-collector to scan control-plane nodes
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
 # RBAC configuration
 rbac:
   create: true
@@ -150,9 +156,5 @@ serviceAccount:
   name: trivy-operator
 
 # Security policies
-# Configure tolerations to scan control-plane nodes
-# (similar to node-exporter configuration)
+# Note: nodeCollector.tolerations are configured above for control-plane scanning
 tolerations: []
-# - key: node-role.kubernetes.io/control-plane
-#   operator: Exists
-#   effect: NoSchedule
