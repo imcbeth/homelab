@@ -13,7 +13,7 @@ spec:
   sources:
     # Tigera operator from official GitHub release
     - repoURL: https://github.com/projectcalico/calico.git
-      targetRevision: v3.29.2
+      targetRevision: v3.31.3
       path: manifests
       directory:
         include: 'tigera-operator.yaml'
