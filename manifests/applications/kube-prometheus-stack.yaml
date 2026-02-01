@@ -14,6 +14,16 @@ spec:
       helm:
         valueFiles:
           - $values/manifests/base/kube-prometheus-stack/values.yaml
+        values: |
+          admissionWebhooks:
+            patch:
+              annotations:
+                argocd.argoproj.io/hook: PreSync
+                argocd.argoproj.io/hook-delete-policy: HookSucceeded
+          prometheusOperator:
+            admissionWebhooks:
+              createSecretJob:
+                ttlSecondsAfterFinished: null # Or a value like 300
     - repoURL: git@github.com:imcbeth/homelab.git
       path: manifests/base/kube-prometheus-stack
       targetRevision: HEAD
