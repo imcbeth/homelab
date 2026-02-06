@@ -3,14 +3,9 @@ kind: Kustomization
 
 resources:
   # Constraint Templates (policy definitions)
+  # These create the CRDs that Constraints depend on
   - constraint-templates/require-resource-limits.yaml
   - constraint-templates/allowed-repos.yaml
   - constraint-templates/require-labels.yaml
   - constraint-templates/block-nodeport.yaml
   - constraint-templates/container-limits.yaml
-  # Constraints (policy bindings)
-  - constraints/require-resource-limits.yaml
-  - constraints/allowed-repos.yaml
-  - constraints/require-labels.yaml
-  - constraints/block-nodeport.yaml
-  - constraints/container-limits.yaml
