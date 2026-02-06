@@ -568,12 +568,12 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "iSCSILUNIopsRead",
+              "expr": "iSCSILUNIopsRead{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Read",
               "refId": "A"
             },
             {
-              "expr": "iSCSILUNIopsWrite",
+              "expr": "iSCSILUNIopsWrite{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Write",
               "refId": "B"
             }
@@ -627,17 +627,17 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "iSCSILUNDiskLatencyRead",
+              "expr": "iSCSILUNDiskLatencyRead{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Disk Read",
               "refId": "A"
             },
             {
-              "expr": "iSCSILUNDiskLatencyWrite",
+              "expr": "iSCSILUNDiskLatencyWrite{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Disk Write",
               "refId": "B"
             },
             {
-              "expr": "iSCSILUNDiskLatencyAvg",
+              "expr": "iSCSILUNDiskLatencyAvg{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Disk Avg",
               "refId": "C"
             }
@@ -691,12 +691,12 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "iSCSILUNNetworkLatencyTx",
+              "expr": "iSCSILUNNetworkLatencyTx{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Network Tx",
               "refId": "A"
             },
             {
-              "expr": "iSCSILUNNetworkLatencyRx",
+              "expr": "iSCSILUNNetworkLatencyRx{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Network Rx",
               "refId": "B"
             }
@@ -750,7 +750,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "iSCSILUNQueueDepth",
+              "expr": "iSCSILUNQueueDepth{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}}",
               "refId": "A"
             }
@@ -817,12 +817,12 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "iSCSILUNThroughputReadHigh * 4294967296 + iSCSILUNThroughputReadLow",
+              "expr": "iSCSILUNThroughputReadHigh{job=\"snmp-synology\"} * 4294967296 + iSCSILUNThroughputReadLow{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Read",
               "refId": "A"
             },
             {
-              "expr": "iSCSILUNThroughputWriteHigh * 4294967296 + iSCSILUNThroughputWriteLow",
+              "expr": "iSCSILUNThroughputWriteHigh{job=\"snmp-synology\"} * 4294967296 + iSCSILUNThroughputWriteLow{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Write",
               "refId": "B"
             }
@@ -876,12 +876,12 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "iSCSILUNIoSizeRead",
+              "expr": "iSCSILUNIoSizeRead{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Read",
               "refId": "A"
             },
             {
-              "expr": "iSCSILUNIoSizeWrite",
+              "expr": "iSCSILUNIoSizeWrite{job=\"snmp-synology\"}",
               "legendFormat": "{{iSCSILUNInfoIndex}} Write",
               "refId": "B"
             }
@@ -1173,7 +1173,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "(raidTotalSize - raidFreeSize) / raidTotalSize * 100",
+              "expr": "(raidTotalSize{job=\"snmp-synology\"} - raidFreeSize{job=\"snmp-synology\"}) / raidTotalSize{job=\"snmp-synology\"} * 100",
               "legendFormat": "{{raidName}}",
               "refId": "A"
             }
@@ -1212,7 +1212,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "raidFreeSize",
+              "expr": "raidFreeSize{job=\"snmp-synology\"}",
               "legendFormat": "{{raidName}}",
               "refId": "A"
             }
@@ -1266,17 +1266,17 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "spaceIOLA1",
+              "expr": "spaceIOLA1{job=\"snmp-synology\"}",
               "legendFormat": "{{spaceIODevice}} 1m avg",
               "refId": "A"
             },
             {
-              "expr": "spaceIOLA5",
+              "expr": "spaceIOLA5{job=\"snmp-synology\"}",
               "legendFormat": "{{spaceIODevice}} 5m avg",
               "refId": "B"
             },
             {
-              "expr": "spaceIOLA15",
+              "expr": "spaceIOLA15{job=\"snmp-synology\"}",
               "legendFormat": "{{spaceIODevice}} 15m avg",
               "refId": "C"
             }
@@ -1333,7 +1333,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "raidStatus",
+              "expr": "raidStatus{job=\"snmp-synology\"}",
               "legendFormat": "{{raidName}}",
               "refId": "A"
             }
