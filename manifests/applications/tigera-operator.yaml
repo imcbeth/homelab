@@ -17,7 +17,7 @@ spec:
       path: manifests
       directory:
         include: 'tigera-operator.yaml'
-    # Installation CR from homelab repository
+    # Installation + APIServer CRs from homelab repository
     - repoURL: git@github.com:imcbeth/homelab.git
       path: manifests/base/tigera-operator
       targetRevision: HEAD
@@ -67,6 +67,12 @@ spec:
         - .spec.calicoNetwork.ipPools[].assignmentMode
         - .spec.calicoNetwork.ipPools[].disableBGPExport
         - .spec.calicoNetwork.ipPools[].disableNewAllocations
+    # Calico APIServer CR - operator populates status/finalizers
+    - group: operator.tigera.io
+      kind: APIServer
+      jsonPointers:
+        - /status
+        - /metadata/finalizers
     # CRDs have runtime fields that differ from upstream
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
