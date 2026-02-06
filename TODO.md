@@ -331,17 +331,6 @@
 - [ ] Status page (Uptime Kuma or similar)
 - [ ] Internal chat/collaboration tool
 
-### 24. **LLM Hosting & AI Infrastructure** (Planning)
-- [ ] **GPU Hardware** - Add GPU-capable unit to cluster (planned)
-- [ ] **Evaluate inference frameworks** - vLLM, Ollama, LocalAI, llama.cpp for ARM64/GPU
-- [ ] **Kubernetes GPU scheduling** - NVIDIA device plugin or equivalent
-- [ ] **Model storage** - Plan NFS/iSCSI storage for large model weights (7B-70B+ parameter models)
-- [ ] **Resource isolation** - Dedicated node pool or taints/tolerations for GPU workloads
-- [ ] **API gateway** - OpenAI-compatible API endpoint for model serving
-- [ ] **Monitoring** - GPU utilization, inference latency, token throughput dashboards
-- [ ] **Model management** - Version control and deployment pipeline for models
-- [ ] **Network considerations** - High-bandwidth model loading, inference API exposure
-
 ### 21. **Observability Maturity Enhancements**
 - [ ] **Distributed Tracing** - Evaluate Jaeger or Tempo for trace collection
 - [ ] **Continuous Profiling** - Pyroscope for application performance profiling
@@ -366,6 +355,17 @@
 - [ ] **Network Egress Optimization** - Monitor and optimize outbound traffic
 - [ ] **Power Consumption Tracking** - PoE monitoring and efficiency analysis
 - [ ] **Carbon Footprint** - Calculate and optimize cluster carbon footprint
+
+### 24. **LLM Hosting & AI Infrastructure** (Planning)
+- [ ] **GPU Hardware** - Add GPU-capable unit to cluster (planned)
+- [ ] **Evaluate inference frameworks** - vLLM, Ollama, LocalAI, llama.cpp for ARM64/GPU
+- [ ] **Kubernetes GPU scheduling** - NVIDIA device plugin or equivalent
+- [ ] **Model storage** - Plan NFS/iSCSI storage for large model weights (7B-70B+ parameter models)
+- [ ] **Resource isolation** - Dedicated node pool or taints/tolerations for GPU workloads
+- [ ] **API gateway** - OpenAI-compatible API endpoint for model serving
+- [ ] **Monitoring** - GPU utilization, inference latency, token throughput dashboards
+- [ ] **Model management** - Version control and deployment pipeline for models
+- [ ] **Network considerations** - High-bandwidth model loading, inference API exposure
 
 ---
 
