@@ -109,8 +109,8 @@
   - [x] Add to kustomization and deploy via GitOps (N/A - all already deployed)
   - [x] Verify dashboards load correctly after migration (All 30 dashboards confirmed via sidecar)
   - [x] Document dashboard creation and modification workflow (Added comprehensive audit section)
-- [ ] Network utilization by VLAN/segment
-- [ ] Storage performance metrics (iSCSI latency, IOPS, throughput)
+- [x] Network utilization dashboard - Deployed initial cluster-wide network utilization view (PR pending, 2026-02-05)
+- [x] Storage performance metrics (iSCSI latency, IOPS, throughput) - Dashboard deployed (PR #383, 2026-02-05)
 - [ ] Application performance monitoring (APM) dashboard
 
 ### 5. **Metrics Server Deployment**
@@ -166,7 +166,7 @@
 - [x] **External Secrets Operator Removed** - Evaluation complete, not needed (2026-01-14)
 - [x] **Secrets Directory Cleaned** - Only bootstrap secret (ArgoCD SSH key) remains (2026-01-14)
 - [x] **Documentation Updated** - CLAUDE_NOTES.md and secrets/README.md updated
-- [ ] Set up secret rotation automation for certificates
+- [x] Set up SealedSecrets sealing key rotation automation - SealedSecrets controller key rotation enabled (30d, PR pending, 2026-02-05); cert-manager separately handles TLS cert renewal automatically
 - [ ] Create runbook for adding new SealedSecrets
 
 ### 9. **Network Policies** ✅ COMPLETE (2026-01-25)

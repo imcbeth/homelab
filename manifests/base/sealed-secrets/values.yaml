@@ -37,7 +37,7 @@ metrics:
 # IMPORTANT: The sealing key pair is auto-generated on first install
 # Backup the key for disaster recovery:
 #   kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > sealed-secrets-key-backup.yaml
-keyrenewperiod: "0"  # Disable automatic key rotation (manual control preferred)
+keyrenewperiod: "720h"  # Rotate sealing key every 30 days; old keys retained for decryption
 
 # Controller settings
 controller:
