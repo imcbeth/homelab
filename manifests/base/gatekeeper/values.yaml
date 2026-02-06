@@ -1,0 +1,65 @@
+# OPA Gatekeeper Configuration for Raspberry Pi 5 Kubernetes Homelab
+# Cluster: 5x Pi 5 nodes (16GB each, 80GB total)
+# Purpose: Admission control and policy enforcement
+
+# =============================================================================
+# Replica Configuration
+# =============================================================================
+# Single replica sufficient for homelab (default is 3 for HA)
+# failurePolicy: Ignore (Helm default) allows requests through if webhook unavailable
+replicas: 1
+
+# =============================================================================
+# Audit Configuration
+# =============================================================================
+# 5-minute audit interval to reduce CPU load on Pi cluster (default 60s)
+auditInterval: 300
+constraintViolationsLimit: 20
+auditFromCache: false
+
+audit:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# =============================================================================
+# Controller Manager Configuration
+# =============================================================================
+controllerManager:
+  # System namespaces exempt from admission control to avoid chicken-and-egg issues
+  exemptNamespaces:
+    - kube-system
+    - argocd
+    - gatekeeper-system
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# =============================================================================
+# Logging & Events
+# =============================================================================
+logLevel: INFO
+logDenies: true
+
+# =============================================================================
+# Mutation (enabled, default is already false for disableMutation)
+# =============================================================================
+disableMutation: false
+
+# =============================================================================
+# Prometheus Metrics
+# =============================================================================
+# Gatekeeper exposes metrics on port 8888 by default (metricsBackends: prometheus)
+metricsBackends: ["prometheus"]
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8888"

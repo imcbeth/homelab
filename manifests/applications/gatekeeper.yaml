@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gatekeeper
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Deploy after monitoring stack, before Velero/Falco
+    argocd.argoproj.io/sync-wave: "-6"
+spec:
+  project: infrastructure
+  sources:
+    # Helm chart from OPA Gatekeeper repository
+    - repoURL: https://open-policy-agent.github.io/gatekeeper/charts
+      chart: gatekeeper
+      targetRevision: 3.21.1
+      helm:
+        valueFiles:
+          - $values/manifests/base/gatekeeper/values.yaml
+    # Values file from homelab git repository
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/gatekeeper
+      targetRevision: HEAD
+      ref: values
+    # Additional manifests (constraint templates, constraints)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/gatekeeper
+      targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gatekeeper-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

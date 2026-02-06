@@ -1,0 +1,27 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRepos
+metadata:
+  name: allowed-repos
+spec:
+  # Dryrun mode: log violations without blocking requests
+  # Switch to "deny" after auditing existing workloads
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+      - argocd
+      - gatekeeper-system
+      - calico-system
+      - tigera-operator
+      - istio-system
+      - cert-manager
+  parameters:
+    repos:
+      - "docker.io"
+      - "ghcr.io"
+      - "quay.io"
+      - "registry.k8s.io"
+      - "gcr.io"

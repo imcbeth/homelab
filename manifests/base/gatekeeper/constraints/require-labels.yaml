@@ -1,0 +1,23 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireLabels
+metadata:
+  name: require-labels
+spec:
+  # Dryrun mode: log violations without blocking requests
+  # Switch to "deny" after auditing existing workloads
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+      - argocd
+      - gatekeeper-system
+      - calico-system
+      - tigera-operator
+      - istio-system
+      - cert-manager
+  parameters:
+    labels:
+      - "app.kubernetes.io/name"
