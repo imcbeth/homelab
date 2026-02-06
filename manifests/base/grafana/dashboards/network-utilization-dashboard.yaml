@@ -411,7 +411,7 @@ data:
                 "mode": "absolute",
                 "steps": [ { "color": "green", "value": null } ]
               },
-              "unit": "pps"
+              "unit": "ops"
             },
             "overrides": []
           },
@@ -730,12 +730,12 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "rate(ifHCInOctets{ifName=~\"eth.*|bond.*\"}[5m])",
+              "expr": "rate(ifHCInOctets{job=\"snmp-synology\",ifName=~\"eth.*|bond.*\"}[5m])",
               "legendFormat": "{{ifName}} Rx",
               "refId": "A"
             },
             {
-              "expr": "rate(ifHCOutOctets{ifName=~\"eth.*|bond.*\"}[5m])",
+              "expr": "rate(ifHCOutOctets{job=\"snmp-synology\",ifName=~\"eth.*|bond.*\"}[5m])",
               "legendFormat": "{{ifName}} Tx",
               "refId": "B"
             }
@@ -787,12 +787,12 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "rate(ifHCInUcastPkts{ifName=~\"eth.*|bond.*\"}[5m])",
+              "expr": "rate(ifHCInUcastPkts{job=\"snmp-synology\",ifName=~\"eth.*|bond.*\"}[5m])",
               "legendFormat": "{{ifName}} Rx Unicast",
               "refId": "A"
             },
             {
-              "expr": "rate(ifHCOutUcastPkts{ifName=~\"eth.*|bond.*\"}[5m])",
+              "expr": "rate(ifHCOutUcastPkts{job=\"snmp-synology\",ifName=~\"eth.*|bond.*\"}[5m])",
               "legendFormat": "{{ifName}} Tx Unicast",
               "refId": "B"
             }
