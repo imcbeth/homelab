@@ -3,6 +3,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8sallowedrepos
   annotations:
+    argocd.argoproj.io/sync-wave: "1"
     description: Restricts container images to approved registries.
 spec:
   crd:
