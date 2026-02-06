@@ -141,7 +141,7 @@
   - [x] VulnerabilityReports available via kubectl
   - [x] Scanning all cluster images automatically
   - [x] Node-collector tolerations for control-plane scanning (PR #345, 2026-01-30)
-- [x] **Falco** - Runtime security monitoring (deployed 2026-01-29, chart 4.20.1)
+- [x] **Falco** - Runtime security monitoring (deployed 2026-01-29, chart 8.0.0)
   - [x] Modern eBPF driver for ARM64 efficiency
   - [x] DaemonSet running on all nodes including control-plane
   - [x] Falcosidekick with AlertManager and Loki integration
@@ -198,7 +198,7 @@
 - [x] Performance impact analysis on Pi 5 cluster (~38m CPU, ~145Mi memory)
 - [x] Document decision and implementation plan
 - **Status:** Istio Ambient Mesh deployed with mTLS on 29 pods across 6 namespaces
-- **Note:** 18/20 ArgoCD apps Synced (istio-cni, istiod show cosmetic OutOfSync from Helm label drift)
+- **Note:** All 22 ArgoCD apps Synced and Healthy (OutOfSync resolved 2026-02-05, PRs #379-381)
 
 ### 11. **Ingress Enhancements**
 - [ ] Document current nginx-ingress configuration
@@ -330,6 +330,17 @@
 - [ ] Internal wiki or knowledge base
 - [ ] Status page (Uptime Kuma or similar)
 - [ ] Internal chat/collaboration tool
+
+### 24. **LLM Hosting & AI Infrastructure** (Planning)
+- [ ] **GPU Hardware** - Add GPU-capable unit to cluster (planned)
+- [ ] **Evaluate inference frameworks** - vLLM, Ollama, LocalAI, llama.cpp for ARM64/GPU
+- [ ] **Kubernetes GPU scheduling** - NVIDIA device plugin or equivalent
+- [ ] **Model storage** - Plan NFS/iSCSI storage for large model weights (7B-70B+ parameter models)
+- [ ] **Resource isolation** - Dedicated node pool or taints/tolerations for GPU workloads
+- [ ] **API gateway** - OpenAI-compatible API endpoint for model serving
+- [ ] **Monitoring** - GPU utilization, inference latency, token throughput dashboards
+- [ ] **Model management** - Version control and deployment pipeline for models
+- [ ] **Network considerations** - High-bandwidth model loading, inference API exposure
 
 ### 21. **Observability Maturity Enhancements**
 - [ ] **Distributed Tracing** - Evaluate Jaeger or Tempo for trace collection
