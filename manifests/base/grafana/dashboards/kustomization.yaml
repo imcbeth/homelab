@@ -18,6 +18,9 @@ resources:
   - synology-dashboard.yaml
   - synology-dashboard2.yaml
 
+  # Storage Dashboards
+  - storage-performance-dashboard.yaml
+
   # UniFi Dashboards
   - unifi-access-points.yaml
   - unifi-clients.yaml
