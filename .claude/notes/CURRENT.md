@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-01-30
+**Last Updated:** 2026-02-05
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -48,11 +48,14 @@
 - **Gotcha:** K8s API egress requires both ClusterIP (10.96.0.1:443) AND control plane network (10.0.10.0/24:6443)
 
 **Argo Workflows:** Deployed (2026-01-24)
-- Argo Workflows v3.7.8 (Helm chart 0.47.1) at sync-wave -8
-- 16 ArgoCD applications total, all Synced and Healthy
+- Argo Workflows v3.7.8 (Helm chart 0.47.3) at sync-wave -8
 - B2 artifact storage working (PRs #287-289 fixed credentials)
 - NetworkPolicy enabled (PR #291 fixed K8s API egress)
 - UI accessible at https://workflows.k8s.n37.ca (PR #293)
+
+**ArgoCD:** 22 apps, all Synced and Healthy (2026-02-05)
+- ServerSideApply drift fully resolved for istio-ztunnel and tigera-operator
+- Server-Side Apply enabled on ArgoCD itself (#376)
 
 **External-DNS:** Fixed (2026-01-25)
 - Root cause: domain-filter=k8s.n37.ca rejected the n37.ca zone
@@ -65,7 +68,7 @@
 - Namespaces: default, loki, argo-workflows, localstack, unipoller, trivy-system
 - Resource usage: ~38m CPU, ~145Mi memory (istiod + cni + ztunnel)
 - Waypoint proxies: Skipped (L4 mTLS sufficient, add later if L7 needed)
-- ArgoCD: 22 apps total, all Healthy (3 show OutOfSync - cosmetic ServerSideApply quirk)
+- ArgoCD: 22 apps total, all Synced and Healthy (ServerSideApply drift fully resolved)
 - **Gotcha:** Transparent proxy preserves source IPs; NetworkPolicies need HBONE port 15008 from source namespace
 
 **Argo Workflows Alerting:** Complete (2026-01-30)
@@ -80,6 +83,46 @@
 ---
 
 ## Recent Sessions
+
+### 2026-02-05: ArgoCD ServerSideApply OutOfSync Fixes
+
+**Completed Work:**
+- Fixed istio-ztunnel perpetual OutOfSync caused by ServerSideApply defaulting
+- Fixed tigera-operator OutOfSync caused by operator-populated defaults on Installation CR
+- All 22 ArgoCD applications now Synced and Healthy (first time with full clean board)
+
+**Pull Requests:**
+- **PR #379:** [Merged] fix: add ignoreDifferences for istio-ztunnel DaemonSet drift
+- **PR #380:** [Merged] fix: broaden ignoreDifferences for ztunnel K8s-defaulted fields
+- **PR #381:** [Merged] fix: add missing ignoreDifferences for tigera-operator Installation CR
+
+**Issues Resolved:**
+
+1. **istio-ztunnel OutOfSync**
+   - Root cause: ServerSideApply causes Kubernetes to populate default values (imagePullPolicy, revisionHistoryLimit, readinessProbe defaults, dnsPolicy, restartPolicy, schedulerName, terminationMessage settings, fieldRef.apiVersion, projected/configMap defaultMode, securityContext) that aren't in the Helm chart template
+   - Fix: Added comprehensive `ignoreDifferences` with `jqPathExpressions` covering all defaulted fields + `RespectIgnoreDifferences=true`
+   - Note: Initial PR #379 with just label/annotation ignores was insufficient; PR #380 added the remaining K8s-defaulted fields
+
+2. **tigera-operator OutOfSync**
+   - Root cause: Tigera operator populates defaults on Installation CR at runtime (finalizers, ipPool defaults: allowedUses, assignmentMode, disableBGPExport, disableNewAllocations, plus cni, logging, nodeUpdateStrategy, etc.)
+   - Fix: Added `metadata/finalizers` to jsonPointers and ipPool defaults to `jqPathExpressions`
+   - Note: Existing ignoreDifferences already covered most fields; only finalizers and ipPool defaults were missing
+
+**Key Learning:**
+- `ignoreDifferences` with label/annotation ignores alone is NOT sufficient for ServerSideApply DaemonSet drift
+- Must enumerate ALL Kubernetes-defaulted fields in `jqPathExpressions`
+- Application manifests in `manifests/applications/` are NOT auto-deployed by ArgoCD self-management; they require `kubectl apply` to update the Application spec in-cluster
+- Always test `ignoreDifferences` changes by applying directly before creating PRs
+
+**Cluster Status:**
+- 22/22 ArgoCD applications Synced and Healthy
+- All Renovate dependency updates flowing cleanly (15+ PRs merged since last session)
+
+**Files Modified:**
+- `manifests/applications/istiod.yaml` (istio-ztunnel ignoreDifferences + RespectIgnoreDifferences)
+- `manifests/applications/tigera-operator.yaml` (Installation CR ignoreDifferences)
+
+---
 
 ### 2026-01-30: Dependency Updates, Documentation Sync & Argo Workflows Alerting
 
@@ -97,12 +140,6 @@
 - **PR #308:** [Merged] chore(deps): Istio 1.24→1.28.3 (minor)
 - **PR #354:** [Merged] feat: Add Argo Workflows AlertManager rules
 
-**k8s-docs-n37 Updates:**
-- New: `docs/applications/argo-workflows.md` - Argo Workflows v0.47.1 documentation
-- New: `docs/applications/localstack.md` - LocalStack AWS emulator docs
-- Updated: `docs/applications/kube-prometheus-stack.md` - Version 81.2.2, ignoreDifferences config
-- Updated: `docs/intro.md` - CNI migration, Service Mesh, Runtime Security sections
-
 **Argo Workflows Alerts Created:**
 | Alert | Severity | Description |
 |-------|----------|-------------|
@@ -114,11 +151,6 @@
 | ArgoWorkflowControllerNotLeader | critical | Lost leader election |
 | ArgoWorkflowControllerDown | critical | Controller metrics absent |
 | ArgoWorkflowHighFailureRate | warning | >30% failure rate over 24h |
-
-**Cluster Status:**
-- 22 ArgoCD applications, all Healthy
-- 3 OutOfSync (istio-cni, istiod, tigera-operator) - cosmetic ServerSideApply quirk
-- All Argo Workflows alerts active in Prometheus, currently inactive (healthy)
 
 **Files Created/Modified:**
 - `manifests/base/kube-prometheus-stack/argo-workflows-alerts.yaml` (new)
@@ -141,317 +173,50 @@
 - **PR #60 (k8s-docs-n37):** docs: Update NetworkPolicies documentation with current implementation
 
 **Issues Resolved:**
-
-1. **Metrics-Server ServiceMonitor DOWN**
-   - Root cause: Helm chart doesn't support `scheme: https` or `tlsConfig`
-   - Manual `servicemonitor.yaml` existed but wasn't applied (ArgoCD `ref:` only source)
-   - Fix: Disabled Helm ServiceMonitor, added third ArgoCD source to apply manual manifests
-
-2. **Trivy Dashboard Empty / No VulnerabilityReports**
-   - Root cause: NetworkPolicy blocked intra-namespace communication
-   - Scan jobs couldn't connect to trivy-server (port 4954)
-   - Fix: Added egress/ingress rules for intra-namespace traffic
-
-**Argo Workflows Dashboard Panels:**
-- Overview: Total/Running/Succeeded/Failed/Error counts, Controller health
-- Trends: Status over time, Operation duration percentiles (p50/p95/p99)
-- Controller: Memory, CPU, Goroutines
-- Queue: Depth and add rate
-- Pods: Workflow pod counts and status table
-
-**Network Policy Documentation (k8s-docs-n37):**
-- Updated from 5 to 9 protected namespaces
-- Added Istio Ambient mesh patterns (HBONE port 15008)
-- Added K8s API dual-egress pattern explanation
-- Architecture diagrams and troubleshooting guides
+1. **Metrics-Server ServiceMonitor DOWN** - Helm chart doesn't support `scheme: https`; added third ArgoCD source for manual manifests
+2. **Trivy Dashboard Empty** - NetworkPolicy blocked intra-namespace communication; added egress/ingress rules
 
 **Files Modified:**
 - `manifests/base/argo-workflows/values.yaml` (ServiceMonitor config)
 - `manifests/base/grafana/dashboards/argo-workflows-dashboard.yaml` (new)
-- `manifests/base/grafana/dashboards/kustomization.yaml`
 - `manifests/applications/metrics-server.yaml` (third source)
-- `manifests/base/metrics-server/values.yaml` (disable Helm ServiceMonitor)
 - `manifests/base/network-policies/trivy-system/network-policy.yaml`
 
 ---
 
-### 2026-01-29 (Afternoon): Documentation Updates
+### 2026-01-29 (Morning/Afternoon): Blackbox-Exporter Fix & Documentation
 
 **Completed Work:**
+- Fixed blackbox-exporter hairpin NAT issue with hostAliases
 - Updated k8s-docs-n37 documentation with recent fixes
-- Added hairpin NAT troubleshooting to blackbox-exporter.md
-- Added Promtail selective labelmap section to loki.md
-- Expanded Istio ArgoCD OutOfSync fix in istio.md
 - Extracted reusable patterns as learned skills
 
 **Pull Requests:**
-- **PR #59 (k8s-docs-n37):** docs: Add troubleshooting sections for recent fixes
-
-**Learned Skills Extracted:**
-- `~/.claude/skills/learned/kubernetes-hairpin-nat-workaround.md`
-- `~/.claude/skills/learned/promtail-loki-label-limit.md`
-
----
-
-### 2026-01-29 (Morning): Blackbox-Exporter Hairpin NAT Fix
-
-**Completed Work:**
-- Diagnosed blackbox-exporter failing to probe internal HTTPS endpoints
-- Root cause: DNS resolves to external MetalLB IP (10.0.10.10), causing hairpin NAT timeout
-- Fix: Added `hostAliases` to resolve internal hostnames to ingress ClusterIP (10.98.168.24)
-
-**Pull Requests:**
 - **PR #327:** [Merged] fix: Add hostAliases to blackbox-exporter for hairpin NAT
-
-**Key Learning:**
-Pods inside the cluster cannot reach external IPs that route back to the same cluster (hairpin NAT). Solution: Use `hostAliases` to map hostnames directly to internal ClusterIPs.
-
-**Hostnames Fixed:**
-- argocd.k8s.n37.ca
-- grafana.k8s.n37.ca
-- workflows.k8s.n37.ca
-- localstack.k8s.n37.ca
+- **PR #59 (k8s-docs-n37):** docs: Add troubleshooting sections for recent fixes
 
 **Files Modified:**
 - `manifests/base/kube-prometheus-stack/blackbox-exporter-deployment.yaml`
 
 ---
 
-### 2026-01-28 (Late Night): Promtail Label Limit Fix
+### 2026-01-28: Istio Ambient Mesh Fixes (Labels, Sync, NetworkPolicies)
 
 **Completed Work:**
-- Fixed promtail errors: "has 17 label names; limit 15"
-- Istio pods (ztunnel, istio-cni-node) have 17+ Kubernetes labels
-- Initial `labeldrop` approach failed (relabel_configs process original labels)
-- Implemented selective `labelmap` to only capture essential labels
+- Fixed Promtail label limit (selective labelmap for Loki 15-label max)
+- Added ignoreDifferences for Istio ArgoCD webhook/label drift
+- Fixed NetworkPolicies for Istio Ambient transparent proxy (HBONE port 15008)
+- 29 pods with mTLS across 6 namespaces
 
 **Pull Requests:**
-- **PR #324:** [Merged] fix: Drop noisy labels in promtail (didn't work)
-- **PR #325:** [Merged] fix: Use selective labelmap in promtail for Loki label limit
-
-**Key Learning:**
-Promtail `labeldrop` in relabel_configs doesn't work after `labelmap` because relabel_configs process against the original label set, not transformed labels. Solution: use selective `labelmap` regex to only capture needed labels.
-
-**Selective Labelmap Pattern:**
-```yaml
-- action: labelmap
-  regex: __meta_kubernetes_pod_label_(app|app_kubernetes_io_name|app_kubernetes_io_instance|app_kubernetes_io_component|app_kubernetes_io_part_of|k8s_app|service_name)
-```
-
-**Label Count After Fix:**
-- Fixed: namespace, pod, container, node (4)
-- Mapped: up to 7 essential labels
-- Auto: filename, stream (2)
-- **Total: max 13 labels** (under 15 limit)
+- **PR #315-319:** [Merged] Istio Ambient NetworkPolicy fixes
+- **PR #320-322:** [Merged] Istio ArgoCD sync fixes
+- **PR #324-325:** [Merged] Promtail label limit fixes
 
 **Files Modified:**
 - `manifests/base/promtail/values.yaml`
-
----
-
-### 2026-01-28 (Evening): Istio ArgoCD Sync Fixes
-
-**Completed Work:**
-- Added `ignoreDifferences` to Istio ArgoCD applications for webhook caBundle drift
-- Switched from jsonPointers to jqPathExpressions for broader label/annotation matching
-- Added RespectIgnoreDifferences sync option
-- Cleaned up temporary `istio-1.24.2/` directory
-
-**Pull Requests:**
-- **PR #320:** [Merged] docs: Update CURRENT.md with Istio Ambient session
-- **PR #321:** [Merged] fix: Add ignoreDifferences for Istio webhook drift
-- **PR #322:** [Merged] fix: Improve Istio ignoreDifferences with jqPathExpressions
-
-**ArgoCD Status After Fixes:**
-- 18/20 applications Synced and Healthy
-- 2 apps (istio-cni, istiod) show OutOfSync but Healthy
-- OutOfSync is cosmetic - Istio Helm chart adds operator labels at runtime
-
-**Key Learning:**
-Istio's Helm chart dynamically adds labels like `install.operator.istio.io/owning-resource` and `operator.istio.io/component` that cause perpetual drift. Using `jqPathExpressions` with broad label ignores helps but doesn't fully resolve. The apps function correctly despite the OutOfSync status.
-
-**Files Modified:**
-- `manifests/applications/istio-base.yaml` (ignoreDifferences)
-- `manifests/applications/istio-cni.yaml` (ignoreDifferences + RespectIgnoreDifferences)
-- `manifests/applications/istiod.yaml` (ignoreDifferences + RespectIgnoreDifferences)
-
----
-
-### 2026-01-28: Istio Ambient NetworkPolicy Fixes
-
-**Completed Work:**
-- Fixed critical NetworkPolicy issues for Istio Ambient transparent proxy
-- Updated all meshed namespace policies with HBONE port 15008 rules
-- 29 pods now have mTLS across 6 namespaces
-- Documented NetworkPolicy pattern for transparent proxy architecture
-
-**Pull Requests:**
-- **PR #315:** [Merged] fix: Add HBONE ingress rules for Istio ambient mesh
-- **PR #316:** [Merged] fix: Correct HBONE ingress selector for Istio ambient mesh
-- **PR #317:** [Merged] fix: Allow application ports from istio-system for ambient mesh
-- **PR #318:** [Merged] fix: Add HBONE port 15008 for Istio ambient transparent proxy
-- **PR #319:** [Merged] docs: Add session notes for Istio Ambient NetworkPolicy fixes
-
-**Key Technical Learning:**
-Istio Ambient uses transparent proxy (TPROXY) which preserves source IPs. NetworkPolicies must:
-1. Allow HBONE port 15008 from the actual source namespace (not just istio-system)
-2. Include port 15008 in both ingress AND egress rules for mesh communication
-3. Allow app ports from istio-system for ztunnel-terminated connections
-
-**Resource Usage:**
-| Component | Instances | CPU | Memory |
-|-----------|-----------|-----|--------|
-| istiod | 1 | ~3m | ~39Mi |
-| istio-cni-node | 5 | ~5m | ~68Mi |
-| ztunnel | 5 | ~30m | ~38Mi |
-
-**Files Modified:**
+- `manifests/applications/istio-base.yaml`, `istio-cni.yaml`, `istiod.yaml`
 - `manifests/base/network-policies/{loki,localstack,argo-workflows,unipoller,trivy-system}/network-policy.yaml`
-
----
-
-### 2026-01-25 (Early Morning): External-DNS, Grafana & Promtail Fixes
-
-**Completed Work:**
-- Diagnosed and fixed external-dns-cloudflare not creating DNS records
-- Diagnosed and fixed Grafana pod mount failure (fsGroup race condition)
-- Diagnosed and fixed promtail pod not ready (missing K8s API egress in loki NetworkPolicy)
-- All 16 ArgoCD applications now Synced and Healthy
-
-**Pull Requests:**
-- **PR #295:** [Merged] fix: Add zone-name-filter for external-dns Cloudflare (partial fix)
-- **PR #296:** [Merged] fix: Use n37.ca domain filter for external-dns Cloudflare (final fix)
-- **PR #297:** [Merged] docs: Update session notes with external-dns fix
-- **PR #298:** [Merged] fix: Add fsGroupChangePolicy for Grafana to fix Synology CSI race
-- **PR #300:** [Merged] docs: Update TODO.md with completed infrastructure fixes
-- **PR #301:** [Merged] fix: Add K8s API egress to loki NetworkPolicy for promtail
-
-**Issues Resolved:**
-1. **external-dns not creating records** - Debug showed "zone n37.ca not in domain filter"
-   - Root cause: domain-filter=k8s.n37.ca fails because k8s.n37.ca is a subdomain, not the zone name
-   - Fix: Changed to domain-filter=n37.ca (the actual Cloudflare zone)
-   - Note: At info log level, no-op syncs don't produce logs (appears stuck but is working)
-
-2. **Grafana pod FailedMount** - `applyFSGroup failed: lstat grafana.db-journal: no such file or directory`
-   - Root cause: Race condition between fsGroup recursive application and SQLite journal file lifecycle
-   - Fix: Added `fsGroupChangePolicy: OnRootMismatch` to skip recursive fsGroup traversal
-
-3. **Promtail pod not ready** - `dial tcp 10.96.0.1:443: i/o timeout` for pod discovery
-   - Root cause: Loki NetworkPolicy was missing K8s API egress rules (same issue as argo-workflows PR #291)
-   - Fix: Added K8s API egress rules (ClusterIP 10.96.0.1:443 + control plane 10.0.10.0/24:6443)
-   - All 5 promtail pods now healthy after restart
-
-**DNS Records Created:**
-- A records: argocd.k8s.n37.ca, grafana.k8s.n37.ca, localstack.k8s.n37.ca, workflows.k8s.n37.ca
-- TXT ownership: external-dns-a-*.k8s.n37.ca
-
-**Files Modified:**
-- `manifests/base/external-dns/deployment-cloudflare.yaml` (domain-filter fix)
-- `manifests/base/kube-prometheus-stack/values.yaml` (fsGroupChangePolicy fix)
-- `manifests/base/network-policies/loki/network-policy.yaml` (K8s API egress fix)
-
----
-
-### 2026-01-24 (Late Night): Argo Workflows Completion & Ingress
-
-**Completed Work:**
-- Verified B2 artifact storage working (ran artifact-test workflow successfully)
-- Fixed NetworkPolicy K8s API egress - requires both ClusterIP AND control plane network
-- Added nginx ingress for Argo Workflows UI at workflows.k8s.n37.ca
-- Updated NetworkPolicies for velero and trivy-system with same API egress fix
-- Discovered external-dns-cloudflare not syncing (investigating)
-
-**Pull Requests:**
-- **PR #290:** [Merged] docs: Mark Argo Workflows B2 artifact storage as fixed
-- **PR #291:** [Merged] fix: Add control plane network to NetworkPolicy API egress rules
-- **PR #292:** [Merged] docs: Update session notes - NetworkPolicy fix complete
-- **PR #293:** [Merged] feat: Add nginx ingress for Argo Workflows UI
-
-**Key Discovery - NetworkPolicy K8s API Egress:**
-With Calico CNI, K8s API access requires BOTH:
-1. ClusterIP service: `10.96.0.1/32:443`
-2. Control plane network: `10.0.10.0/24:6443`
-
-**Files Created/Modified:**
-- `manifests/base/argo-workflows/ingress.yaml` (new)
-- `manifests/base/network-policies/argo-workflows/network-policy.yaml` (enabled + fixed)
-- `manifests/base/network-policies/velero/network-policy.yaml` (API egress fix)
-- `manifests/base/network-policies/trivy-system/network-policy.yaml` (API egress fix)
-
-**Known Issues:**
-- external-dns-cloudflare stuck after startup (no sync logs)
-- TLS certificate pending DNS-01 challenge (manual A record added)
-
----
-
-### 2026-01-24 (Night): Argo Workflows Deployment
-
-**Completed Work:**
-- Deployed Argo Workflows v3.7.8 (Helm chart 0.47.1) at sync-wave -8
-- Configured Pi-optimized resource limits (Controller: 100m/256Mi, Server: 50m/128Mi)
-- Created SealedSecret for B2 credentials (`homelab-workflows` bucket)
-- Added test WorkflowTemplates (hello-world, artifact-test)
-- Created NetworkPolicy for argo-workflows namespace (temporarily disabled)
-- Test workflow executed successfully
-
-**Pull Requests:**
-- **PR #277:** [Merged] feat: Add Argo Workflows for CI/CD pipeline automation
-- **PR #280:** [Merged] fix: Set default serviceAccountName for Argo Workflows
-- **PR #281:** [Merged] fix: Update Argo Workflows B2 credentials
-- **PR #282:** [Merged] fix: Correct NetworkPolicy DNS and API rules
-- **PR #283:** [Merged] fix: Temporarily disable argo-workflows NetworkPolicy
-- **PR #284:** [Merged] fix: Disable archiveLogs until B2 permissions are fixed
-- **PR #285:** [Merged] docs: Mark Argo Workflows as deployed in TODO.md
-
-**Issues Resolved:**
-1. **Workflow pods using wrong service account** - Added `serviceAccountName: argo-workflow` to workflowDefaults
-2. **NetworkPolicy blocking K8s API** - Fixed in PR #291
-3. **B2 "not entitled" error** - Fixed in PRs #287-289
-
-**Files Created:**
-- `manifests/applications/argo-workflows.yaml`
-- `manifests/base/argo-workflows/values.yaml`
-- `manifests/base/argo-workflows/b2-credentials-sealed.yaml`
-- `manifests/base/argo-workflows/test-workflow.yaml`
-- `manifests/base/network-policies/argo-workflows/network-policy.yaml`
-
-**Final Cluster Status:**
-- 16/16 ArgoCD applications Synced and Healthy
-- Test workflow: Succeeded
-
----
-
-### 2026-01-24 (Evening): Network Policies Implementation
-
-**Completed Work:**
-- Implemented Kubernetes NetworkPolicies for 5 namespaces
-- Created ArgoCD Application for GitOps deployment (sync-wave -40)
-- Validated all policies don't break existing functionality
-- All tests passed: Prometheus scraping, Velero backups, Loki logs
-
-**Pull Requests:**
-- **PR #274:** [Merged] feat: Add NetworkPolicies for namespace isolation
-- **PR #57:** [Merged] docs: Add Network Policies documentation (k8s-docs-n37)
-
-**NetworkPolicies Deployed:**
-| Namespace | Ingress Allowed | Egress Allowed |
-|-----------|-----------------|----------------|
-| localstack | velero, ingress-nginx, prometheus | DNS only |
-| unipoller | prometheus | DNS, UniFi (10.0.1.1) |
-| loki | promtail, prometheus, grafana | DNS, alertmanager |
-| trivy-system | prometheus | DNS, K8s API, registries |
-| velero | prometheus | DNS, localstack, B2, K8s API |
-
-**Files Created:**
-- `manifests/base/network-policies/kustomization.yaml`
-- `manifests/base/network-policies/{localstack,unipoller,loki,trivy-system,velero}/network-policy.yaml`
-- `manifests/applications/network-policies.yaml`
-
-**Verification Results:**
-- Prometheus → all namespace metrics: Working
-- Velero → B2 backup storage: Available
-- Promtail → Loki: Connected (label limit warning is pre-existing)
-- ArgoCD UI: HTTP 200
 
 ---
 
@@ -459,6 +224,10 @@ With Calico CNI, K8s API access requires BOTH:
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-01-29 | Monitoring Fixes & Docs | Metrics-server, Trivy, hairpin NAT, learned skills |
+| 2026-01-28 | Istio ArgoCD Sync & Labels | ignoreDifferences, Promtail labelmap, HBONE NetworkPolicies |
+| 2026-01-25 | External-DNS, Grafana & Promtail | Domain-filter fix, fsGroup race, K8s API egress |
+| 2026-01-24 | Argo Workflows & Network Policies | Deployment, B2 artifacts, ingress, 5 namespace policies |
 | 2026-01-23 | Renovate PR Merge & Velero Fix | 20 PRs merged, Velero v1.17 breaking change |
 | 2026-01-21 | Restructure CLAUDE_NOTES.md | Modular notes system, 93% reduction |
 | 2026-01-14 | Sealed Secrets Ops & Backups | Key backup, B2 restore test, ArgoCD backup |
