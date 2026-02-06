@@ -37,8 +37,8 @@ spec:
       - CreateNamespace=true
       - SkipDryRunOnMissingResource=true
     retry:
-      limit: 3
+      limit: 5
       backoff:
-        duration: 10s
+        duration: 15s
         factor: 2
-        maxDuration: 3m
+        maxDuration: 5m

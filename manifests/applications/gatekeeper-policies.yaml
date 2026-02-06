@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gatekeeper-policies
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Deploy after gatekeeper (-6) so ConstraintTemplate CRDs exist
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  project: infrastructure
+  sources:
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/gatekeeper/constraints
+      targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gatekeeper-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
