@@ -1,0 +1,91 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8scontainerlimits
+  annotations:
+    description: Enforces maximum resource limits per container to prevent node monopolization.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sContainerLimits
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            cpu:
+              description: Maximum allowed CPU limit (e.g., "2").
+              type: string
+            memory:
+              description: Maximum allowed memory limit (e.g., "2Gi").
+              type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8scontainerlimits
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          cpu_limit := container.resources.limits.cpu
+          max_cpu := input.parameters.cpu
+          not cpu_within_limit(cpu_limit, max_cpu)
+          msg := sprintf("Container <%v> CPU limit <%v> exceeds maximum allowed <%v>", [container.name, cpu_limit, max_cpu])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          mem_limit := container.resources.limits.memory
+          max_mem := input.parameters.memory
+          not mem_within_limit(mem_limit, max_mem)
+          msg := sprintf("Container <%v> memory limit <%v> exceeds maximum allowed <%v>", [container.name, mem_limit, max_mem])
+        }
+
+        # Convert CPU string to millicores for comparison
+        cpu_within_limit(limit, max) {
+          to_millicores(limit) <= to_millicores(max)
+        }
+
+        to_millicores(cpu) = result {
+          endswith(cpu, "m")
+          result := to_number(trim_suffix(cpu, "m"))
+        }
+
+        to_millicores(cpu) = result {
+          not endswith(cpu, "m")
+          result := to_number(cpu) * 1000
+        }
+
+        # Convert memory string to bytes for comparison
+        mem_within_limit(limit, max) {
+          to_bytes(limit) <= to_bytes(max)
+        }
+
+        to_bytes(mem) = result {
+          endswith(mem, "Gi")
+          result := to_number(trim_suffix(mem, "Gi")) * 1073741824
+        }
+
+        to_bytes(mem) = result {
+          endswith(mem, "Mi")
+          result := to_number(trim_suffix(mem, "Mi")) * 1048576
+        }
+
+        to_bytes(mem) = result {
+          endswith(mem, "Ki")
+          result := to_number(trim_suffix(mem, "Ki")) * 1024
+        }
+
+        to_bytes(mem) = result {
+          endswith(mem, "G")
+          result := to_number(trim_suffix(mem, "G")) * 1000000000
+        }
+
+        to_bytes(mem) = result {
+          endswith(mem, "M")
+          result := to_number(trim_suffix(mem, "M")) * 1000000
+        }
+
+        to_bytes(mem) = result {
+          endswith(mem, "K")
+          result := to_number(trim_suffix(mem, "K")) * 1000
+        }

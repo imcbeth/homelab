@@ -1,0 +1,20 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireResourceLimits
+metadata:
+  name: require-resource-limits
+spec:
+  # Dryrun mode: log violations without blocking requests
+  # Switch to "deny" after auditing existing workloads
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+      - argocd
+      - gatekeeper-system
+      - calico-system
+      - tigera-operator
+      - istio-system
+      - cert-manager

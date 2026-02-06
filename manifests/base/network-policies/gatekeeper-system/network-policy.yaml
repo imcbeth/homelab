@@ -1,0 +1,83 @@
+---
+# OPA Gatekeeper NetworkPolicy
+# Purpose: Restrict Gatekeeper controller and audit network access
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gatekeeper-network-policy
+  namespace: gatekeeper-system
+  labels:
+    app.kubernetes.io/name: gatekeeper
+    app.kubernetes.io/component: security
+spec:
+  # Apply to all Gatekeeper pods
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Kubernetes API server webhook calls
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8443  # Webhook server port
+
+    # Allow Prometheus to scrape metrics (in default namespace)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8888  # Metrics port
+
+    # Allow internal communication within gatekeeper-system namespace
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8443
+        - protocol: TCP
+          port: 8888
+        - protocol: TCP
+          port: 9090  # Health check port
+
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow Kubernetes API access (for audit controller)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    # Allow internal communication within gatekeeper-system namespace
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8443
+        - protocol: TCP
+          port: 8888
+        - protocol: TCP
+          port: 9090

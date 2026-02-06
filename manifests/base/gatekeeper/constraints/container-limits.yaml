@@ -1,0 +1,25 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sContainerLimits
+metadata:
+  name: container-limits
+spec:
+  # Dryrun mode: log violations without blocking requests
+  # Switch to "deny" after auditing existing workloads
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+      - argocd
+      - gatekeeper-system
+      - calico-system
+      - tigera-operator
+      - istio-system
+      - cert-manager
+  parameters:
+    # Maximum 2 CPU cores and 2Gi RAM per container
+    # Prevents any single container from monopolizing a Pi 5 node
+    cpu: "2"
+    memory: "2Gi"

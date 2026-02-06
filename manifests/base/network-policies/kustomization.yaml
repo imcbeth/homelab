@@ -8,8 +8,9 @@ resources:
   # Phase 2: Monitoring namespaces
   - loki/network-policy.yaml
   - trivy-system/network-policy.yaml
-  # Runtime security
+  # Runtime security & policy enforcement
   - falco/network-policy.yaml
+  - gatekeeper-system/network-policy.yaml
   # Phase 3: Security-sensitive namespaces
   - velero/network-policy.yaml
   # CI/CD namespaces
