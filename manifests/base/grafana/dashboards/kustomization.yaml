@@ -21,6 +21,9 @@ resources:
   # Storage Dashboards
   - storage-performance-dashboard.yaml
 
+  # Network Dashboards
+  - network-utilization-dashboard.yaml
+
   # UniFi Dashboards
   - unifi-access-points.yaml
   - unifi-clients.yaml
