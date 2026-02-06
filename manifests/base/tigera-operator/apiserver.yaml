@@ -1,0 +1,11 @@
+---
+# Calico APIServer CR
+# Enables the Calico v3 API (projectcalico.org/v3) so the
+# tigera-operator can fully manage IPPools and other resources.
+# Without this, the operator logs:
+#   "Unable to modify IP pools while Calico API server is unavailable"
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}
