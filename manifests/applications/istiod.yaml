@@ -58,6 +58,14 @@ metadata:
     argocd.argoproj.io/sync-wave: "-42"
 spec:
   project: infrastructure
+  ignoreDifferences:
+    - group: apps
+      kind: DaemonSet
+      jqPathExpressions:
+        - .metadata.labels
+        - .metadata.annotations
+        - .spec.template.metadata.labels
+        - .spec.template.metadata.annotations
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
       chart: ztunnel
@@ -79,3 +87,4 @@ spec:
       selfHeal: true
     syncOptions:
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
