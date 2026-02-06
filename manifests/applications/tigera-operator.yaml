@@ -49,6 +49,7 @@ spec:
       kind: Installation
       jsonPointers:
         - /status
+        - /metadata/finalizers
         - /spec/cni
         - /spec/flexVolumePath
         - /spec/kubeletVolumePluginPath
@@ -61,6 +62,11 @@ spec:
         - /spec/calicoNetwork/linuxPolicySetupTimeoutSeconds
         - /spec/calicoNetwork/multiInterfaceMode
         - /spec/calicoNetwork/windowsDataplane
+      jqPathExpressions:
+        - .spec.calicoNetwork.ipPools[].allowedUses
+        - .spec.calicoNetwork.ipPools[].assignmentMode
+        - .spec.calicoNetwork.ipPools[].disableBGPExport
+        - .spec.calicoNetwork.ipPools[].disableNewAllocations
     # CRDs have runtime fields that differ from upstream
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
