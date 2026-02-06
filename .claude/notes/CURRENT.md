@@ -53,7 +53,7 @@
 - NetworkPolicy enabled (PR #291 fixed K8s API egress)
 - UI accessible at https://workflows.k8s.n37.ca (PR #293)
 
-**ArgoCD:** 22 apps, all Synced and Healthy (2026-02-05)
+**ArgoCD:** 24 apps (22 + gatekeeper + gatekeeper-policies) (2026-02-06)
 - ServerSideApply drift fully resolved for istio-ztunnel and tigera-operator
 - Server-Side Apply enabled on ArgoCD itself (#376)
 
@@ -80,14 +80,66 @@
 - APIServer CR enables v3 API for operator IPPool management
 - Fixed IPPool ownership error (RestoreV3Metadata annotation fix)
 
+**OPA Gatekeeper:** Deployed (2026-02-06)
+- Helm chart 3.21.1, sync-wave -6
+- 2 ArgoCD apps: `gatekeeper` (Helm + ConstraintTemplates) and `gatekeeper-policies` (Constraints)
+- 5 ConstraintTemplates, 5 Constraints (all dryrun mode)
+- Initial audit: 156 resource-limit, 20 allowed-repo, 15 label violations
+- NetworkPolicy configured for gatekeeper-system
+
 **Phase 4 Status:** In Progress
 - Storage performance + network utilization dashboards deployed
 - SealedSecrets key rotation enabled (30d)
-- Next: OPA Gatekeeper, Ingress hardening, APM dashboard
+- OPA Gatekeeper deployed (dryrun mode)
+- Next: Switch Gatekeeper to deny mode, Ingress hardening, APM dashboard
 
 ---
 
 ## Recent Sessions
+
+### 2026-02-06: OPA Gatekeeper Deployment
+
+**Completed Work:**
+- Deployed OPA Gatekeeper v3.21.1 for Kubernetes admission control
+- Created 5 ConstraintTemplates (Rego): resource limits, allowed repos, required labels, block NodePort, container limits
+- Created 5 Constraints in dryrun mode for audit-first rollout
+- Split into 2 ArgoCD Applications (gatekeeper + gatekeeper-policies) to handle CRD ordering
+- Created NetworkPolicy for gatekeeper-system namespace
+- Created k8s-docs-n37 application guide and updated runtime-security docs
+- Updated sidebar navigation in k8s-docs-n37
+
+**Pull Requests:**
+- **PR #389:** [Merged] feat: deploy OPA Gatekeeper for admission control
+- **PR #390:** [Merged] fix: remove duplicate source path from gatekeeper Application
+- **PR #391:** [Merged] fix: add sync waves for gatekeeper CRD ordering
+- **PR #392:** [Merged] fix: split gatekeeper constraints into separate ArgoCD Application
+
+**Issues Resolved:**
+
+1. **Duplicate resources in ArgoCD multi-source app**
+   - Root cause: Source 2 had both `path` and `ref`, causing it to render manifests AND serve as a values ref
+   - Fix: Removed `path` from the ref source
+
+2. **ConstraintTemplate/Constraint CRD ordering**
+   - Root cause: ArgoCD validates ALL resources before syncing ANY; constraint CRDs only exist after Gatekeeper processes ConstraintTemplates
+   - Fix: Split into two Applications - gatekeeper (wave -6) for Helm+Templates, gatekeeper-policies (wave -5) for Constraints with generous retries
+
+**Audit Results (dryrun):**
+- 156 resource-limit violations
+- 20 allowed-repo violations
+- 15 require-label violations
+- 0 block-nodeport violations
+- 0 container-limit violations
+
+**Files Created/Modified:**
+- `manifests/applications/gatekeeper.yaml` (new)
+- `manifests/applications/gatekeeper-policies.yaml` (new)
+- `manifests/base/gatekeeper/` (new directory - values, kustomization, constraint-templates, constraints)
+- `manifests/base/network-policies/gatekeeper-system/network-policy.yaml` (new)
+- `manifests/base/network-policies/kustomization.yaml` (added gatekeeper-system)
+- `TODO.md` (marked OPA Gatekeeper items done)
+
+---
 
 ### 2026-02-05 (Evening): Storage Dashboard, Tigera Fix, Network Dashboard & Cleanup
 
