@@ -84,6 +84,9 @@
 | NetworkPolicy K8s API egress with Calico | Allow BOTH ClusterIP (10.96.0.1/32:443) AND control plane network (10.0.10.0/24:6443) | 2026-01-24 |
 | Istio Ambient transparent proxy NetworkPolicy | HBONE port 15008 must be allowed from source namespace (not just istio-system) - source IP preserved | 2026-01-28 |
 | Istio ArgoCD perpetual OutOfSync | Helm chart adds operator labels at runtime; use jqPathExpressions ignoreDifferences - cosmetic only, apps work fine | 2026-01-28 |
+| ServerSideApply DaemonSet drift | Must ignore ALL K8s-defaulted fields (imagePullPolicy, readinessProbe defaults, dnsPolicy, etc.) not just labels/annotations | 2026-02-05 |
+| Tigera operator Installation CR drift | Operator populates finalizers and ipPool defaults at runtime; add to ignoreDifferences | 2026-02-05 |
+| Application manifests not auto-deployed | `manifests/applications/*.yaml` require `kubectl apply` to update in-cluster; ArgoCD self-management doesn't manage them | 2026-02-05 |
 | Promtail labeldrop after labelmap | labeldrop doesn't work after labelmap; use selective labelmap regex instead to capture only needed labels | 2026-01-28 |
 | Loki 15 label limit with Istio | Istio pods have 17+ labels; use selective labelmap in promtail to stay under limit | 2026-01-28 |
 | Hairpin NAT for internal probes | Pods can't reach external IPs routing back to cluster; use hostAliases to map to ClusterIP | 2026-01-29 |
