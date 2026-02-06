@@ -64,8 +64,26 @@ spec:
       jqPathExpressions:
         - .metadata.labels
         - .metadata.annotations
+        - .spec.revisionHistoryLimit
         - .spec.template.metadata.labels
         - .spec.template.metadata.annotations
+        - .spec.template.spec.containers[].imagePullPolicy
+        - .spec.template.spec.containers[].terminationMessagePath
+        - .spec.template.spec.containers[].terminationMessagePolicy
+        - .spec.template.spec.containers[].env[].valueFrom.fieldRef.apiVersion
+        - .spec.template.spec.containers[].env[].valueFrom.resourceFieldRef.divisor
+        - .spec.template.spec.containers[].readinessProbe.failureThreshold
+        - .spec.template.spec.containers[].readinessProbe.periodSeconds
+        - .spec.template.spec.containers[].readinessProbe.successThreshold
+        - .spec.template.spec.containers[].readinessProbe.timeoutSeconds
+        - .spec.template.spec.containers[].readinessProbe.httpGet.scheme
+        - .spec.template.spec.dnsPolicy
+        - .spec.template.spec.restartPolicy
+        - .spec.template.spec.schedulerName
+        - .spec.template.spec.securityContext
+        - .spec.template.spec.serviceAccount
+        - .spec.template.spec.volumes[].projected.defaultMode
+        - .spec.template.spec.volumes[].configMap.defaultMode
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
       chart: ztunnel
