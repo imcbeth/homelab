@@ -3,6 +3,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8scontainerlimits
   annotations:
+    argocd.argoproj.io/sync-wave: "1"
     description: Enforces maximum resource limits per container to prevent node monopolization.
 spec:
   crd:

@@ -3,6 +3,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8srequirelabels
   annotations:
+    argocd.argoproj.io/sync-wave: "1"
     description: Requires specified labels on resources.
 spec:
   crd:

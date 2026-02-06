@@ -3,6 +3,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8sblocknodeport
   annotations:
+    argocd.argoproj.io/sync-wave: "1"
     description: Prevents creation of NodePort services (use MetalLB LoadBalancer instead).
 spec:
   crd:

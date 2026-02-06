@@ -3,6 +3,7 @@ kind: ConstraintTemplate
 metadata:
   name: k8srequireresourcelimits
   annotations:
+    argocd.argoproj.io/sync-wave: "1"
     description: Requires all containers to have CPU and memory limits set.
 spec:
   crd:
