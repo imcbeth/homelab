@@ -18,9 +18,8 @@ spec:
       helm:
         valueFiles:
           - $values/manifests/base/gatekeeper/values.yaml
-    # Values file from homelab git repository
+    # Values file reference from homelab git repository
     - repoURL: git@github.com:imcbeth/homelab.git
-      path: manifests/base/gatekeeper
       targetRevision: HEAD
       ref: values
     # Additional manifests (constraint templates, constraints)
