@@ -199,15 +199,15 @@ falcosidekick:
       resources:
         requests:
           cpu: 50m
-          memory: 256Mi
+          memory: 512Mi
         limits:
           cpu: 200m
-          memory: 768Mi
+          memory: 1Gi
       # Define custom redis configuration
       config:
-        maxmemory: "700mb" # Set below the limit to allow buffer space
-        maxmemory-policy: "allkeys-lru" # Evict old keys
-    initContainers:
+        maxmemory: "800mb"
+        maxmemory-policy: "allkeys-lru"
+    initContainer:
       resources:
         requests:
           cpu: 10m

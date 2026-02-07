@@ -105,6 +105,16 @@ sidecar:
       cpu: 100m
       memory: 256Mi
 
+# Loki canary DaemonSet resources
+lokiCanary:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
 # Note: Promtail is deployed separately via its own ArgoCD application
 # See manifests/applications/promtail.yaml
 
@@ -127,14 +137,7 @@ monitoring:
     enabled: false
     grafanaAgent:
       installOperator: false
-    lokiCanary:
-      resources:
-        requests:
-          cpu: 10m
-          memory: 32Mi
-        limits:
-          cpu: 50m
-          memory: 64Mi
+    # Note: lokiCanary resources are set via the top-level lokiCanary.resources key above
 
 # Ruler configuration for log-based alerting
 # Note: Disabled as separate Deployment - ruler runs embedded in singleBinary pod

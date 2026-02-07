@@ -15,14 +15,8 @@ operator:
   # Single replica is sufficient for homelab
   replicas: 1
 
-  # Resource limits tuned for Pi cluster
-  resources:
-    requests:
-      cpu: 50m          # Reduced from default 100m
-      memory: 100Mi     # Same as default
-    limits:
-      cpu: 300m         # Reduced from default 500m
-      memory: 300Mi     # Reduced from default 500Mi
+  # Note: operator.resources configures scan job defaults, not the operator pod.
+  # The operator pod resources are set via the top-level resources: key at the bottom of this file.
 
   # Scanning configuration
   scanJobTimeout: 10m                              # Increased from 5m for slower Pi nodes
@@ -154,6 +148,16 @@ rbac:
 serviceAccount:
   create: true
   name: trivy-operator
+
+# Top-level resources for the trivy-operator container itself
+# Note: operator.resources only configures scan job defaults, not the operator pod
+resources:
+  requests:
+    cpu: 50m
+    memory: 100Mi
+  limits:
+    cpu: 300m
+    memory: 300Mi
 
 # Security policies
 # Note: nodeCollector.tolerations are configured above for control-plane scanning
