@@ -82,8 +82,22 @@ falcoctl:
   artifact:
     install:
       enabled: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
     follow:
       enabled: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
   config:
     artifact:
       allowedTypes:
@@ -181,6 +195,22 @@ falcosidekick:
       limits:
         cpu: 100m
         memory: 128Mi
+    redis:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+    initContainers:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
 
   # Prometheus metrics for sidekick
   serviceMonitor:

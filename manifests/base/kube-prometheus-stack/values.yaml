@@ -503,6 +503,14 @@ grafana:
   # Fix fsGroup race condition with Synology CSI and SQLite journal files
   podSecurityContext:
     fsGroupChangePolicy: OnRootMismatch
+  initChownData:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 50m
+        memory: 64Mi
   # Resource limits for Grafana (actual usage ~269Mi)
   resources:
     requests:
@@ -552,6 +560,13 @@ grafana:
     create: true
     autoMount: true
   sidecar:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 50m
+        memory: 64Mi
     dashboards:
       enabled: true
       label: grafana_dashboard
@@ -1252,7 +1267,13 @@ prometheusOperator:
       tag: ""
       sha: ""
     enableProbe: false
-    resources: {}
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 50m
+        memory: 64Mi
   thanosImage:
     registry: quay.io
     repository: thanos/thanos

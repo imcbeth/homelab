@@ -15,10 +15,18 @@ spec:
     metadata:
       labels:
         app: snmp-exporter
+        app.kubernetes.io/name: snmp-exporter
     spec:
       initContainers:
       - name: config-processor
         image: busybox:1.37
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
         env:
         - name: SNMP_USERNAME
           valueFrom:

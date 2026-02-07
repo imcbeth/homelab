@@ -5,9 +5,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
-  # Dryrun mode: log violations without blocking requests
-  # Switch to "deny" after auditing existing workloads
-  enforcementAction: dryrun
+  enforcementAction: deny
   match:
     kinds:
       - apiGroups: [""]
@@ -20,3 +18,7 @@ spec:
       - tigera-operator
       - istio-system
       - cert-manager
+      - metallb-system
+      - synology-csi
+      - ingress-nginx
+      - localstack

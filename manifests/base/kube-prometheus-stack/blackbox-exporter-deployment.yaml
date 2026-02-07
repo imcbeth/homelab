@@ -15,6 +15,7 @@ spec:
     metadata:
       labels:
         app: blackbox-exporter
+        app.kubernetes.io/name: blackbox-exporter
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9115"

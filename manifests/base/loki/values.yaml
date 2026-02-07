@@ -96,6 +96,15 @@ resultsCache:
   enabled: false
   replicas: 0
 
+sidecar:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
 # Note: Promtail is deployed separately via its own ArgoCD application
 # See manifests/applications/promtail.yaml
 
@@ -118,6 +127,14 @@ monitoring:
     enabled: false
     grafanaAgent:
       installOperator: false
+    lokiCanary:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
 
 # Ruler configuration for log-based alerting
 # Note: Disabled as separate Deployment - ruler runs embedded in singleBinary pod
