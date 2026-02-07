@@ -155,6 +155,16 @@ serviceAccount:
   create: true
   name: trivy-operator
 
+# Top-level resources for the trivy-operator container itself
+# Note: operator.resources only configures scan job defaults, not the operator pod
+resources:
+  requests:
+    cpu: 50m
+    memory: 100Mi
+  limits:
+    cpu: 300m
+    memory: 300Mi
+
 # Security policies
 # Note: nodeCollector.tolerations are configured above for control-plane scanning
 tolerations: []
