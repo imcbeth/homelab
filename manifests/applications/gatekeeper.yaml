@@ -9,6 +9,11 @@ metadata:
     # Deploy after monitoring stack, before Velero/Falco
     argocd.argoproj.io/sync-wave: "-6"
 spec:
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpressions:
+        - .spec.preserveUnknownFields
   project: infrastructure
   sources:
     # Helm chart from OPA Gatekeeper repository
@@ -36,6 +41,7 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - SkipDryRunOnMissingResource=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
