@@ -100,10 +100,10 @@ sidecar:
   resources:
     requests:
       cpu: 10m
-      memory: 32Mi
-    limits:
-      cpu: 50m
       memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
 
 # Note: Promtail is deployed separately via its own ArgoCD application
 # See manifests/applications/promtail.yaml
