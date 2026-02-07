@@ -202,7 +202,7 @@ falcosidekick:
           memory: 256Mi
         limits:
           cpu: 200m
-          memory: 512Mi
+          memory: 768Mi
     initContainers:
       resources:
         requests:
