@@ -1,0 +1,19 @@
+---
+# PodMonitor for OPA Gatekeeper metrics
+# Gatekeeper exposes Prometheus metrics on port 8888 (named "metrics")
+# Using PodMonitor (not ServiceMonitor) because no metrics Service exists
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: gatekeeper
+  namespace: gatekeeper-system
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/name: gatekeeper
+spec:
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gatekeeper

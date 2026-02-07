@@ -9,3 +9,6 @@ resources:
   - constraint-templates/require-labels.yaml
   - constraint-templates/block-nodeport.yaml
   - constraint-templates/container-limits.yaml
+
+  # Monitoring
+  - podmonitor.yaml
