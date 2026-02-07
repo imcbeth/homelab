@@ -21,3 +21,4 @@ spec:
       - metallb-system
       - synology-csi
       - ingress-nginx
+      - localstack
