@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         app: unifi-poller
+        app.kubernetes.io/name: unifi-poller
         type: poller
       annotations:
         prometheus.io/path: /metrics
