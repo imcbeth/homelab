@@ -66,16 +66,11 @@ spec:
 
         # When there is a slash, treat the first path segment as a Docker Hub shortname
         # only if it is not an explicit registry (no '.', no ':', and not 'localhost').
-
-        # When there is a slash, treat the first path segment as a Docker Hub shortname
-        # only if it is not an explicit registry (no '.', no ':', and not 'localhost').
         # This prevents misclassifying images like 'localhost:5000/myimg' as Docker Hub.
         is_dockerhub_shortname(image) {
           contains(image, "/")
           prefix := substring(image, 0, indexof(image, "/"))
           not contains(prefix, ".")
-          not contains(prefix, ":")
-          prefix != "localhost"
           not contains(prefix, ":")
           prefix != "localhost"
         }
