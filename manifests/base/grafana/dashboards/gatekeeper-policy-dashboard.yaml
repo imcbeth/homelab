@@ -10,6 +10,7 @@ metadata:
     grafana_dashboard: "1"
     app.kubernetes.io/name: grafana
     app.kubernetes.io/component: dashboard
+    folder: security
 data:
   gatekeeper-policy-dashboard.json: |
     {
@@ -557,7 +558,7 @@ data:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"gatekeeper-system\"}[5m]))",
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"gatekeeper-system\", container!=\"\", container!=\"POD\"}[5m]))",
               "legendFormat": "{{pod}}",
               "refId": "A"
             }
@@ -591,7 +592,7 @@ data:
           "type": "timeseries",
           "targets": [
             {
-              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"gatekeeper-system\", container!=\"\"})",
+              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"gatekeeper-system\", container!=\"\", container!=\"POD\"})",
               "legendFormat": "{{pod}}",
               "refId": "A"
             }
