@@ -1119,7 +1119,14 @@ prometheusOperator:
         tag: v1.6.7
         sha: ""
         pullPolicy: IfNotPresent
-      resources: {}
+      # Resource limits required by Gatekeeper require-resource-limits constraint
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
       priorityClassName: ""
       ttlSecondsAfterFinished: 60
       annotations: {}
