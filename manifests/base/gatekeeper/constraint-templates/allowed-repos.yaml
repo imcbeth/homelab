@@ -40,3 +40,23 @@ spec:
           repo := repos[_]
           startswith(image, repo)
         }
+
+        # Handle Docker Hub shortnames (e.g., "nginx", "velero/velero:v1.17.2")
+        # These images have no domain (no dots before the first slash, or no slash at all)
+        image_matches(image, repos) {
+          is_dockerhub_shortname(image)
+          repo := repos[_]
+          repo == "docker.io"
+        }
+
+        # An image is a Docker Hub shortname if it has no domain component
+        # Domain components contain dots (e.g., "gcr.io", "registry.k8s.io")
+        is_dockerhub_shortname(image) {
+          not contains(image, "/")
+        }
+
+        is_dockerhub_shortname(image) {
+          contains(image, "/")
+          prefix := substring(image, 0, indexof(image, "/"))
+          not contains(prefix, ".")
+        }
