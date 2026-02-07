@@ -36,11 +36,15 @@ spec:
           msg := sprintf("Init container <%v> has an invalid image repo <%v>, allowed repos are %v", [container.name, container.image, input.parameters.repos])
         }
 
+        # Match images against allowed repositories
+        # Exact match (e.g., exact digest or rare edge case)
         image_matches(image, repos) {
           repo := repos[_]
           image == repo
         }
 
+        # Prefix match with slash separator (e.g., "docker.io/" matches "docker.io/nginx")
+        # This ensures "docker.io" won't match "docker.io.evil.com/foo"
         image_matches(image, repos) {
           repo := repos[_]
           startswith(image, sprintf("%v/", [repo]))
