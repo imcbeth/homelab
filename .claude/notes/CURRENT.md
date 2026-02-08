@@ -31,7 +31,8 @@
 
 **Monitoring:** Operational
 - AlertManager email: 121 sent, 0 failed
-- Trivy scanning: VulnerabilityReports now generating (NetworkPolicy fixed)
+- Trivy scanning: 58+ VulnerabilityReports, metrics in Prometheus (Critical: 44, High: 479, Medium: 1058)
+- Trivy dashboard enhanced with vulnerability panels, alerts, and trends
 - All Prometheus targets healthy (metrics-server HTTPS scraping fixed)
 - Argo Workflows: Grafana dashboard deployed with ServiceMonitor
 - Promtail: Using selective labelmap to stay under Loki's 15 label limit
@@ -46,6 +47,7 @@
 - All namespaces isolated: localstack, unipoller, loki, trivy-system, velero, argo-workflows, cert-manager, external-dns, metallb-system
 - ArgoCD Application at sync-wave -40
 - **Gotcha:** K8s API egress requires both ClusterIP (10.96.0.1:443) AND control plane network (10.0.10.0/24:6443)
+- **Gotcha:** Ambient mesh namespaces need bare port 15008 ingress/egress rules + link-local 169.254.7.127/32 health probe
 
 **Argo Workflows:** Deployed (2026-01-24)
 - Argo Workflows v3.7.8 (Helm chart 0.47.3) at sync-wave -8
@@ -69,7 +71,7 @@
 - Resource usage: ~38m CPU, ~145Mi memory (istiod + cni + ztunnel)
 - Waypoint proxies: Skipped (L4 mTLS sufficient, add later if L7 needed)
 - ArgoCD: 22 apps total, all Synced and Healthy (ServerSideApply drift fully resolved)
-- **Gotcha:** Transparent proxy preserves source IPs; NetworkPolicies need HBONE port 15008 from source namespace
+- **Gotcha:** ztunnel tunnels ALL inter-pod traffic through port 15008, rewriting dest port. NetworkPolicies need bare port 15008 ingress/egress rules (not namespace-scoped). Also need link-local 169.254.7.127/32 for ztunnel health probes.
 
 **Argo Workflows Alerting:** Complete (2026-01-30)
 - 8 PrometheusRule alerts deployed (PR #354)
@@ -94,11 +96,48 @@
 - OOM fixes: Grafana sidecars (256Mi), Loki sidecar/canary, Falco redis (700Mi maxmemory)
 - ArgoCD MCP RBAC configured (readonly for MCP service account)
 - k8s-docs-n37 documentation synced (PR #64 merged)
-- Next: Trivy vulnerability dashboard, Ingress hardening, APM dashboard
+- Trivy vulnerability dashboard complete (scanning, alerts, Grafana panels)
+- Next: Ingress hardening, APM dashboard
 
 ---
 
 ## Recent Sessions
+
+### 2026-02-08: Trivy Vulnerability Scanning & Ambient Mesh NetworkPolicy Fix
+
+**Completed Work:**
+- Fixed trivy-operator vulnerability scanning (was completely broken, now generating 58+ reports)
+- Root cause 1: NetworkPolicy blocked HBONE port 15008 (ztunnel tunnel traffic) between operator and trivy-server
+- Root cause 2: Gatekeeper require-labels constraint blocked scan job pods (no `app.kubernetes.io/name` label)
+- Root cause 3: `sbomGenerationEnabled: true` is a v0.29.0 bug preventing VulnerabilityReports (fixed in prior PR #410)
+- Enhanced Trivy security dashboard with vulnerability panels (stats, trends, donut chart, table)
+- Enabled vulnerability PrometheusRule alerts (CriticalVulnerabilitiesDetected, HighVulnerabilityCount)
+- Fixed all 5 ambient mesh namespace NetworkPolicies with bare HBONE port 15008 rules + link-local health probes
+
+**Pull Requests:**
+- **PR #411:** [Merged] fix: allow HBONE port 15008 in trivy NetworkPolicy for ambient mesh
+- **PR #412:** [Merged] fix: add HBONE port 15008 rules to all ambient mesh NetworkPolicies
+
+**Issues Resolved:**
+1. **Trivy vulnerability scanning inert** - Operator couldn't reach trivy-server via HBONE tunnel. Fix: bare port 15008 ingress/egress in NetworkPolicy.
+2. **Gatekeeper blocking scan job pods** - Scan jobs lack `app.kubernetes.io/name`. Fix: exempt trivy-system from require-labels constraint.
+3. **Ambient mesh NetworkPolicy pattern incorrect** - All 5 ambient namespaces had namespace-scoped port 15008 rules. In ambient mode, ztunnel rewrites dest port to 15008 for ALL traffic, so bare (source-agnostic) rules are needed.
+
+**Key Learning:**
+- In Istio ambient mesh, ztunnel rewrites the destination port to 15008 for ALL inter-pod traffic
+- NetworkPolicies must use bare `ports: [{port: 15008}]` rules (no `from`/`to` selector) for HBONE
+- Link-local 169.254.7.127/32 must be allowed for ztunnel health probes
+- ArgoCD selfHeal will revert manual kubectl changes; must merge PRs before testing
+
+**Files Modified:**
+- `manifests/base/network-policies/trivy-system/network-policy.yaml` (HBONE fix)
+- `manifests/base/network-policies/loki/network-policy.yaml` (HBONE fix)
+- `manifests/base/network-policies/unipoller/network-policy.yaml` (HBONE fix)
+- `manifests/base/network-policies/argo-workflows/network-policy.yaml` (HBONE fix)
+- `manifests/base/network-policies/localstack/network-policy.yaml` (HBONE fix)
+- `manifests/base/gatekeeper/constraints/require-labels.yaml` (trivy-system exemption)
+
+---
 
 ### 2026-02-07 (Evening): ArgoCD MCP RBAC Fix
 
@@ -232,52 +271,13 @@
 
 ---
 
-### 2026-02-05: ArgoCD ServerSideApply OutOfSync Fixes
-
-**Completed Work:**
-- Fixed istio-ztunnel perpetual OutOfSync caused by ServerSideApply defaulting
-- Fixed tigera-operator OutOfSync caused by operator-populated defaults on Installation CR
-- All 22 ArgoCD applications now Synced and Healthy (first time with full clean board)
-
-**Pull Requests:**
-- **PR #379:** [Merged] fix: add ignoreDifferences for istio-ztunnel DaemonSet drift
-- **PR #380:** [Merged] fix: broaden ignoreDifferences for ztunnel K8s-defaulted fields
-- **PR #381:** [Merged] fix: add missing ignoreDifferences for tigera-operator Installation CR
-
-**Issues Resolved:**
-
-1. **istio-ztunnel OutOfSync**
-   - Root cause: ServerSideApply causes Kubernetes to populate default values (imagePullPolicy, revisionHistoryLimit, readinessProbe defaults, dnsPolicy, restartPolicy, schedulerName, terminationMessage settings, fieldRef.apiVersion, projected/configMap defaultMode, securityContext) that aren't in the Helm chart template
-   - Fix: Added comprehensive `ignoreDifferences` with `jqPathExpressions` covering all defaulted fields + `RespectIgnoreDifferences=true`
-   - Note: Initial PR #379 with just label/annotation ignores was insufficient; PR #380 added the remaining K8s-defaulted fields
-
-2. **tigera-operator OutOfSync**
-   - Root cause: Tigera operator populates defaults on Installation CR at runtime (finalizers, ipPool defaults: allowedUses, assignmentMode, disableBGPExport, disableNewAllocations, plus cni, logging, nodeUpdateStrategy, etc.)
-   - Fix: Added `metadata/finalizers` to jsonPointers and ipPool defaults to `jqPathExpressions`
-   - Note: Existing ignoreDifferences already covered most fields; only finalizers and ipPool defaults were missing
-
-**Key Learning:**
-- `ignoreDifferences` with label/annotation ignores alone is NOT sufficient for ServerSideApply DaemonSet drift
-- Must enumerate ALL Kubernetes-defaulted fields in `jqPathExpressions`
-- Application manifests in `manifests/applications/` are NOT auto-deployed by ArgoCD self-management; they require `kubectl apply` to update the Application spec in-cluster
-- Always test `ignoreDifferences` changes by applying directly before creating PRs
-
-**Cluster Status:**
-- 22/22 ArgoCD applications Synced and Healthy
-- All Renovate dependency updates flowing cleanly (15+ PRs merged since last session)
-
-**Files Modified:**
-- `manifests/applications/istiod.yaml` (istio-ztunnel ignoreDifferences + RespectIgnoreDifferences)
-- `manifests/applications/tigera-operator.yaml` (Installation CR ignoreDifferences)
-
----
-
 ---
 
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-02-05 | ArgoCD ServerSideApply OutOfSync Fixes | ignoreDifferences, ztunnel+tigera defaults, 22/22 Synced |
 | 2026-01-30 | Dependency Updates, Docs & Argo Alerts | Renovate PRs, Istio 1.28.3, 8 workflow alerts |
 | 2026-01-29 | Monitoring Fixes & Docs | Metrics-server, Trivy, hairpin NAT, learned skills |
 | 2026-01-28 | Istio ArgoCD Sync & Labels | ignoreDifferences, Promtail labelmap, HBONE NetworkPolicies |

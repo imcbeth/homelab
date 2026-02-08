@@ -158,7 +158,7 @@
   - [x] System namespaces exempted (kube-system, argocd, gatekeeper-system)
 - [x] Security policy definitions for workloads
 - [ ] Compliance reporting and alerting
-- [ ] Create Grafana dashboard for vulnerability trends (blocked: trivy_image_vulnerabilities metric missing, vuln scanning not producing reports)
+- [x] Create Grafana dashboard for vulnerability trends (completed 2026-02-08, PRs #410-412: fixed NetworkPolicy HBONE, Gatekeeper exemption, SBOM bug)
 
 ### 8. **Secrets Management** ✅ Complete
 - [x] **Evaluation Complete** - Sealed Secrets recommended for homelab (2026-01-13)
