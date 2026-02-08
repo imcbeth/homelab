@@ -12,31 +12,22 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Allow Istio ambient mesh traffic (ztunnel proxies all connections in ambient mode)
+    # Allow Istio ambient mesh HBONE tunnel traffic (port 15008)
+    - ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS tunnel
+    # Allow ztunnel health probes via link-local address
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+    # Allow Prometheus to scrape metrics
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: istio-system
+              kubernetes.io/metadata.name: monitoring
       ports:
-        - protocol: TCP
-          port: 15008  # HBONE mTLS
-        - protocol: TCP
-          port: 9090   # Controller metrics (ztunnel originates connection)
-        - protocol: TCP
-          port: 2746   # Server port (ztunnel originates connection)
-    # Allow Prometheus to scrape metrics from default namespace
-    # Include HBONE port for ztunnel transparent proxy
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: default
-      ports:
-        - protocol: TCP
-          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
         - protocol: TCP
           port: 9090   # Controller metrics
-        - protocol: TCP
-          port: 2746   # Server port
     # Allow ingress-nginx for UI access
     - from:
         - namespaceSelector:
@@ -47,10 +38,17 @@ spec:
           port: 2746   # Server port
     # Allow internal namespace communication (workflow pods)
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: argo-workflows
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 2746   # Server port
+        - protocol: TCP
+          port: 9090   # Controller metrics
   egress:
+    # Allow HBONE tunnel traffic to any ambient mesh pod (port 15008)
+    - ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS tunnel
     # Allow DNS resolution via kube-dns
     - to:
         - namespaceSelector:
@@ -78,14 +76,12 @@ spec:
       ports:
         - protocol: TCP
           port: 6443  # API server port
-    # Allow LocalStack S3 access (through mesh)
+    # Allow LocalStack S3 access
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: localstack
       ports:
-        - protocol: TCP
-          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
         - protocol: TCP
           port: 4566   # LocalStack API
     # Allow Backblaze B2 and container registries (external HTTPS)
@@ -101,9 +97,12 @@ spec:
           port: 443
     # Allow internal namespace communication (workflow pods)
     - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: argo-workflows
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 2746
+        - protocol: TCP
+          port: 9090
     # Allow Istio ambient mesh communication (ztunnel, istiod)
     - to:
         - namespaceSelector:

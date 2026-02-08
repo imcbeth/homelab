@@ -12,41 +12,31 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Allow Istio ambient mesh traffic (ztunnel proxies all connections in ambient mode)
-    # ztunnel terminates HBONE on 15008 and originates connections to application ports
+    # Allow Istio ambient mesh HBONE tunnel traffic (port 15008)
+    # In ambient mode, ztunnel tunnels ALL inter-pod traffic through port 15008.
+    - ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS tunnel
+    # Allow ztunnel health probes via link-local address
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: istio-system
+        - ipBlock:
+            cidr: 169.254.7.127/32
+    # Allow intra-namespace communication (Loki components)
+    - from:
+        - podSelector: {}
       ports:
         - protocol: TCP
-          port: 15008  # HBONE mTLS
-        - protocol: TCP
-          port: 3100   # Loki API (ztunnel originates connection)
+          port: 3100   # Loki HTTP API
         - protocol: TCP
           port: 9095   # Loki gRPC
         - protocol: TCP
           port: 7946   # Loki memberlist
-    # Allow intra-namespace communication (direct + HBONE tunneled)
-    # ztunnel uses transparent proxy so source IP is preserved from original pod
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: loki
-      ports:
-        - protocol: TCP
-          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
-        - protocol: TCP
-          port: 3100   # Loki HTTP API
     # Allow Prometheus and Grafana from default namespace
-    # Include HBONE port for ztunnel transparent proxy
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: default
       ports:
-        - protocol: TCP
-          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
         - protocol: TCP
           port: 3100   # Loki metrics and query endpoint
         - protocol: TCP
@@ -60,6 +50,11 @@ spec:
         - protocol: TCP
           port: 3100   # Loki push API
   egress:
+    # Allow HBONE tunnel traffic to any ambient mesh pod (port 15008)
+    # In ambient mode, ztunnel rewrites the destination port to 15008.
+    - ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS tunnel
     # Allow DNS resolution via kube-dns
     - to:
         - namespaceSelector:
@@ -96,14 +91,9 @@ spec:
         - protocol: TCP
           port: 9093  # AlertManager API
     # Allow internal communication within loki namespace (Loki components)
-    # Include HBONE port for ztunnel transparent proxy
     - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: loki
+        - podSelector: {}
       ports:
-        - protocol: TCP
-          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
         - protocol: TCP
           port: 3100
         - protocol: TCP
