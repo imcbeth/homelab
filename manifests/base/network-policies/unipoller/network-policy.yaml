@@ -12,28 +12,27 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Allow Istio ambient mesh traffic (ztunnel proxies all connections in ambient mode)
+    # Allow Istio ambient mesh HBONE tunnel traffic (port 15008)
+    - ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS tunnel
+    # Allow ztunnel health probes via link-local address
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+    # Allow Prometheus to scrape metrics
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: istio-system
+              kubernetes.io/metadata.name: monitoring
       ports:
-        - protocol: TCP
-          port: 15008  # HBONE mTLS
-        - protocol: TCP
-          port: 9130   # Metrics port (ztunnel originates connection)
-    # Allow Prometheus to scrape metrics from default namespace
-    # Include HBONE port for ztunnel transparent proxy
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: default
-      ports:
-        - protocol: TCP
-          port: 15008  # HBONE mTLS (ztunnel transparent proxy)
         - protocol: TCP
           port: 9130   # unipoller metrics port
   egress:
+    # Allow HBONE tunnel traffic to any ambient mesh pod (port 15008)
+    - ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS tunnel
     # Allow DNS resolution via kube-dns
     - to:
         - namespaceSelector:
