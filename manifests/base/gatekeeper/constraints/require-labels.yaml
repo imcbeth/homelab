@@ -20,6 +20,7 @@ spec:
       - cert-manager
       - synology-csi
       - localstack
+      - trivy-system
   parameters:
     labels:
       - "app.kubernetes.io/name"
