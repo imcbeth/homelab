@@ -25,7 +25,7 @@ operator:
 
   # Enable all security scanners
   vulnerabilityScannerEnabled: true                # CVE vulnerability scanning
-  sbomGenerationEnabled: true                      # Software Bill of Materials
+  sbomGenerationEnabled: false                     # Disabled: v0.29.0 bug prevents VulnerabilityReports when SBOM enabled
   configAuditScannerEnabled: true                  # Kubernetes configuration auditing
   rbacAssessmentScannerEnabled: true               # RBAC permission analysis
   infraAssessmentScannerEnabled: true              # Infrastructure component scanning

@@ -38,15 +38,30 @@ spec:
           {{ $value }} ClusterRoles have HIGH severity RBAC issues.
           Review ClusterRbacAssessmentReports and apply principle of least privilege.
 
-  # NOTE: trivy_image_vulnerabilities alerts are disabled due to Trivy Operator v0.29.0 bug
-  # The vulnerability scanner is not creating VulnerabilityReports.
-  # Re-enable these alerts after upgrading to a fixed version.
-  # - name: trivy_vulnerabilities
-  #   interval: 60s
-  #   rules:
-  #   - alert: CriticalVulnerabilitiesDetected
-  #     expr: trivy_image_vulnerabilities{severity="Critical"} > 0
-  #     ...etc
+  - name: trivy_vulnerabilities
+    interval: 60s
+    rules:
+    - alert: CriticalVulnerabilitiesDetected
+      expr: sum by (image_repository, image_tag, namespace, resource_name) (trivy_image_vulnerabilities{severity="Critical"}) > 0
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Critical vulnerabilities in {{ $labels.image_repository }}:{{ $labels.image_tag }}"
+        description: |
+          {{ $value }} critical vulnerabilities detected in {{ $labels.namespace }}/{{ $labels.resource_name }}.
+          Image: {{ $labels.image_repository }}:{{ $labels.image_tag }}
+          Review VulnerabilityReports and plan image updates.
+    - alert: HighVulnerabilityCount
+      expr: sum(trivy_image_vulnerabilities{severity=~"Critical|High"}) > 50
+      for: 1h
+      labels:
+        severity: info
+      annotations:
+        summary: "High total vulnerability count across cluster"
+        description: |
+          {{ $value }} Critical+High vulnerabilities detected across all images.
+          Review Trivy dashboard for affected images and prioritize remediation.
 
   - name: trivy_configuration_audit
     interval: 60s

@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-02-05
+**Last Updated:** 2026-02-08
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -80,22 +80,75 @@
 - APIServer CR enables v3 API for operator IPPool management
 - Fixed IPPool ownership error (RestoreV3Metadata annotation fix)
 
-**OPA Gatekeeper:** Deployed (2026-02-06)
+**OPA Gatekeeper:** Enforcing (2026-02-07)
 - Helm chart 3.21.1, sync-wave -6
 - 2 ArgoCD apps: `gatekeeper` (Helm + ConstraintTemplates) and `gatekeeper-policies` (Constraints)
-- 5 ConstraintTemplates, 5 Constraints (all dryrun mode)
-- Initial audit: 156 resource-limit, 20 allowed-repo, 15 label violations
+- 5 ConstraintTemplates, 5 Constraints (deny mode, 0 violations)
+- PodMonitor + Grafana dashboard for metrics
 - NetworkPolicy configured for gatekeeper-system
 
 **Phase 4 Status:** In Progress
 - Storage performance + network utilization dashboards deployed
 - SealedSecrets key rotation enabled (30d)
-- OPA Gatekeeper deployed (dryrun mode)
-- Next: Switch Gatekeeper to deny mode, Ingress hardening, APM dashboard
+- OPA Gatekeeper in deny mode (0 violations)
+- OOM fixes: Grafana sidecars (256Mi), Loki sidecar/canary, Falco redis (700Mi maxmemory)
+- ArgoCD MCP RBAC configured (readonly for MCP service account)
+- k8s-docs-n37 documentation synced (PR #64 merged)
+- Next: Trivy vulnerability dashboard, Ingress hardening, APM dashboard
 
 ---
 
 ## Recent Sessions
+
+### 2026-02-07 (Evening): ArgoCD MCP RBAC Fix
+
+**Completed Work:**
+- Diagnosed ArgoCD MCP returning empty results (JWT valid, but zero RBAC permissions)
+- Added readonly RBAC policy for MCP service account in argocd-config.yaml
+- Fixed stuck ArgoCD sync (argocd-redis-secret-init hook job blocking)
+- Verified all 24 apps visible via MCP after fix
+
+**Pull Requests:**
+- **PR #409:** [Merged] fix: add RBAC policy for ArgoCD MCP service account
+
+**Issues Resolved:**
+1. **ArgoCD MCP empty results** - Root cause: `mcp` account had `apiKey` capability but no RBAC permissions (empty `policy.csv`). Fix: Added `configs.rbac.policy.csv` with readonly role in Helm values.
+2. **ArgoCD sync stuck on hook job** - `argocd-redis-secret-init` blocking. Fix: Patched `status.operationState` to null.
+
+**Files Modified:**
+- `manifests/base/argocd/argocd-config.yaml` (RBAC policy added)
+
+---
+
+### 2026-02-07: OOM Fixes, Gatekeeper Deny Mode & Docs Sync
+
+**Completed Work:**
+- Fixed 12 Gatekeeper resource-limit violations across multiple apps
+- Switched OPA Gatekeeper from dryrun to deny mode (0 violations)
+- Fixed OOMKilled containers: Grafana sidecars (256Mi), Loki sidecar/canary, Falco redis-stack
+- Configured Falco redis-stack maxmemory (700Mi)
+- Synced k8s-docs-n37 documentation (10 files updated)
+- Cleaned up stale PVs
+
+**Pull Requests:**
+- **PR #405:** [Merged] fix: increase Grafana sidecar and Loki memory limits for OOMKill prevention
+- **PR #407:** [Merged] fix: limit Falco redis to 700mb maxmemory
+- **PR #408:** [Merged] fix: add missing resource limits for Gatekeeper violations
+- **PR #64 (k8s-docs-n37):** [Merged] docs: sync cluster state for February 2026
+
+**Issues Resolved:**
+1. **Grafana sidecar OOMKill** - k8s-sidecar watching ConfigMaps across many namespaces needs 256Mi+
+2. **Falco redis-stack memory** - Modules (RediSearch, TimeSeries, JSON, Bloom, Gears) consume significant memory; needs `maxmemory` config
+3. **Loki canary value path** - `monitoring.selfMonitoring.lokiCanary.resources` is ignored; use top-level `lokiCanary.resources`
+
+**Files Modified:**
+- `manifests/base/kube-prometheus-stack/values.yaml` (sidecar resources)
+- `manifests/base/loki/values.yaml` (sidecar + canary resources)
+- `manifests/base/falco/values.yaml` (redis maxmemory)
+- `manifests/base/gatekeeper/constraints/` (dryrun → deny)
+- Multiple k8s-docs-n37 files (10 files, 142 insertions)
+
+---
 
 ### 2026-02-06: OPA Gatekeeper Deployment
 
@@ -219,106 +272,13 @@
 
 ---
 
-### 2026-01-30: Dependency Updates, Documentation Sync & Argo Workflows Alerting
-
-**Completed Work:**
-- Merged 5 Renovate PRs for dependency updates
-- Updated k8s-docs-n37 documentation to match current cluster state
-- Created and deployed Argo Workflows AlertManager rules
-- Upgraded Istio from 1.24.2 to 1.28.3
-
-**Pull Requests:**
-- **PR #278:** [Merged] chore(deps): ArgoCD ecosystem patch (argo-workflows 0.47.1→0.47.2, argocd 9.3.4→9.3.7)
-- **PR #279:** [Merged] chore(deps): busybox 1.36→1.37
-- **PR #305:** [Merged] chore(deps): UniFi Poller v2.21.0→v2.28.0
-- **PR #307:** [Merged] chore(deps): Istio 1.24.2→1.24.6 (patch)
-- **PR #308:** [Merged] chore(deps): Istio 1.24→1.28.3 (minor)
-- **PR #354:** [Merged] feat: Add Argo Workflows AlertManager rules
-
-**Argo Workflows Alerts Created:**
-| Alert | Severity | Description |
-|-------|----------|-------------|
-| ArgoWorkflowFailed | warning | Workflows ending in Failed state |
-| ArgoWorkflowError | critical | Workflows in Error state (system failures) |
-| ArgoWorkflowControllerErrors | warning | Controller errors by cause |
-| ArgoWorkflowStuck | warning | Workflows running >1 hour |
-| ArgoWorkflowQueueBacklog | warning | Queue depth >10 items for 15m |
-| ArgoWorkflowControllerNotLeader | critical | Lost leader election |
-| ArgoWorkflowControllerDown | critical | Controller metrics absent |
-| ArgoWorkflowHighFailureRate | warning | >30% failure rate over 24h |
-
-**Files Created/Modified:**
-- `manifests/base/kube-prometheus-stack/argo-workflows-alerts.yaml` (new)
-- `manifests/base/kube-prometheus-stack/kustomization.yaml` (added alerts)
-
----
-
-### 2026-01-29 (Evening): Monitoring Fixes & Network Policy Documentation
-
-**Completed Work:**
-- Created Argo Workflows Grafana dashboard with ServiceMonitor
-- Fixed metrics-server ServiceMonitor (was showing DOWN in Prometheus)
-- Fixed Trivy NetworkPolicy blocking vulnerability scans
-- Documented network segmentation strategy in k8s-docs-n37
-
-**Pull Requests:**
-- **PR #330:** [Merged] feat: Add Argo Workflows Grafana dashboard and enable ServiceMonitor
-- **PR #331:** [Merged] fix: Enable metrics-server HTTPS scraping and Trivy intra-namespace communication
-- **PR #332:** docs: Mark network policies documentation as complete
-- **PR #60 (k8s-docs-n37):** docs: Update NetworkPolicies documentation with current implementation
-
-**Issues Resolved:**
-1. **Metrics-Server ServiceMonitor DOWN** - Helm chart doesn't support `scheme: https`; added third ArgoCD source for manual manifests
-2. **Trivy Dashboard Empty** - NetworkPolicy blocked intra-namespace communication; added egress/ingress rules
-
-**Files Modified:**
-- `manifests/base/argo-workflows/values.yaml` (ServiceMonitor config)
-- `manifests/base/grafana/dashboards/argo-workflows-dashboard.yaml` (new)
-- `manifests/applications/metrics-server.yaml` (third source)
-- `manifests/base/network-policies/trivy-system/network-policy.yaml`
-
----
-
-### 2026-01-29 (Morning/Afternoon): Blackbox-Exporter Fix & Documentation
-
-**Completed Work:**
-- Fixed blackbox-exporter hairpin NAT issue with hostAliases
-- Updated k8s-docs-n37 documentation with recent fixes
-- Extracted reusable patterns as learned skills
-
-**Pull Requests:**
-- **PR #327:** [Merged] fix: Add hostAliases to blackbox-exporter for hairpin NAT
-- **PR #59 (k8s-docs-n37):** docs: Add troubleshooting sections for recent fixes
-
-**Files Modified:**
-- `manifests/base/kube-prometheus-stack/blackbox-exporter-deployment.yaml`
-
----
-
-### 2026-01-28: Istio Ambient Mesh Fixes (Labels, Sync, NetworkPolicies)
-
-**Completed Work:**
-- Fixed Promtail label limit (selective labelmap for Loki 15-label max)
-- Added ignoreDifferences for Istio ArgoCD webhook/label drift
-- Fixed NetworkPolicies for Istio Ambient transparent proxy (HBONE port 15008)
-- 29 pods with mTLS across 6 namespaces
-
-**Pull Requests:**
-- **PR #315-319:** [Merged] Istio Ambient NetworkPolicy fixes
-- **PR #320-322:** [Merged] Istio ArgoCD sync fixes
-- **PR #324-325:** [Merged] Promtail label limit fixes
-
-**Files Modified:**
-- `manifests/base/promtail/values.yaml`
-- `manifests/applications/istio-base.yaml`, `istio-cni.yaml`, `istiod.yaml`
-- `manifests/base/network-policies/{loki,localstack,argo-workflows,unipoller,trivy-system}/network-policy.yaml`
-
 ---
 
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-01-30 | Dependency Updates, Docs & Argo Alerts | Renovate PRs, Istio 1.28.3, 8 workflow alerts |
 | 2026-01-29 | Monitoring Fixes & Docs | Metrics-server, Trivy, hairpin NAT, learned skills |
 | 2026-01-28 | Istio ArgoCD Sync & Labels | ignoreDifferences, Promtail labelmap, HBONE NetworkPolicies |
 | 2026-01-25 | External-DNS, Grafana & Promtail | Domain-filter fix, fsGroup race, K8s API egress |

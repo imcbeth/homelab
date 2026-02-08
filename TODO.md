@@ -151,14 +151,14 @@
   - [x] NetworkPolicy configured (PR #339, #344)
 - [x] **OPA Gatekeeper** - Policy enforcement and admission control (deployed 2026-02-06, chart 3.21.1)
   - [x] 5 ConstraintTemplates: resource limits, allowed repos, required labels, block NodePort, container limits
-  - [x] All constraints deployed in dryrun mode (audit before enforce)
+  - [x] All constraints switched to deny mode (0 violations, 2026-02-07)
   - [x] Pi-optimized: 1 replica, 100m/256Mi requests, 500m/512Mi limits
   - [x] Prometheus metrics with ServiceMonitor
   - [x] NetworkPolicy configured
   - [x] System namespaces exempted (kube-system, argocd, gatekeeper-system)
 - [x] Security policy definitions for workloads
 - [ ] Compliance reporting and alerting
-- [ ] Create Grafana dashboard for vulnerability trends
+- [ ] Create Grafana dashboard for vulnerability trends (blocked: trivy_image_vulnerabilities metric missing, vuln scanning not producing reports)
 
 ### 8. **Secrets Management** ✅ Complete
 - [x] **Evaluation Complete** - Sealed Secrets recommended for homelab (2026-01-13)
