@@ -71,31 +71,7 @@ serviceMonitor:
   interval: "60s"                                  # Scrape every 60 seconds
 
 # Built-in Trivy server configuration
-trivyServer:
-  enabled: true                                    # Enable built-in server
-
-  # Resource limits for Trivy server (actual usage ~22Mi)
-  # Right-sized from 256Mi/512Mi to match actual usage with headroom
-  resources:
-    requests:
-      cpu: 50m                                     # Reduced from 100m
-      memory: 64Mi                                 # Reduced from 256Mi (actual ~22Mi)
-    limits:
-      cpu: 300m                                    # Reduced from 500m
-      memory: 256Mi                                # Reduced from 512Mi
-
-  # Security context
-  podSecurityContext:
-    runAsUser: 65534
-    runAsNonRoot: true
-    fsGroup: 65534
-
-  # Trivy vulnerability database storage
-  persistence:
-    enabled: true
-    storageClass: "synology-iscsi-retain"         # Use Synology storage
-    size: 5Gi                                      # Database and cache storage
-    accessMode: ReadWriteOnce
+# Note: Chart uses trivy.server.* path, NOT top-level trivyServer.*
 
 # Trivy scanner configuration
 trivy:
@@ -119,6 +95,28 @@ trivy:
     limits:
       cpu: 500m
       memory: 500Mi
+
+  # Trivy server StatefulSet configuration
+  server:
+    # Resource limits for Trivy server (actual usage ~30Mi)
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 300m
+        memory: 256Mi
+
+    # Security context
+    podSecurityContext:
+      runAsUser: 65534
+      runAsNonRoot: true
+      fsGroup: 65534
+
+  # Trivy server PVC storage
+  storageClassEnabled: true
+  storageClassName: "synology-iscsi-retain"
+  storageSize: "5Gi"
 
 # Node collector for node component scanning
 nodeCollector:

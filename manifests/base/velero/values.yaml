@@ -17,14 +17,14 @@ upgradeCRDs: false
 # CSI snapshots are storage-native and more efficient for block storage
 deployNodeAgent: false
 
-# Resource limits for Pi cluster - Velero server pod
+# Resource limits for Pi cluster - Velero server pod (actual usage ~93Mi)
 resources:
   requests:
     cpu: 100m
-    memory: 256Mi
+    memory: 128Mi
   limits:
     cpu: 200m
-    memory: 512Mi
+    memory: 256Mi
 
 # Init containers for backup plugins - ARM64 versions
 # Note: CSI plugin is integrated into Velero v1.14+, no separate plugin needed
