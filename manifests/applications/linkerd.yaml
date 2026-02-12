@@ -10,7 +10,7 @@ spec:
   sources:
     - repoURL: https://helm.linkerd.io/edge
       chart: linkerd-control-plane
-      targetRevision: 2026.1.3
+      targetRevision: 2026.1.4
       helm:
         releaseName: linkerd-control-plane
         valueFiles:
