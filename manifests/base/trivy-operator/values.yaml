@@ -113,9 +113,8 @@ trivy:
       runAsNonRoot: true
       fsGroup: 65534
 
-  # Trivy server PVC storage
+  # Trivy server PVC storage (storageClassName omitted to match existing PVC using cluster default)
   storageClassEnabled: true
-  storageClassName: "synology-iscsi-retain"
   storageSize: "5Gi"
 
 # Node collector for node component scanning
