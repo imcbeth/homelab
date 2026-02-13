@@ -173,7 +173,7 @@ data:
           "type": "stat",
           "targets": [
             {
-              "expr": "sum(increase(kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"}[24h]))",
+              "expr": "sum(max_over_time(kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"}[24h]))",
               "legendFormat": "",
               "refId": "A"
             }
