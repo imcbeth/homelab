@@ -111,7 +111,7 @@
   - [x] Document dashboard creation and modification workflow (Added comprehensive audit section)
 - [x] Network utilization dashboard - Deployed initial cluster-wide network utilization view (PR pending, 2026-02-05)
 - [x] Storage performance metrics (iSCSI latency, IOPS, throughput) - Dashboard deployed (PR #383, 2026-02-05)
-- [ ] Application performance monitoring (APM) dashboard
+- [x] Application performance monitoring (APM) dashboard - 8-row overview with service health, CPU/memory, blackbox endpoints, API server, network I/O, saturation (2026-02-13)
 
 ### 5. **Metrics Server Deployment**
 - [x] **Metrics Server** - Deployed for kubectl top and HPA (2025-12-28)

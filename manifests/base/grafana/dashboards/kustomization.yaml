@@ -38,5 +38,8 @@ resources:
   - falco-security-dashboard.yaml
   - gatekeeper-policy-dashboard.yaml
 
+  # APM / Performance Dashboards
+  - apm-dashboard.yaml
+
   # CI/CD Dashboards
   - argo-workflows-dashboard.yaml
