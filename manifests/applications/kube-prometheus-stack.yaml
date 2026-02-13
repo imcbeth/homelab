@@ -20,7 +20,6 @@ spec:
               annotations:
                 argocd.argoproj.io/hook: PreSync
                 argocd.argoproj.io/hook-delete-policy: HookSucceeded
-                argocd.argoproj.io/sync-options: Force=true
           prometheusOperator:
             admissionWebhooks:
               createSecretJob:
