@@ -1702,8 +1702,31 @@ prometheus:
     maximumStartupDurationSeconds: 0
     scrapeProtocols: []
   additionalRulesForClusterRole: []
-  additionalServiceMonitors: []
-  additionalPodMonitors: []
+  additionalServiceMonitors:
+    - name: istiod
+      namespaceSelector:
+        matchNames:
+          - istio-system
+      selector:
+        matchLabels:
+          app: istiod
+          istio: pilot
+      endpoints:
+        - port: http-monitoring
+          interval: 30s
+          path: /metrics
+  additionalPodMonitors:
+    - name: ztunnel
+      namespaceSelector:
+        matchNames:
+          - istio-system
+      selector:
+        matchLabels:
+          app: ztunnel
+      podMetricsEndpoints:
+        - port: ztunnel-stats
+          interval: 30s
+          path: /metrics
 thanosRuler:
   enabled: false
   annotations: {}
