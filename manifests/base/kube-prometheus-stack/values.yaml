@@ -1284,7 +1284,7 @@ prometheusOperator:
   thanosImage:
     registry: quay.io
     repository: thanos/thanos
-    tag: v0.40.1
+    tag: v0.41.0
     sha: ""
   prometheusInstanceSelector: ""
   alertmanagerInstanceSelector: ""
@@ -1802,7 +1802,7 @@ thanosRuler:
     image:
       registry: quay.io
       repository: thanos/thanos
-      tag: v0.40.1
+      tag: v0.41.0
       sha: ""
     ruleNamespaceSelector: {}
     ruleSelectorNilUsesHelmValues: true
