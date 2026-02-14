@@ -676,14 +676,14 @@ data:
             "colorMode": "value",
             "graphMode": "none",
             "justifyMode": "auto",
-            "textMode": "auto",
+            "textMode": "name",
             "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
           },
           "title": "Istio Version",
           "type": "stat",
           "targets": [
             {
-              "expr": "count(istio_build{component=\"pilot\"}) by (tag)",
+              "expr": "istio_build{component=\"pilot\"}",
               "legendFormat": "{{tag}}",
               "refId": "A"
             }
@@ -814,7 +814,7 @@ data:
             "legend": { "displayMode": "list", "placement": "bottom" },
             "tooltip": { "mode": "multi", "sort": "desc" }
           },
-          "title": "mTLS TCP Throughput",
+          "title": "Istio TCP Throughput",
           "type": "timeseries",
           "targets": [
             {
