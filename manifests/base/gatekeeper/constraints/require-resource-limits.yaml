@@ -12,12 +12,4 @@ spec:
         kinds: ["Pod"]
     excludedNamespaces:
       - kube-system
-      - argocd
-      - gatekeeper-system
-      - calico-system
       - tigera-operator
-      - istio-system
-      - cert-manager
-      - metallb-system
-      - synology-csi
-      - localstack

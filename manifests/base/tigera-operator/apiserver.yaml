@@ -8,4 +8,17 @@ apiVersion: operator.tigera.io/v1
 kind: APIServer
 metadata:
   name: default
-spec: {}
+spec:
+  apiServerDeployment:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: calico-apiserver
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 256Mi

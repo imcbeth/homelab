@@ -23,16 +23,25 @@ spec:
             requests:
               cpu: 10m
               memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 256Mi
           webhook:
             resources:
               requests:
                 cpu: 10m
+                memory: 128Mi
+              limits:
+                cpu: 50m
                 memory: 128Mi
           cainjector:
             resources:
               requests:
                 cpu: 10m
                 memory: 128Mi
+              limits:
+                cpu: 100m
+                memory: 256Mi
     - path: manifests/base/cert-manager
       repoURL: git@github.com:imcbeth/homelab.git
       targetRevision: HEAD

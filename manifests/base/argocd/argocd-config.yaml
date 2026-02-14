@@ -65,6 +65,16 @@ notifications:
       cpu: 50m
       memory: 64Mi
 
+# Dex OIDC server
+dex:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 50m
+      memory: 128Mi
+
 configs:
   cm:
     url: https://argocd.k8s.n37.ca # Set the external URL for Argo CD

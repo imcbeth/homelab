@@ -48,6 +48,15 @@ spec:
               labelSelector:
                 matchLabels:
                   k8s-app: calico-typha
+          containers:
+            - name: calico-typha
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
 
   # Component resource limits for Pi cluster
   calicoNodeDaemonSet:
@@ -63,6 +72,28 @@ spec:
                 limits:
                   cpu: 500m
                   memory: 512Mi
+
+  csiNodeDriverDaemonSet:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: calico-csi
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 50m
+                  memory: 64Mi
+            - name: csi-node-driver-registrar
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 50m
+                  memory: 64Mi
 
   calicoKubeControllersDeployment:
     spec:
