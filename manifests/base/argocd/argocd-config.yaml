@@ -65,6 +65,16 @@ notifications:
       cpu: 50m
       memory: 64Mi
 
+# Redis secret initialization job
+redisSecretInit:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
 # Dex OIDC server
 dex:
   resources:
