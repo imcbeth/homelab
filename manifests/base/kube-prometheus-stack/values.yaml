@@ -547,6 +547,8 @@ grafana:
       nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
       external-dns.alpha.kubernetes.io/hostname: grafana.k8s.n37.ca
       external-dns.alpha.kubernetes.io/ttl: "300"
+      nginx.ingress.kubernetes.io/limit-rps: "100"
+      nginx.ingress.kubernetes.io/limit-connections: "20"
     labels: {}
     hosts:
       - grafana.k8s.n37.ca

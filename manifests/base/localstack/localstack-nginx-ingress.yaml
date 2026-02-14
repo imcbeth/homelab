@@ -8,6 +8,8 @@ metadata:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP" # LocalStack uses HTTP internally
     external-dns.alpha.kubernetes.io/hostname: localstack.k8s.n37.ca
     external-dns.alpha.kubernetes.io/ttl: "300"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
 spec:
   ingressClassName: nginx
   tls:
