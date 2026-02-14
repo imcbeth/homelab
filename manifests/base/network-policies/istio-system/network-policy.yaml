@@ -12,32 +12,46 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Intra-namespace communication (istiod, ztunnel)
+    # HBONE tunnel port (mandatory bare rule for ambient mesh)
+    # ztunnel tunnels ALL inter-pod traffic through port 15008
+    # Must be bare (no from selector) per Istio ambient requirements
+    - ports:
+        - protocol: TCP
+          port: 15008
+
+    # Intra-namespace communication (istiod, ztunnel, istio-cni)
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: istio-system
       ports:
         - protocol: TCP
-          port: 15010  # istiod grpc (plaintext)
+          port: 15010  # istiod gRPC plaintext xDS
         - protocol: TCP
-          port: 15012  # istiod grpc (mtls)
+          port: 15012  # istiod gRPC TLS xDS
         - protocol: TCP
-          port: 15014  # istiod http
+          port: 15014  # istiod monitoring / istio-cni metrics
         - protocol: TCP
-          port: 15017  # istiod webhook
+          port: 15017  # istiod webhooks
         - protocol: TCP
-          port: 15053  # istiod DNS
+          port: 15020  # ztunnel stats
 
-    # Webhook calls from Kubernetes API server (control plane nodes)
+    # xDS from ztunnel/waypoints in any namespace to istiod
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 15012
+
+    # Webhook calls from Kubernetes API server
     - from:
         - ipBlock:
             cidr: 10.0.10.0/24
       ports:
         - protocol: TCP
-          port: 15017  # istiod webhook
+          port: 15017
 
-    # Prometheus scraping from default namespace (kube-prometheus-stack)
+    # Prometheus scraping from default namespace (ServiceMonitor + PodMonitor)
     - from:
         - namespaceSelector:
             matchLabels:
@@ -47,48 +61,14 @@ spec:
           port: 15014  # istiod metrics
         - protocol: TCP
           port: 15020  # ztunnel metrics
-        - protocol: TCP
-          port: 15021  # health check
 
-    # Ztunnel traffic from all namespaces (ambient mesh)
-    # Workloads in ambient mode connect to ztunnel for mTLS
-    - from:
-        - namespaceSelector: {}
-      ports:
-        - protocol: TCP
-          port: 15001  # ztunnel outbound
-        - protocol: TCP
-          port: 15006  # ztunnel inbound
-        - protocol: TCP
-          port: 15008  # ztunnel HBONE
-        - protocol: TCP
-          port: 15053  # ztunnel DNS proxy
-
-    # HBONE traffic (HTTP-based overlay network)
-    # Used for cross-node communication in ambient mode
-    - from:
-        - ipBlock:
-            cidr: 10.0.10.0/24  # Node network
-      ports:
-        - protocol: TCP
-          port: 15008  # HBONE
-        - protocol: TCP
-          port: 15009  # HBONE connect
-
-    # Pod CIDR for ztunnel to intercept traffic
-    - from:
-        - ipBlock:
-            cidr: 192.168.0.0/16  # Pod CIDR (Calico)
-      ports:
-        - protocol: TCP
-          port: 15001
-        - protocol: TCP
-          port: 15006
+  egress:
+    # HBONE tunnel port (mandatory bare rule for ambient mesh)
+    - ports:
         - protocol: TCP
           port: 15008
 
-  egress:
-    # DNS resolution to kube-dns
+    # DNS resolution via kube-dns
     - to:
         - namespaceSelector:
             matchLabels:
@@ -110,7 +90,7 @@ spec:
         - protocol: TCP
           port: 443
 
-    # Kubernetes API server (control plane nodes direct)
+    # Kubernetes API server (control plane nodes)
     - to:
         - ipBlock:
             cidr: 10.0.10.0/24
@@ -133,25 +113,11 @@ spec:
         - protocol: TCP
           port: 15017
         - protocol: TCP
-          port: 15053
+          port: 15020
 
-    # Ztunnel egress to all namespaces (proxying traffic)
+    # Ztunnel data plane: deliver decrypted traffic to backend pods
+    # ztunnel proxies all meshed traffic and must reach any pod on any port
     - to:
         - namespaceSelector: {}
       ports:
-        - protocol: TCP  # All TCP ports for proxied traffic
-
-    # HBONE traffic to other nodes
-    - to:
-        - ipBlock:
-            cidr: 10.0.10.0/24  # Node network
-      ports:
         - protocol: TCP
-          port: 15008
-        - protocol: TCP
-          port: 15009
-
-    # Pod CIDR for ztunnel to forward traffic
-    - to:
-        - ipBlock:
-            cidr: 192.168.0.0/16  # Pod CIDR (Calico)
