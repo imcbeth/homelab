@@ -20,5 +20,4 @@ spec:
       - cert-manager
       - metallb-system
       - synology-csi
-      - ingress-nginx
       - localstack

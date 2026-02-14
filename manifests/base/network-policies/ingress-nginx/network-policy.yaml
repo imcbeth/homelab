@@ -1,0 +1,114 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-nginx-network-policy
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # External HTTP/HTTPS traffic via LoadBalancer (10.0.10.10)
+    # The controller is the cluster's sole ingress point
+    - ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+
+    # Admission webhook from Kubernetes API server
+    - from:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 8443
+
+    # Prometheus metrics scraping from default namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 10254
+
+  egress:
+    # DNS resolution via kube-dns
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Kubernetes API server (ClusterIP)
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # Kubernetes API server (control plane nodes)
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    # Backend: argo-workflows-server
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-workflows
+      ports:
+        - protocol: TCP
+          port: 2746
+
+    # Backend: argocd-server
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argocd
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # Backend: grafana
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 3000
+
+    # Backend: falcosidekick-ui
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: falco
+      ports:
+        - protocol: TCP
+          port: 2802
+
+    # Backend: localstack
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: localstack
+      ports:
+        - protocol: TCP
+          port: 4566
