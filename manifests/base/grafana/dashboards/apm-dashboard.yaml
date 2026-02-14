@@ -651,6 +651,231 @@ data:
         {
           "collapsed": false,
           "gridPos": { "h": 1, "w": 24, "x": 0, "y": 54 },
+          "id": 29,
+          "panels": [],
+          "title": "Istio Service Mesh",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "color": { "mode": "thresholds" }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 55 },
+          "id": 30,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "name",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "title": "Istio Version",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "istio_build{component=\"pilot\"}",
+              "legendFormat": "{{tag}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 0 }
+                ]
+              },
+              "color": { "mode": "thresholds" }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 55 },
+          "id": 31,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "title": "Connected Proxies",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(pilot_xds)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "unit": "cps",
+              "color": { "mode": "thresholds" }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 55 },
+          "id": 32,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "title": "TCP Connection Rate",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(rate(istio_tcp_connections_opened_total[5m]))",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "color": { "mode": "thresholds" }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 55 },
+          "id": 33,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "textMode": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "title": "Active TCP Connections",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(istio_tcp_connections_opened_total) - sum(istio_tcp_connections_closed_total)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 20,
+                "pointSize": 5,
+                "lineWidth": 2,
+                "stacking": { "mode": "none" },
+                "showPoints": "auto"
+              },
+              "unit": "Bps",
+              "color": { "mode": "palette-classic" }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 59 },
+          "id": 34,
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "title": "Istio TCP Throughput",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum(rate(istio_tcp_sent_bytes_total[5m]))",
+              "legendFormat": "Sent",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(istio_tcp_received_bytes_total[5m]))",
+              "legendFormat": "Received",
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "fillOpacity": 10,
+                "pointSize": 5,
+                "lineWidth": 2,
+                "stacking": { "mode": "none" },
+                "showPoints": "auto"
+              },
+              "unit": "s",
+              "color": { "mode": "palette-classic" }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 59 },
+          "id": 35,
+          "options": {
+            "legend": { "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "title": "XDS Proxy Convergence Time",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(pilot_proxy_convergence_time_bucket[5m])))",
+              "legendFormat": "P50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(pilot_proxy_convergence_time_bucket[5m])))",
+              "legendFormat": "P95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(pilot_proxy_convergence_time_bucket[5m])))",
+              "legendFormat": "P99",
+              "refId": "C"
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 67 },
           "id": 22,
           "panels": [],
           "title": "Network I/O",
@@ -674,7 +899,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 55 },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 68 },
           "id": 23,
           "options": {
             "legend": { "displayMode": "list", "placement": "bottom" },
@@ -708,7 +933,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 55 },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 68 },
           "id": 24,
           "options": {
             "legend": { "displayMode": "list", "placement": "bottom" },
@@ -726,7 +951,7 @@ data:
         },
         {
           "collapsed": false,
-          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 63 },
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 76 },
           "id": 25,
           "panels": [],
           "title": "Resource Saturation",
@@ -750,7 +975,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 64 },
+          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 77 },
           "id": 26,
           "options": {
             "minVizHeight": 75,
@@ -788,7 +1013,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 64 },
+          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 77 },
           "id": 27,
           "options": {
             "minVizHeight": 75,
@@ -826,7 +1051,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 6, "w": 12, "x": 12, "y": 64 },
+          "gridPos": { "h": 6, "w": 12, "x": 12, "y": 77 },
           "id": 28,
           "options": {
             "legend": { "displayMode": "list", "placement": "bottom" },
@@ -845,7 +1070,7 @@ data:
       ],
       "refresh": "30s",
       "schemaVersion": 39,
-      "tags": ["apm", "performance", "kubernetes"],
+      "tags": ["apm", "performance", "kubernetes", "istio"],
       "templating": {
         "list": [
           {
