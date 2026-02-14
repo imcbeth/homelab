@@ -32,7 +32,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: webhook
-        image: ghcr.io/kashalls/external-dns-unifi-webhook:v0.8.1
+        image: ghcr.io/kashalls/external-dns-unifi-webhook:v0.8.2
         ports:
         - name: http
           containerPort: 8080
