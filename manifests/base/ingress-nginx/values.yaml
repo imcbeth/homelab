@@ -30,6 +30,12 @@ controller:
       cpu: 500m
       memory: 256Mi
 
+  # Prometheus metrics
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
   # Service config to match existing
   service:
     externalTrafficPolicy: Local
