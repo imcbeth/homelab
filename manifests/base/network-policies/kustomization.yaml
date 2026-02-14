@@ -19,7 +19,5 @@ resources:
   - cert-manager/network-policy.yaml
   - external-dns/network-policy.yaml
   - metallb-system/network-policy.yaml
-  # Phase 5: Service mesh namespaces (deploy one at a time for evaluation)
-  # Uncomment the appropriate mesh when testing:
-  # - linkerd/network-policy.yaml
+  # Phase 5: Service mesh namespaces
   # - istio-system/network-policy.yaml
