@@ -1,0 +1,46 @@
+controller:
+  image:
+    tag: "v1.14.3"
+
+  # Hardening settings (previously in separate ConfigMap)
+  config:
+    ssl-protocols: "TLSv1.2 TLSv1.3"
+    ssl-prefer-server-ciphers: "true"
+    hsts: "true"
+    hsts-max-age: "31536000"
+    hsts-include-subdomains: "true"
+    server-tokens: "false"
+    hide-headers: "X-Powered-By"
+    force-ssl-redirect: "true"
+    client-max-body-size: "20m"
+
+  # Security headers (previously in custom-headers ConfigMap)
+  addHeaders:
+    X-Frame-Options: "DENY"
+    X-Content-Type-Options: "nosniff"
+    Referrer-Policy: "strict-origin-when-cross-origin"
+    Permissions-Policy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=()"
+
+  # Resource limits for cluster stability
+  resources:
+    requests:
+      cpu: 100m
+      memory: 90Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  # Service config to match existing
+  service:
+    externalTrafficPolicy: Local
+
+  # Webhook cert patching jobs resource limits
+  admissionWebhooks:
+    patch:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
