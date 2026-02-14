@@ -12,6 +12,8 @@ resources:
   - storage-class.yml
   - snapshotter/snapshotter.yml
   - snapshotter/volume-snapshot-class.yml
+patches:
+  - path: patches/snapshot-controller-resources.yaml
 # secretGenerator:
 #   - name: client-info-secret
 #     files:
