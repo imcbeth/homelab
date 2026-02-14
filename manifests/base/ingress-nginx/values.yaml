@@ -21,7 +21,7 @@ controller:
     Referrer-Policy: "strict-origin-when-cross-origin"
     Permissions-Policy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=()"
 
-  # Resource limits (fix Gatekeeper violation)
+  # Resource limits for cluster stability
   resources:
     requests:
       cpu: 100m
@@ -34,7 +34,7 @@ controller:
   service:
     externalTrafficPolicy: Local
 
-  # Webhook cert patching jobs need resource limits for Gatekeeper
+  # Webhook cert patching jobs resource limits
   admissionWebhooks:
     patch:
       resources:
