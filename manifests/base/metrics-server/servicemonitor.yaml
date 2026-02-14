@@ -17,6 +17,6 @@ spec:
     scheme: https
     interval: 1m
     scrapeTimeout: 10s
+    bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
     tlsConfig:
       insecureSkipVerify: true
-      # Required because metrics-server uses self-signed certificates
