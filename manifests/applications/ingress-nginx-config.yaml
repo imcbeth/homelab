@@ -7,10 +7,17 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: infrastructure
-  source:
-    repoURL: git@github.com:imcbeth/homelab.git
-    path: manifests/base/ingress-nginx
-    targetRevision: HEAD
+  sources:
+    - repoURL: https://kubernetes.github.io/ingress-nginx
+      chart: ingress-nginx
+      targetRevision: 4.14.3
+      helm:
+        releaseName: ingress-nginx
+        valueFiles:
+          - $values/manifests/base/ingress-nginx/values.yaml
+    - repoURL: git@github.com:imcbeth/homelab.git
+      targetRevision: HEAD
+      ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: ingress-nginx
