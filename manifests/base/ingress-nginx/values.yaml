@@ -40,8 +40,16 @@ controller:
   service:
     externalTrafficPolicy: Local
 
-  # Webhook cert patching jobs resource limits
+  # Webhook cert jobs resource limits
   admissionWebhooks:
+    createSecretJob:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
     patch:
       resources:
         requests:
