@@ -9,6 +9,9 @@ metadata:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS" # If your Argo CD server uses TLS internally
     external-dns.alpha.kubernetes.io/hostname: argocd.k8s.n37.ca
     external-dns.alpha.kubernetes.io/ttl: "300"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
 spec:
   ingressClassName: nginx
   tls:
