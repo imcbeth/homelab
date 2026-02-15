@@ -35,6 +35,8 @@ controller:
     enabled: true
     serviceMonitor:
       enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
 
   # Service config to match existing
   service:
