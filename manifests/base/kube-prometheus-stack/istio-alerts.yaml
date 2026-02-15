@@ -126,14 +126,20 @@ spec:
           Net close rate excess: {{ $value | humanize }}/s.
           This may indicate widespread service failures or mesh connectivity issues.
 
-    # DNS upstream failures
+    # DNS upstream failure rate spike (compared to baseline)
+    # Note: ztunnel DNS proxy counts NXDOMAIN from search domain expansion
+    # as failures, so a baseline failure rate is normal. Alert on 3x spike.
     - alert: IstioDNSFailures
-      expr: rate(istio_dns_upstream_failures_total[5m]) > 0.1
+      expr: |
+        sum(rate(istio_dns_upstream_failures_total[5m]))
+        > 3 * sum(rate(istio_dns_upstream_failures_total[1h]))
+        and sum(rate(istio_dns_upstream_failures_total[5m])) > 1
       for: 10m
       labels:
         severity: warning
       annotations:
-        summary: "Elevated Istio DNS upstream failure rate"
+        summary: "Istio DNS upstream failure rate spiked 3x above baseline"
         description: |
-          Ztunnel DNS proxy is experiencing upstream failures at {{ $value | humanize }}/s.
+          Ztunnel DNS proxy failure rate is {{ $value | humanize }}/s,
+          significantly above the 1-hour baseline.
           Check CoreDNS health and network connectivity.
