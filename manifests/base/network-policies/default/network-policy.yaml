@@ -95,6 +95,12 @@ spec:
       ports:
         - protocol: TCP
           port: 6443
+        - protocol: TCP
+          port: 10250  # kubelet metrics (host network)
+        - protocol: TCP
+          port: 10257  # kube-controller-manager metrics (host network)
+        - protocol: TCP
+          port: 10259  # kube-scheduler metrics (host network)
 
     # Prometheus scrapes targets across all namespaces
     # Allow egress to all cluster pods for scraping
@@ -145,6 +151,20 @@ spec:
           port: 443    # operator webhooks
         - protocol: TCP
           port: 5443   # calico-apiserver
+        - protocol: TCP
+          port: 9153   # CoreDNS metrics
+        - protocol: TCP
+          port: 8085   # Velero metrics
+        - protocol: TCP
+          port: 9402   # cert-manager metrics
+        - protocol: TCP
+          port: 8083   # ArgoCD metrics
+        - protocol: TCP
+          port: 8082   # ArgoCD repo-server metrics
+        - protocol: TCP
+          port: 8765   # Falco metrics
+        - protocol: TCP
+          port: 2801   # Falcosidekick metrics
 
     # Intra-namespace communication (alertmanager, grafana, prometheus, etc.)
     - to:

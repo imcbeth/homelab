@@ -11,17 +11,30 @@ server:
     limits:
       cpu: 200m
       memory: 256Mi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
 
 controller:
   replicas: 2 # Increase the number of application controller replicas
-  # Resource limits for application controller (actual usage ~571Mi)
+  # Resource limits for application controller
+  # OOMKilled 13 times in 46h at 1Gi — 25 apps need more headroom
   resources:
     requests:
       cpu: 100m
       memory: 512Mi
     limits:
       cpu: 500m
-      memory: 1Gi
+      memory: 1536Mi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
 
 # Repository server
 repoServer:
@@ -34,6 +47,12 @@ repoServer:
     limits:
       cpu: 500m
       memory: 512Mi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
 
 # Redis (used for caching)
 redis:

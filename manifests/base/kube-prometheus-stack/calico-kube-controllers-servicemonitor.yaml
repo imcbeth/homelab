@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: calico-kube-controllers
+  namespace: default
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/name: calico-kube-controllers
+spec:
+  namespaceSelector:
+    matchNames:
+      - calico-system
+  selector:
+    matchLabels:
+      k8s-app: calico-kube-controllers
+  endpoints:
+    - port: metrics-port
+      interval: 30s

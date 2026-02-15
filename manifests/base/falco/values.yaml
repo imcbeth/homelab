@@ -163,7 +163,7 @@ metrics:
     port: 8765
 
 serviceMonitor:
-  enabled: true
+  create: true
   labels:
     release: kube-prometheus-stack
   interval: 30s
@@ -219,7 +219,7 @@ falcosidekick:
   # Prometheus metrics for sidekick
   serviceMonitor:
     enabled: true
-    labels:
+    additionalLabels:
       release: kube-prometheus-stack
 
   # Output configuration

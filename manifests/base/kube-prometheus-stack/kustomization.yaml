@@ -22,3 +22,4 @@ resources:
   - velero-alerts.yaml
   - istio-alerts.yaml
   - apm-alerts.yaml
+  - calico-kube-controllers-servicemonitor.yaml
