@@ -188,7 +188,8 @@ spec:
           port: 80
         - protocol: TCP
           port: 443
-        - protocol: ICMP
+        # Note: ICMP not supported in NetworkPolicy (TCP/UDP/SCTP only)
+        # Blackbox ICMP probes rely on default-allow for ICMP at the Calico level
 
     # Blackbox and SNMP probe internal network targets
     - to:
@@ -203,7 +204,6 @@ spec:
           port: 8443
         - protocol: UDP
           port: 161    # SNMP
-        - protocol: ICMP
 
     # Istio ambient mesh communication (ztunnel, istiod)
     - to:
