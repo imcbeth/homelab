@@ -13,3 +13,4 @@ spec:
     excludedNamespaces:
       - kube-system
       - tigera-operator
+      - calico-system

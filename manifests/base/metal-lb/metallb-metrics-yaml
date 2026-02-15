@@ -28,6 +28,55 @@ speaker:
     limits:
       cpu: 100m
       memory: 64Mi
+  frr:
+    resources:
+      requests:
+        cpu: 5m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  reloader:
+    resources:
+      requests:
+        cpu: 1m
+        memory: 8Mi
+      limits:
+        cpu: 25m
+        memory: 32Mi
+  frrMetrics:
+    resources:
+      requests:
+        cpu: 5m
+        memory: 16Mi
+      limits:
+        cpu: 50m
+        memory: 32Mi
+  initContainers:
+    cpFrrFiles:
+      resources:
+        requests:
+          cpu: 1m
+          memory: 8Mi
+        limits:
+          cpu: 25m
+          memory: 32Mi
+    cpReloader:
+      resources:
+        requests:
+          cpu: 1m
+          memory: 8Mi
+        limits:
+          cpu: 25m
+          memory: 32Mi
+    cpMetrics:
+      resources:
+        requests:
+          cpu: 1m
+          memory: 8Mi
+        limits:
+          cpu: 25m
+          memory: 32Mi
   metrics:
     enabled: true
     serviceMonitor:
