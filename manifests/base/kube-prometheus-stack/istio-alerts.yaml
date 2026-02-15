@@ -132,7 +132,7 @@ spec:
     - alert: IstioDNSFailures
       expr: |
         sum(rate(istio_dns_upstream_failures_total[5m]))
-        > 3 * sum(rate(istio_dns_upstream_failures_total[1h]))
+        > 3 * sum(rate(istio_dns_upstream_failures_total[1h] offset 5m))
         and sum(rate(istio_dns_upstream_failures_total[5m])) > 1
       for: 10m
       labels:
