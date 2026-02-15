@@ -20,3 +20,5 @@ resources:
   - snmp-exporter-service.yaml
   - storage-alerts.yaml
   - velero-alerts.yaml
+  - istio-alerts.yaml
+  - apm-alerts.yaml

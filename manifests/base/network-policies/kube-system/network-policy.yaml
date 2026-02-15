@@ -1,0 +1,113 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kube-system-network-policy
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: kube-system
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # CoreDNS: Allow DNS queries from ALL namespaces
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # CoreDNS metrics scraping from Prometheus
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 9153   # CoreDNS metrics
+
+    # Metrics-server: API server aggregation layer
+    # Bare port rule for IPIP compatibility
+    - ports:
+        - protocol: TCP
+          port: 4443   # metrics-server
+
+    # Kubelet metrics scraping from Prometheus
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 10250  # kubelet
+        - protocol: TCP
+          port: 10255  # kubelet read-only
+        - protocol: TCP
+          port: 10257  # kube-controller-manager metrics
+        - protocol: TCP
+          port: 10259  # kube-scheduler metrics
+
+    # Sealed-secrets controller webhook from API server
+    - ports:
+        - protocol: TCP
+          port: 8080   # sealed-secrets webhook/controller
+
+    # Sealed-secrets metrics scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 8081   # sealed-secrets metrics
+
+    # Kube-proxy health check
+    - from:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 10256  # kube-proxy health
+
+  egress:
+    # DNS resolution (CoreDNS upstream to external DNS)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Kubernetes API server (ClusterIP + control plane)
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    # Control plane nodes: API server, kubelet (metrics-server + kube-proxy)
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 6443   # kube-apiserver
+        - protocol: TCP
+          port: 10250  # kubelet (metrics-server scraping + kube-proxy)
+
+    # Sealed-secrets controller: needs to reach API server only (already covered above)
+
+    # Intra-namespace communication
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

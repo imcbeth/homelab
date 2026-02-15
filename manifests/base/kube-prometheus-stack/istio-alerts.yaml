@@ -1,0 +1,139 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: istio-ambient-alerts
+  namespace: default
+  labels:
+    app: istio
+    prometheus: kube-prometheus
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: istio_control_plane
+    interval: 60s
+    rules:
+    # Istiod has restarted (uptime reset)
+    - alert: IstiodRestarted
+      expr: istiod_uptime_seconds < 300
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Istiod has restarted recently"
+        description: |
+          Istiod uptime is only {{ $value | humanizeDuration }}.
+          Check istiod pod logs for crash reasons.
+
+    # Connected ztunnel proxies dropped below expected count (5 nodes)
+    - alert: IstioConnectedProxiesLow
+      expr: sum(pilot_xds) < 5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Fewer than 5 ztunnel proxies connected to istiod"
+        description: |
+          Only {{ $value }} proxies are connected to istiod (expected 5 for 5-node cluster).
+          Check ztunnel DaemonSet pod status across nodes.
+
+    # No connected proxies at all
+    - alert: IstioNoConnectedProxies
+      expr: sum(pilot_xds) == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "No ztunnel proxies connected to istiod"
+        description: |
+          Zero proxies are connected to istiod. The mesh data plane is completely disconnected.
+          IMMEDIATE ACTION: Check istiod and ztunnel pod status.
+
+  - name: istio_xds_performance
+    interval: 60s
+    rules:
+    # XDS push convergence time is high (p95 > 5s)
+    - alert: IstioHighConvergenceTime
+      expr: |
+        histogram_quantile(0.95, sum by (le) (rate(pilot_proxy_convergence_time_bucket[5m]))) > 5
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Istio XDS push convergence time is high"
+        description: |
+          p95 XDS push convergence time is {{ $value | humanizeDuration }}.
+          This means configuration changes take too long to propagate to proxies.
+
+    # XDS connection terminations spike
+    - alert: IstioXDSConnectionTerminations
+      expr: rate(istio_xds_connection_terminations_total[5m]) > 0.1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Elevated XDS connection termination rate"
+        description: |
+          XDS connections are being terminated at {{ $value | humanize }}/s.
+          This may indicate network issues between ztunnel and istiod.
+
+  - name: istio_configuration_errors
+    interval: 60s
+    rules:
+    # Listener conflicts detected
+    - alert: IstioListenerConflicts
+      expr: pilot_conflict_inbound_listener > 0 or pilot_conflict_outbound_listener_tcp_over_current_tcp > 0
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Istio listener conflicts detected"
+        description: |
+          Pilot has detected listener conflicts. This may cause traffic routing issues.
+          Review service port configurations for overlapping ports.
+
+    # Duplicate clusters
+    - alert: IstioDuplicateClusters
+      expr: pilot_duplicate_envoy_clusters > 0
+      for: 15m
+      labels:
+        severity: info
+      annotations:
+        summary: "Duplicate Envoy clusters detected in Istio config"
+        description: |
+          {{ $value }} duplicate cluster configurations found.
+          Review service definitions for naming conflicts.
+
+  - name: istio_data_plane
+    interval: 60s
+    rules:
+    # Net close rate exceeds open rate by >50% sustained (connection drain)
+    - alert: IstioTCPConnectionsDrop
+      expr: |
+        (
+          sum(rate(istio_tcp_connections_closed_total[5m]))
+          - sum(rate(istio_tcp_connections_opened_total[5m]))
+        ) > 0.5 * sum(rate(istio_tcp_connections_opened_total[5m]))
+        and sum(rate(istio_tcp_connections_opened_total[5m])) > 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Active Istio TCP connections dropping (high close rate vs open rate)"
+        description: |
+          The rate of closed mesh TCP connections significantly exceeds the open rate.
+          Net close rate excess: {{ $value | humanize }}/s.
+          This may indicate widespread service failures or mesh connectivity issues.
+
+    # DNS upstream failures
+    - alert: IstioDNSFailures
+      expr: rate(istio_dns_upstream_failures_total[5m]) > 0.1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Elevated Istio DNS upstream failure rate"
+        description: |
+          Ztunnel DNS proxy is experiencing upstream failures at {{ $value | humanize }}/s.
+          Check CoreDNS health and network connectivity.

@@ -1,0 +1,131 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: apm-overview-alerts
+  namespace: default
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: apm_pod_health
+    interval: 60s
+    rules:
+    # OOMKilled containers
+    - alert: ContainerOOMKilled
+      expr: |
+        increase(kube_pod_container_status_restarts_total[5m]) > 0
+        and on (namespace, pod, container)
+        kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled"
+        description: |
+          Container {{ $labels.container }} in pod {{ $labels.namespace }}/{{ $labels.pod }}
+          was terminated due to OOM. Increase memory limits or investigate memory usage.
+
+    # Pod crash looping
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total[15m]) * 60 * 15 > 3
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
+        description: |
+          Pod {{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }}
+          has restarted {{ $value | humanize }} times in the last 15 minutes.
+
+    # Pods not ready for extended period
+    - alert: PodNotReady
+      expr: |
+        sum by (namespace, pod) (
+          kube_pod_status_phase{phase=~"Pending|Unknown"}
+        ) > 0
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} not ready"
+        description: |
+          Pod {{ $labels.namespace }}/{{ $labels.pod }} has been in a non-running
+          state (Pending or Unknown) for more than 15 minutes.
+
+  - name: apm_node_health
+    interval: 60s
+    rules:
+    # Node memory pressure
+    - alert: NodeHighMemoryUsage
+      expr: |
+        (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.85
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Node {{ $labels.instance }} memory usage above 85%"
+        description: |
+          Node {{ $labels.instance }} memory usage is {{ $value | humanizePercentage }}.
+          Consider scaling workloads or adding resources.
+
+    # Node CPU pressure
+    - alert: NodeHighCPUUsage
+      expr: |
+        1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.85
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Node {{ $labels.instance }} CPU usage above 85%"
+        description: |
+          Node {{ $labels.instance }} CPU usage is {{ $value | humanizePercentage }}.
+          Review resource-intensive workloads on this node.
+
+    # Node disk pressure (root filesystem)
+    - alert: NodeDiskSpaceLow
+      expr: |
+        (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.85
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Node {{ $labels.instance }} root filesystem usage above 85%"
+        description: |
+          Node {{ $labels.instance }} root filesystem is {{ $value | humanizePercentage }} full.
+          Clean up old images or expand storage.
+
+  - name: apm_api_server
+    interval: 60s
+    rules:
+    # API server request latency high
+    - alert: APIServerHighLatency
+      expr: |
+        histogram_quantile(0.95,
+          sum by (le, verb) (rate(apiserver_request_duration_seconds_bucket{verb!~"WATCH|CONNECT"}[5m]))
+        ) > 1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Kubernetes API server p95 latency above 1s for {{ $labels.verb }}"
+        description: |
+          API server {{ $labels.verb }} request p95 latency is {{ $value | humanizeDuration }}.
+          This may indicate API server overload or etcd performance issues.
+
+    # API server error rate
+    - alert: APIServerHighErrorRate
+      expr: |
+        sum(rate(apiserver_request_total{code=~"5.."}[5m]))
+        / sum(rate(apiserver_request_total[5m])) > 0.01
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Kubernetes API server error rate above 1%"
+        description: |
+          API server is returning 5xx errors at {{ $value | humanizePercentage }} rate.
+          Check API server logs and etcd health.

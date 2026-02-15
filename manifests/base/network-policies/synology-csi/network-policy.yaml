@@ -1,0 +1,70 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: synology-csi-network-policy
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: synology-csi
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # CSI driver internal communication
+    # kubelet -> CSI node plugin (unix socket, not network)
+    # snapshot-controller webhook (if any)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: synology-csi
+      ports:
+        - protocol: TCP
+          port: 9808   # liveness probe
+
+    # Admission webhooks from API server (bare port for IPIP compat)
+    - ports:
+        - protocol: TCP
+          port: 9443   # snapshot-controller webhook
+
+  egress:
+    # DNS resolution via kube-dns
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Kubernetes API server (ClusterIP + control plane)
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    # Synology NAS DSM API and iSCSI (NAS at 10.0.1.204)
+    - to:
+        - ipBlock:
+            cidr: 10.0.1.204/32
+      ports:
+        - protocol: TCP
+          port: 5000   # Synology DSM HTTP
+        - protocol: TCP
+          port: 5001   # Synology DSM HTTPS
+        - protocol: TCP
+          port: 3260   # iSCSI target
