@@ -102,8 +102,9 @@ spec:
     # Exposed secrets alerts
     - alert: ExposedSecretsDetected
       expr: |
-        trivy_image_exposedsecrets{severity="Critical"} > 0 or
-        trivy_image_exposedsecrets{severity="High"} > 0
+        max by (image_repository, image_tag, namespace, resource_name, resource_kind) (
+          trivy_image_exposedsecrets{severity=~"Critical|High"}
+        ) > 0
       for: 5m
       labels:
         severity: critical
