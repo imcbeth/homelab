@@ -21,10 +21,10 @@ spec:
           port: 443
 
     # Admission webhook from Kubernetes API server
-    - from:
-        - ipBlock:
-            cidr: 10.0.10.0/24
-      ports:
+    # Bare port rule (no from selector) because Calico IPIP encapsulation
+    # rewrites the source IP for cross-node traffic, making ipBlock rules
+    # unreliable for matching the API server's node IP
+    - ports:
         - protocol: TCP
           port: 8443
 
