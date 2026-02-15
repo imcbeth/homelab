@@ -106,7 +106,8 @@ spec:
         - protocol: TCP
           port: 8080   # argocd-server
 
-    # Git repository access (GitHub SSH + HTTPS)
+    # External access: git repos (SSH+HTTPS), Helm/OCI registries,
+    # Dex OIDC callbacks, ArgoCD notifications
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -118,28 +119,4 @@ spec:
         - protocol: TCP
           port: 22     # SSH (git)
         - protocol: TCP
-          port: 443    # HTTPS (git, Helm repos, OCI registries)
-
-    # Dex OIDC callbacks (if configured)
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 443
-
-    # ArgoCD notifications (if configured for Slack/webhook)
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 443
+          port: 443    # HTTPS (git, Helm repos, OCI, OIDC, notifications)

@@ -53,8 +53,8 @@ spec:
       annotations:
         summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} not ready"
         description: |
-          Pod {{ $labels.namespace }}/{{ $labels.pod }} has been in {{ $labels.phase }}
-          state for more than 15 minutes.
+          Pod {{ $labels.namespace }}/{{ $labels.pod }} has been in a non-running
+          state (Pending or Unknown) for more than 15 minutes.
 
   - name: apm_node_health
     interval: 60s

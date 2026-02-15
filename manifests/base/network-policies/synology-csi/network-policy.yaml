@@ -57,11 +57,10 @@ spec:
         - protocol: TCP
           port: 6443
 
-    # Synology NAS DSM API and iSCSI
-    # NAS is on the storage network
+    # Synology NAS DSM API and iSCSI (NAS at 10.0.1.204)
     - to:
         - ipBlock:
-            cidr: 10.0.0.0/8
+            cidr: 10.0.1.204/32
       ports:
         - protocol: TCP
           port: 5000   # Synology DSM HTTP

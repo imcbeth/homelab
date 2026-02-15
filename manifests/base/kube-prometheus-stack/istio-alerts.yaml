@@ -108,22 +108,22 @@ spec:
   - name: istio_data_plane
     interval: 60s
     rules:
-    # Active TCP connections dropped significantly (50% drop in 5 min)
+    # Net close rate exceeds open rate by >50% sustained (connection drain)
     - alert: IstioTCPConnectionsDrop
       expr: |
         (
-          sum(istio_tcp_connections_opened_total) - sum(istio_tcp_connections_closed_total)
-        ) < 0.5 * (
-          sum(istio_tcp_connections_opened_total offset 5m) - sum(istio_tcp_connections_closed_total offset 5m)
-        )
+          sum(rate(istio_tcp_connections_closed_total[5m]))
+          - sum(rate(istio_tcp_connections_opened_total[5m]))
+        ) > 0.5 * sum(rate(istio_tcp_connections_opened_total[5m]))
+        and sum(rate(istio_tcp_connections_opened_total[5m])) > 0
       for: 5m
       labels:
         severity: warning
       annotations:
-        summary: "Active Istio TCP connections dropped by >50%"
+        summary: "Active Istio TCP connections dropping (high close rate vs open rate)"
         description: |
-          Active mesh TCP connections have dropped significantly.
-          Current: {{ $value }} connections.
+          The rate of closed mesh TCP connections significantly exceeds the open rate.
+          Net close rate excess: {{ $value | humanize }}/s.
           This may indicate widespread service failures or mesh connectivity issues.
 
     # DNS upstream failures

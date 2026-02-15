@@ -49,9 +49,7 @@ spec:
         - protocol: TCP
           port: 443    # operator webhook
 
-    # Prometheus scrapes pods in other namespaces via ServiceMonitors
-    # They need to reach back for web UI / API
-    # Also allow ingress-nginx to reach grafana
+    # Allow ingress-nginx controller to proxy external requests to Grafana UI
     - from:
         - namespaceSelector:
             matchLabels:
@@ -110,7 +108,7 @@ spec:
         - protocol: TCP
           port: 8081   # various metrics
         - protocol: TCP
-          port: 8443   # ingress-nginx metrics
+          port: 8443   # ingress-nginx metrics, gatekeeper webhook
         - protocol: TCP
           port: 9090   # prometheus
         - protocol: TCP
@@ -141,8 +139,6 @@ spec:
           port: 15090  # envoy admin
         - protocol: TCP
           port: 8888   # gatekeeper metrics
-        - protocol: TCP
-          port: 8443   # gatekeeper webhook
         - protocol: TCP
           port: 3000   # grafana
         - protocol: TCP
