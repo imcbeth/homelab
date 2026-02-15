@@ -22,3 +22,9 @@ resources:
   - ingress-nginx/network-policy.yaml
   # Phase 5: Service mesh namespaces
   - istio-system/network-policy.yaml
+  # Phase 6: Remaining namespaces
+  - default/network-policy.yaml
+  - argocd/network-policy.yaml
+  - synology-csi/network-policy.yaml
+  - kube-system/network-policy.yaml
+  - tigera-operator/network-policy.yaml
