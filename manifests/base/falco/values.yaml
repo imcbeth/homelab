@@ -204,7 +204,7 @@ falcosidekick:
           memory: 1536Mi
         limits:
           cpu: 200m
-          memory: 2560Mi
+          memory: 2Gi
       # Define custom redis configuration
       config:
         maxmemory: "1000mb"
