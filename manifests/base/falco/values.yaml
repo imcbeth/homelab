@@ -188,6 +188,7 @@ falcosidekick:
   webui:
     enabled: true
     replicaCount: 1
+    ttl: "30d"
     resources:
       requests:
         cpu: 10m
@@ -200,10 +201,10 @@ falcosidekick:
       resources:
         requests:
           cpu: 50m
-          memory: 1Gi
+          memory: 1536Mi
         limits:
           cpu: 200m
-          memory: 1536Mi
+          memory: 2560Mi
       # Define custom redis configuration
       config:
         maxmemory: "1000mb"
