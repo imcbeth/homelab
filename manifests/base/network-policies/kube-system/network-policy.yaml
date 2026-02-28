@@ -29,10 +29,10 @@ spec:
           port: 9153   # CoreDNS metrics
 
     # Metrics-server: API server aggregation layer
-    # Bare port rule for IPIP compatibility
+    # Bare port rule - hostNetwork API server can't match namespaceSelector
     - ports:
         - protocol: TCP
-          port: 4443   # metrics-server
+          port: 10250  # metrics-server container port
 
     # Kubelet metrics scraping from Prometheus
     - from:
