@@ -24,6 +24,7 @@ resources:
   - istio-system/network-policy.yaml
   # Phase 6: Remaining namespaces
   - default/network-policy.yaml
+  - default/calico-network-policy-allow-egress-icmp.yaml
   - argocd/network-policy.yaml
   - synology-csi/network-policy.yaml
   - kube-system/network-policy.yaml
