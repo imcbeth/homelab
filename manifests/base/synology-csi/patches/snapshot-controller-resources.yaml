@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: snapshot-controller
-  namespace: synology-csi
+  namespace: kube-system
 spec:
   selector:
     matchLabels:
