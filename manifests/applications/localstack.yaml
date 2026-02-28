@@ -13,7 +13,7 @@ spec:
   destination:
     namespace: localstack
     server: https://kubernetes.default.svc
-  project: applications
+  project: infrastructure
   syncPolicy:
     automated:
       prune: true
