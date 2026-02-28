@@ -196,6 +196,7 @@ falcosidekick:
         cpu: 100m
         memory: 128Mi
     redis:
+      storageSize: "2Gi"
       resources:
         requests:
           cpu: 50m
