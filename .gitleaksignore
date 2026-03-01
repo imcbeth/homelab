@@ -12,3 +12,4 @@
 #
 # Ignored findings (by fingerprint):
 manifests/base/pihole/pihole-web-secret.yaml:generic-api-key:8
+secrets/SEALED-SECRETS.md:hashicorp-tf-password:78

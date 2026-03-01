@@ -1,0 +1,150 @@
+# LogQL alerting rules evaluated by Loki's embedded ruler
+# The k8s-sidecar (loki-sc-rules) picks up ConfigMaps with label loki_rule
+# and writes them to /rules/ for the ruler to evaluate
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-alerting-rules
+  namespace: loki
+  labels:
+    loki_rule: "true"
+  annotations:
+    k8s-sidecar-target-directory: /rules/fake
+data:
+  log-alerts.yaml: |
+    groups:
+      - name: log_errors
+        interval: 1m
+        rules:
+          - alert: HighErrorLogRate
+            expr: |
+              sum by (namespace, pod) (
+                rate({namespace=~".+"} |~ "(?i)(error|err|fatal|exception|panic|fail)" [5m])
+              ) > 1
+            for: 5m
+            labels:
+              severity: warning
+              component: loki
+              alert_type: log_pattern
+            annotations:
+              summary: "High error log rate in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is logging errors at {{ $value | humanize }}/s for 5 minutes."
+
+          - alert: CriticalErrorLogs
+            expr: |
+              sum by (namespace, pod) (
+                rate({namespace=~".+"} |~ "(?i)(critical|fatal|panic|emergency)" [5m])
+              ) > 0.1
+            for: 2m
+            labels:
+              severity: critical
+              component: loki
+              alert_type: log_pattern
+            annotations:
+              summary: "Critical errors in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is logging critical/fatal errors at {{ $value | humanize }}/s."
+
+      - name: pod_failures
+        interval: 1m
+        rules:
+          - alert: CrashLoopBackOffDetected
+            expr: |
+              sum by (namespace, pod) (
+                rate({namespace=~".+"} |~ "(?i)(back-off restarting failed container|crashloopbackoff)" [5m])
+              ) > 0
+            for: 5m
+            labels:
+              severity: critical
+              component: loki
+              alert_type: pod_failure
+            annotations:
+              summary: "CrashLoopBackOff in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is in CrashLoopBackOff state."
+
+          - alert: OOMKilledDetected
+            expr: |
+              sum by (namespace, pod) (
+                rate({namespace=~".+"} |~ "(?i)(oomkilled|out of memory|memory cgroup out of memory)" [5m])
+              ) > 0
+            for: 1m
+            labels:
+              severity: critical
+              component: loki
+              alert_type: pod_failure
+            annotations:
+              summary: "OOMKilled in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} was OOM killed."
+
+          - alert: PersistentPodRestarts
+            expr: |
+              count_over_time({namespace=~".+"} |~ "(?i)(restarting container|restart count)" [15m]) > 5
+            for: 10m
+            labels:
+              severity: warning
+              component: loki
+              alert_type: pod_failure
+            annotations:
+              summary: "Persistent restarts in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted multiple times in 15 minutes."
+
+      - name: application_errors
+        interval: 1m
+        rules:
+          - alert: HighHTTP5xxErrorRate
+            expr: |
+              sum by (namespace, pod) (
+                rate({namespace=~".+"} |~ "(?i)(status[= :]5[0-9]{2}|http.*5[0-9]{2})" [5m])
+              ) > 1
+            for: 5m
+            labels:
+              severity: warning
+              component: loki
+              alert_type: application_error
+            annotations:
+              summary: "High HTTP 5xx rate in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is returning HTTP 5xx errors at {{ $value | humanize }}/s."
+
+          - alert: DatabaseConnectionErrors
+            expr: |
+              sum by (namespace, pod) (
+                rate({namespace=~".+"} |~ "(?i)(connection.*refused|connection.*timeout|database.*error|sql.*error)" [5m])
+              ) > 0.5
+            for: 5m
+            labels:
+              severity: warning
+              component: loki
+              alert_type: application_error
+            annotations:
+              summary: "Database errors in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is experiencing database connection errors."
+
+      - name: security_events
+        interval: 1m
+        rules:
+          - alert: AuthenticationFailures
+            expr: |
+              sum by (namespace, pod) (
+                rate({namespace=~".+"} |~ "(?i)(authentication.*failed|auth.*failed|unauthorized|invalid.*credentials)" [5m])
+              ) > 5
+            for: 5m
+            labels:
+              severity: warning
+              component: loki
+              alert_type: security
+            annotations:
+              summary: "Auth failures in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has {{ $value | humanize }} auth failures/s."
+
+          - alert: SuspiciousActivity
+            expr: |
+              sum by (namespace, pod) (
+                rate({namespace=~".+"} |~ "(?i)(attack|intrusion|exploit|malicious|suspicious)" [5m])
+              ) > 0
+            for: 2m
+            labels:
+              severity: critical
+              component: loki
+              alert_type: security
+            annotations:
+              summary: "Suspicious activity in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has logs indicating potential security concerns."

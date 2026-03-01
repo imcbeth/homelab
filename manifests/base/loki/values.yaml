@@ -41,19 +41,20 @@ loki:
     compaction_interval: 10m
     delete_request_store: filesystem
 
-  # Ruler configuration for sending alerts to AlertManager
-  rulerConfig:
-    alertmanager_url: http://kube-prometheus-stack-alertmanager.default.svc.cluster.local:9093
-    enable_api: true
-    enable_alertmanager_v2: true
-    storage:
-      type: local
-      local:
-        directory: /rules
-    rule_path: /tmp/rules
-    ring:
-      kvstore:
-        store: inmemory
+  # Ruler config via structuredConfig (rulerConfig is ignored when ruler.enabled=false)
+  structuredConfig:
+    ruler:
+      alertmanager_url: http://kube-prometheus-stack-alertmanager.default.svc.cluster.local:9093
+      enable_api: true
+      enable_alertmanager_v2: true
+      storage:
+        type: local
+        local:
+          directory: /rules
+      rule_path: /tmp/rules
+      ring:
+        kvstore:
+          store: inmemory
 
 singleBinary:
   replicas: 1
@@ -139,23 +140,11 @@ monitoring:
       installOperator: false
     # Note: lokiCanary resources are set via the top-level lokiCanary.resources key above
 
-# Ruler configuration for log-based alerting
-# Note: Disabled as separate Deployment - ruler runs embedded in singleBinary pod
-# The rulerConfig above enables ruler functionality within the main Loki process
+# Ruler runs embedded in singleBinary pod, no separate Deployment needed
+# Config is injected via loki.structuredConfig.ruler above
 ruler:
-  enabled: false  # Disable separate Deployment
-  replicas: 0     # No standalone ruler pods
-  resources:
-    requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      cpu: 200m
-      memory: 256Mi
-  persistence:
-    enabled: true
-    storageClass: synology-iscsi-retain
-    size: 1Gi
+  enabled: false
+  replicas: 0
 
 # Test configuration
 test:
