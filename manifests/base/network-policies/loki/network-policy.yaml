@@ -40,7 +40,7 @@ spec:
         - protocol: TCP
           port: 3100   # Loki metrics and query endpoint
         - protocol: TCP
-          port: 3101   # Promtail metrics port
+          port: 12345  # Alloy metrics port
     # Allow Falcosidekick to push security events
     - from:
         - namespaceSelector:
@@ -68,7 +68,7 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Allow Kubernetes API access (for Promtail pod discovery)
+    # Allow Kubernetes API access (for Alloy pod discovery)
     # Service ClusterIP (10.96.0.1:443) and actual API server endpoint (10.0.10.0/24:6443)
     - to:
         - ipBlock:
