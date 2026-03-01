@@ -19,7 +19,7 @@ resources:
     memory: 128Mi
 
 # Settings for ztunnel socket directory
-ztunnelSockDir: "/var/run/ztunnel"
+ztunnelSockDir: "/var/run"
 
 # Termination grace period
 terminationGracePeriodSeconds: 30
