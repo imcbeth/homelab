@@ -43,11 +43,10 @@ spec:
         - protocol: TCP
           port: 15012
 
-    # Webhook calls from Kubernetes API server
-    - from:
-        - ipBlock:
-            cidr: 10.0.10.0/24
-      ports:
+    # Webhook calls from Kubernetes API server (hostNetwork)
+    # Must be bare rule (no from selector) because hostNetwork pods
+    # don't match namespaceSelector, and IPIP rewrites source IP
+    - ports:
         - protocol: TCP
           port: 15017
 
