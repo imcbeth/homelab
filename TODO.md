@@ -30,7 +30,7 @@
 ### Monitoring & Observability (December 2025)
 - **SNMP Monitoring for Synology** - Deployed SNMP exporter, scraping NAS metrics (disk health, temperature, RAID status)
 - **Node Exporter for Pi Cluster** - DaemonSet running on all 5 nodes, monitoring CPU, memory, disk, network
-- **Log Aggregation** - Loki + Promtail deployed, 7-day retention, collecting logs from all pods on all nodes (including control-plane)
+- **Log Aggregation** - Loki + Alloy deployed, 7-day retention, collecting logs from all pods on all nodes (including control-plane)
 - **Prometheus Stack Fixes** - Fixed node-exporter scraping, Grafana PVC issues, cleaned up control plane monitoring
 - **Control Plane Monitoring** - Re-enabled kube-scheduler and kube-controller-manager monitoring
 - **ServiceMonitor Enablement** - Enabled metrics collection for Loki and Promtail
@@ -46,7 +46,7 @@
 ### Documentation
 - **Comprehensive Docs Site** - k8s-docs-n37 Docusaurus site with application guides
 - **External-DNS Guide** - Complete documentation with dual provider setup and troubleshooting
-- **Loki Application Guide** - Complete documentation for Loki + Promtail deployment
+- **Loki Application Guide** - Complete documentation for Loki + Alloy deployment
 - **SNMP Exporter Guide** - Synology monitoring documentation
 - **Troubleshooting Guides** - Monitoring stack and common issues documented
 
@@ -120,16 +120,16 @@
 - [x] Configure for resource-constrained Pi environment (50m CPU / 100Mi RAM)
 - [x] Prometheus ServiceMonitor integration
 
-### 6. **Log-Based Alerting**
-- [~] **Loki Ruler Alerting** - Temporarily disabled due to singleBinary mode compatibility (2026-01-05)
-- [~] Set up Loki alerting rules for error patterns (HighErrorLogRate, CriticalErrorLogs)
-- [~] Alert on CrashLoopBackOff events (CrashLoopBackOffDetected)
-- [~] Alert on OOMKilled events (OOMKilledDetected)
-- [~] Alert on persistent pod failures (PersistentPodRestarts)
-- [~] Create log-based SLO monitoring (Error rate tracking via HighErrorLogRate)
-- [~] Additional alerts: HTTP 5xx errors, DB connection errors, auth failures, security events
+### 6. **Log-Based Alerting** ✅ ENABLED (2026-03-01)
+- [x] **Loki Ruler Alerting** - Enabled via structuredConfig (rulerConfig ignored when ruler.enabled=false)
+- [x] Set up Loki alerting rules for error patterns (HighErrorLogRate, CriticalErrorLogs)
+- [x] Alert on CrashLoopBackOff events (CrashLoopBackOffDetected)
+- [x] Alert on OOMKilled events (OOMKilledDetected)
+- [x] Alert on persistent pod failures (PersistentPodRestarts)
+- [x] Create log-based SLO monitoring (Error rate tracking via HighErrorLogRate)
+- [x] Additional alerts: HTTP 5xx errors, DB connection errors, auth failures, security events
 
-**Status:** Rules created but disabled (loki-alerts.yaml.disabled). Can be re-enabled with proper singleBinary ruler configuration.
+**Status:** 9 LogQL rules in 4 groups deployed as ConfigMap with loki_rule label. k8s-sidecar loads rules to /rules/fake/ for embedded ruler in singleBinary mode. Alerts route to AlertManager (PR #489, 2026-03-01).
 
 ---
 
@@ -173,14 +173,14 @@
 - [x] **Secrets Directory Cleaned** - Only bootstrap secret (ArgoCD SSH key) remains (2026-01-14)
 - [x] **Documentation Updated** - CLAUDE_NOTES.md and secrets/README.md updated
 - [x] Set up SealedSecrets sealing key rotation automation - SealedSecrets controller key rotation enabled (30d, PR pending, 2026-02-05); cert-manager separately handles TLS cert renewal automatically
-- [ ] Create runbook for adding new SealedSecrets
+- [x] Create runbook for adding new SealedSecrets (added to SEALED-SECRETS.md, PR #489, 2026-03-01)
 
 ### 9. **Network Policies** ✅ COMPLETE (2026-01-25)
 - [x] Define NetworkPolicies for namespace isolation (9 namespaces)
 - [x] Implement ingress/egress rules for sensitive workloads
   - [x] localstack: Allow velero, ingress-nginx, prometheus; egress DNS only
   - [x] unipoller: Allow prometheus; egress DNS + UniFi controller
-  - [x] loki: Allow promtail, prometheus, grafana; egress DNS + alertmanager + K8s API
+  - [x] loki: Allow alloy, prometheus, grafana; egress DNS + alertmanager + K8s API
   - [x] trivy-system: Allow prometheus; egress DNS + K8s API + registries
   - [x] velero: Allow prometheus; egress DNS + localstack + B2 + K8s API
   - [x] argo-workflows: Allow ingress-nginx, prometheus; egress DNS + K8s API + B2 (2026-01-24)
@@ -418,7 +418,7 @@ Wave  -25: sealed-secrets (secrets management)
 Wave  -20: unipoller (UniFi metrics collection)
 Wave  -15: kube-prometheus-stack (monitoring stack)
 Wave  -12: loki (log aggregation)
-Wave  -11: promtail (log collection)
+Wave  -11: alloy (log collection, replaced Promtail 2026-03-01)
 Wave  -10: cert-manager, external-dns, metrics-server (certificates & DNS & metrics)
 Wave   -8: argo-workflows (CI/CD)
 Wave   -7: localstack (S3 mock for Velero)
@@ -451,7 +451,7 @@ Wave   -5: velero, falco (backup, runtime security)
 - **Synology CSI** (-30) → Storage driver available before PVCs
 - **kube-prometheus-stack** (-15) → Uses CSI for 50Gi Prometheus PVC
 - **Loki** (-12) → Uses CSI for 20Gi log storage PVC
-- **Promtail** (-11) → Depends on Loki being available
+- **Alloy** (-11) → Log collector DaemonSet, depends on Loki being available
 - **cert-manager** (-10) → Independent, issues certs on-demand
 - **external-dns** (-10) → Works with TLS Ingresses (safe timing)
 - **LocalStack** (-7) → S3 mock available before Velero
@@ -477,7 +477,7 @@ Wave   -5: velero, falco (backup, runtime security)
 **Monitoring & Logging** (Wave -20 to -10):
 - Metrics collection (UniFi Poller)
 - Monitoring stack (Prometheus, Grafana, AlertManager)
-- Log aggregation (Loki, Promtail)
+- Log aggregation (Loki, Alloy)
 - Certificates and DNS (cert-manager, external-dns)
 
 **Operational Tools** (Wave -10 to 0):
