@@ -9,6 +9,7 @@ cni:
   # Ambient mode redirects traffic at CNI level
   ambient:
     enabled: true
+    ztunnelSockDir: /var/run
 
   # Resource limits per CNI pod
   resources:
@@ -29,6 +30,9 @@ cni:
   # Repair functionality (fixes pod networking issues)
   repair:
     enabled: true
+
+  config:
+    ztunnelSocketPath: /var/run/ztunnel.sock
 
 # Tolerations to run on all nodes including control plane
 tolerations:
