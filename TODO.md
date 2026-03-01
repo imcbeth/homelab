@@ -207,11 +207,11 @@
 - **Note:** All 22 ArgoCD apps Synced and Healthy (OutOfSync resolved 2026-02-05, PRs #379-381)
 
 ### 11. **Ingress Enhancements**
-- [ ] Document current nginx-ingress configuration
-- [ ] Implement rate limiting for public endpoints
-- [ ] Add ModSecurity WAF rules
-- [ ] Configure geo-blocking if needed
-- [ ] Monitor ingress performance and errors
+- [x] Document current nginx-ingress configuration *(Updated network-info.md with all 5 Ingresses, rate limits, hardening config)*
+- [x] Implement rate limiting for public endpoints *(Already configured: 50-100 RPS + 20 conn limits on all Ingresses)*
+- [ ] ~~Add ModSecurity WAF rules~~ *Deferred: 256Mi memory limit insufficient for OWASP CRS (~512-768Mi needed); not justified for private 10.0.10.0/24 network*
+- [ ] ~~Configure geo-blocking if needed~~ *N/A: All services on private network (MetalLB IP 10.0.10.10 is RFC 1918), no public ingress*
+- [x] Monitor ingress performance and errors *(Created 7 PrometheusRule alerts + Grafana dashboard with 20 panels)*
 
 ---
 

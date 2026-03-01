@@ -1,0 +1,526 @@
+---
+# Ingress NGINX Dashboard
+# Purpose: Monitor request rates, error rates, latency, connections,
+#          upstream performance, and controller health
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-ingress-nginx
+  namespace: default
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: dashboard
+    folder: network
+data:
+  ingress-nginx-dashboard.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "Ingress NGINX controller monitoring - request rates, errors, latency, connections, and controller health",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 100,
+          "title": "Overview",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 10 },
+                  { "color": "red", "value": 50 }
+                ]
+              },
+              "unit": "reqps"
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+          "id": 1,
+          "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "title": "Total Request Rate",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(rate(nginx_ingress_controller_requests[5m]))",
+              "legendFormat": "RPS"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 0.90 },
+                  { "color": "green", "value": 0.95 }
+                ]
+              },
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+          "id": 2,
+          "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "title": "Success Rate",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(rate(nginx_ingress_controller_requests{status=~\"[23]..\"}[5m])) / sum(rate(nginx_ingress_controller_requests[5m]))",
+              "legendFormat": "Success %"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 50 },
+                  { "color": "red", "value": 200 }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+          "id": 3,
+          "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "title": "Active Connections",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(nginx_ingress_controller_nginx_process_connections{state=\"active\"})",
+              "legendFormat": "Active"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "green", "value": 1 }
+                ]
+              },
+              "mappings": [
+                { "options": { "0": { "text": "FAILED", "color": "red" }, "1": { "text": "OK", "color": "green" } }, "type": "value" }
+              ]
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+          "id": 4,
+          "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "title": "Config Reload",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "nginx_ingress_controller_config_last_reload_successful",
+              "legendFormat": "Status"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+          "id": 5,
+          "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "title": "P95 Latency",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "p95"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+          "id": 6,
+          "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "title": "5xx Errors/s",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(rate(nginx_ingress_controller_requests{status=~\"5..\"}[5m]))",
+              "legendFormat": "5xx"
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+          "id": 101,
+          "title": "Request Rate by Status Code",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 30, "stacking": { "mode": "normal" } },
+              "unit": "reqps"
+            },
+            "overrides": [
+              { "matcher": { "id": "byRegexp", "options": "2.." }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+              { "matcher": { "id": "byRegexp", "options": "3.." }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] },
+              { "matcher": { "id": "byRegexp", "options": "4.." }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+              { "matcher": { "id": "byRegexp", "options": "5.." }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+            ]
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+          "id": 10,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Request Rate by Status Code",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum by (status) (rate(nginx_ingress_controller_requests[5m]))",
+              "legendFormat": "{{ status }}"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10 },
+              "unit": "reqps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+          "id": 11,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Request Rate by Host",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum by (host) (rate(nginx_ingress_controller_requests{host=~\"$host\"}[5m]))",
+              "legendFormat": "{{ host }}"
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+          "id": 102,
+          "title": "Latency",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10 },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+          "id": 20,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Request Duration Percentiles",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "p50"
+            },
+            {
+              "expr": "histogram_quantile(0.90, sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "p90"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "p99"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10 },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+          "id": 21,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "P95 Latency by Host",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, host) (rate(nginx_ingress_controller_request_duration_seconds_bucket{host=~\"$host\"}[5m])))",
+              "legendFormat": "{{ host }}"
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+          "id": 103,
+          "title": "Upstream Performance",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10 },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+          "id": 30,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Upstream Response Time (P95)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(nginx_ingress_controller_response_duration_seconds_bucket[5m])))",
+              "legendFormat": "p95 upstream"
+            },
+            {
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(nginx_ingress_controller_response_duration_seconds_bucket[5m])))",
+              "legendFormat": "p50 upstream"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10 },
+              "unit": "bytes"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+          "id": 31,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Avg Request / Response Size",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum(rate(nginx_ingress_controller_request_size_sum[5m])) / sum(rate(nginx_ingress_controller_request_size_count[5m]))",
+              "legendFormat": "Avg Request Size"
+            },
+            {
+              "expr": "sum(rate(nginx_ingress_controller_response_size_sum[5m])) / sum(rate(nginx_ingress_controller_response_size_count[5m]))",
+              "legendFormat": "Avg Response Size"
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+          "id": 104,
+          "title": "Connections",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 20 },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
+          "id": 40,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Connection States",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum by (state) (nginx_ingress_controller_nginx_process_connections)",
+              "legendFormat": "{{ state }}"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10 },
+              "unit": "reqps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
+          "id": 41,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Rate-Limited Requests (429)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum by (host) (rate(nginx_ingress_controller_requests{status=\"429\"}[5m]))",
+              "legendFormat": "{{ host }}"
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 41 },
+          "id": 105,
+          "title": "Controller Health",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10 },
+              "unit": "bytes"
+            }
+          },
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 42 },
+          "id": 50,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Controller Memory Usage",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "nginx_ingress_controller_nginx_process_resident_memory_bytes",
+              "legendFormat": "Resident Memory"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10 },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 42 },
+          "id": 51,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Controller CPU Usage",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "rate(nginx_ingress_controller_nginx_process_cpu_seconds_total[5m])",
+              "legendFormat": "CPU cores"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "fillOpacity": 10 },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 42 },
+          "id": 52,
+          "options": { "tooltip": { "mode": "multi" } },
+          "title": "Config Reloads",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "increase(nginx_ingress_controller_success[1h])",
+              "legendFormat": "Successful Reloads"
+            }
+          ]
+        }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "tags": ["ingress", "nginx", "network"],
+      "templating": {
+        "list": [
+          {
+            "current": { "selected": true, "text": "All", "value": "$__all" },
+            "datasource": { "type": "prometheus", "uid": "prometheus" },
+            "definition": "label_values(nginx_ingress_controller_requests, host)",
+            "includeAll": true,
+            "multi": true,
+            "name": "host",
+            "query": { "query": "label_values(nginx_ingress_controller_requests, host)" },
+            "refresh": 2,
+            "regex": "",
+            "type": "query"
+          }
+        ]
+      },
+      "time": { "from": "now-6h", "to": "now" },
+      "timezone": "utc",
+      "title": "Ingress NGINX",
+      "uid": "ingress-nginx-overview",
+      "version": 1
+    }

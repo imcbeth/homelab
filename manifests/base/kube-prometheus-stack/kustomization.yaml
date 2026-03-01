@@ -22,4 +22,5 @@ resources:
   - velero-alerts.yaml
   - istio-alerts.yaml
   - apm-alerts.yaml
+  - ingress-nginx-alerts.yaml
   - calico-kube-controllers-servicemonitor.yaml

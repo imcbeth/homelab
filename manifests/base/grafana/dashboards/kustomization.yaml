@@ -41,5 +41,8 @@ resources:
   # APM / Performance Dashboards
   - apm-dashboard.yaml
 
+  # Ingress Dashboards
+  - ingress-nginx-dashboard.yaml
+
   # CI/CD Dashboards
   - argo-workflows-dashboard.yaml

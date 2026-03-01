@@ -106,19 +106,30 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 
 ### Ingress Configuration
 
-- **Controller:** nginx-ingress v1.14.1
+- **Controller:** ingress-nginx v1.14.3 (Helm chart 4.14.3)
 - **External IP:** 10.0.10.10 (via MetalLB)
 - **TLS:** Let's Encrypt via cert-manager (Cloudflare DNS-01 challenge)
 - **Public Domain:** k8s.n37.ca
 - **IngressClass:** nginx (default)
+- **Traffic Policy:** externalTrafficPolicy: Local (preserves source IPs)
 
 #### Active Ingresses
 
-| Host | Namespace | Service | TLS | Status |
-|------|-----------|---------|-----|--------|
-| argocd.k8s.n37.ca | argocd | argocd-server | ✅ | Active |
-| grafana.k8s.n37.ca | default | kube-prometheus-stack-grafana | ✅ | Active |
-| localstack.k8s.n37.ca | localstack | localstack | ✅ | Active |
+| Host | Namespace | Service | Rate Limit | TLS | Status |
+|------|-----------|---------|------------|-----|--------|
+| argocd.k8s.n37.ca | argocd | argocd-server | 50 RPS / 20 conn | LE | Active |
+| grafana.k8s.n37.ca | default | kube-prometheus-stack-grafana | 100 RPS / 20 conn | LE | Active |
+| workflows.k8s.n37.ca | argo-workflows | argo-workflows-server | 50 RPS / 20 conn | LE | Active |
+| falco.k8s.n37.ca | falco | falco-falcosidekick-ui | 50 RPS / 20 conn | LE | Active |
+| localstack.k8s.n37.ca | localstack | localstack | 50 RPS / 20 conn | LE | Active |
+
+#### Hardening Configuration
+
+- **TLS:** TLSv1.2 + TLSv1.3 only, server cipher preference
+- **HSTS:** Enabled, max-age 31536000 (1 year), includeSubdomains
+- **Headers:** X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin, Permissions-Policy (camera/microphone/geolocation/payment/usb/bluetooth/serial denied)
+- **Other:** server-tokens off, X-Powered-By hidden, force-ssl-redirect, client-max-body-size 20m
+- **Monitoring:** Prometheus ServiceMonitor, PrometheusRule alerts, Grafana dashboard
 
 ---
 
