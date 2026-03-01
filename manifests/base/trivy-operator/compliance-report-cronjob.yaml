@@ -42,19 +42,20 @@ spec:
             - /bin/bash
             - -c
             - |
-              set -euo pipefail
+              set -uo pipefail
 
               ALERTMANAGER_URL="http://kube-prometheus-stack-alertmanager.default.svc.cluster.local:9093"
 
-              # Collect compliance report summaries
+              # Collect compliance report summaries using jsonpath
               COMPLIANCE_SUMMARY=""
+              REPORTS=$(kubectl get clustercompliancereport -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.summary.passCount}{" "}{.status.summary.failCount}{"\n"}{end}' 2>/dev/null || true)
               while IFS= read -r line; do
+                [ -z "$line" ] && continue
                 NAME=$(echo "$line" | awk '{print $1}')
-                DETAIL=$(kubectl get clustercompliancereport "$NAME" -o jsonpath='{.status.summary}' 2>/dev/null || echo '{}')
-                PASS=$(echo "$DETAIL" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('passCount', 0))" 2>/dev/null || echo "0")
-                FAIL=$(echo "$DETAIL" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('failCount', 0))" 2>/dev/null || echo "0")
+                PASS=$(echo "$line" | awk '{print $2}')
+                FAIL=$(echo "$line" | awk '{print $3}')
                 COMPLIANCE_SUMMARY="${COMPLIANCE_SUMMARY}${NAME}: ${PASS} pass / ${FAIL} fail\n"
-              done < <(kubectl get clustercompliancereport --no-headers 2>/dev/null || true)
+              done <<< "$REPORTS"
 
               if [ -z "$COMPLIANCE_SUMMARY" ]; then
                 COMPLIANCE_SUMMARY="No compliance reports found"
@@ -82,11 +83,17 @@ spec:
               DESCRIPTION+="Critical: ${VULN_CRITICAL} | High: ${VULN_HIGH} | Medium: ${VULN_MEDIUM}\n\n"
               DESCRIPTION+="== Top Images by Critical Vulns ==\n${TOP_IMAGES}"
 
-              # Post to AlertManager
+              echo -e "$DESCRIPTION"
+
+              # Build JSON payload using jq for proper escaping
               TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-              PAYLOAD=$(cat <<EOF
-              [
-                {
+              DESC_TEXT=$(echo -e "$DESCRIPTION")
+
+              PAYLOAD=$(jq -n \
+                --arg summary "Weekly Security Compliance Report - Critical: ${VULN_CRITICAL}, High: ${VULN_HIGH}" \
+                --arg description "$DESC_TEXT" \
+                --arg startsAt "$TIMESTAMP" \
+                '[{
                   "labels": {
                     "alertname": "WeeklyComplianceSummary",
                     "severity": "none",
@@ -94,27 +101,36 @@ spec:
                     "alert_type": "compliance_report"
                   },
                   "annotations": {
-                    "summary": "Weekly Security Compliance Report - Critical: ${VULN_CRITICAL}, High: ${VULN_HIGH}",
-                    "description": "$(echo -e "$DESCRIPTION" | sed 's/"/\\"/g')"
+                    "summary": $summary,
+                    "description": $description
                   },
-                  "startsAt": "${TIMESTAMP}",
+                  "startsAt": $startsAt,
                   "generatorURL": "https://trivy.homelab.local/compliance"
-                }
-              ]
-              EOF
-              )
+                }]')
 
-              # Send to AlertManager API
-              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-                -X POST "${ALERTMANAGER_URL}/api/v2/alerts" \
-                -H "Content-Type: application/json" \
-                -d "$PAYLOAD")
+              echo "Payload built, posting to AlertManager..."
 
-              if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              # Wait for ztunnel to be ready (ambient mesh networking)
+              sleep 3
+
+              # Send to AlertManager API with retry
+              HTTP_CODE="000"
+              for i in 1 2 3; do
+                HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 \
+                  -X POST "${ALERTMANAGER_URL}/api/v2/alerts" \
+                  -H "Content-Type: application/json" \
+                  -d "$PAYLOAD" 2>/dev/null || echo "000")
+                if [ "$HTTP_CODE" -ge 200 ] 2>/dev/null && [ "$HTTP_CODE" -lt 300 ] 2>/dev/null; then
+                  break
+                fi
+                echo "Attempt $i: AlertManager returned HTTP ${HTTP_CODE}, retrying in 5s..."
+                sleep 5
+              done
+
+              if [ "$HTTP_CODE" -ge 200 ] 2>/dev/null && [ "$HTTP_CODE" -lt 300 ] 2>/dev/null; then
                 echo "Compliance report posted to AlertManager (HTTP ${HTTP_CODE})"
-                echo -e "$DESCRIPTION"
               else
-                echo "Failed to post to AlertManager (HTTP ${HTTP_CODE})"
-                echo -e "$DESCRIPTION"
+                echo "Failed to post to AlertManager after 3 attempts (HTTP ${HTTP_CODE})"
+                echo "Report printed above for manual review"
                 exit 1
               fi
