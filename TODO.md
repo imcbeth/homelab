@@ -157,7 +157,7 @@
   - [x] NetworkPolicy configured
   - [x] System namespaces exempted (kube-system, argocd, gatekeeper-system)
 - [x] Security policy definitions for workloads
-- [ ] Compliance reporting and alerting
+- [x] Compliance reporting and alerting (PSS Baseline + Restricted alerts, weekly CronJob summary to AlertManager)
 - [x] Create Grafana dashboard for vulnerability trends (completed 2026-02-08, PRs #410-412: fixed NetworkPolicy HBONE, Gatekeeper exemption, SBOM bug)
 
 ### 8. **Secrets Management** ✅ Complete

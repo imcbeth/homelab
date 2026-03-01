@@ -142,3 +142,25 @@ spec:
         description: |
           NSA Kubernetes Hardening Guidance has failing checks.
           Review compliance report for security hardening recommendations.
+
+    - alert: PSSBaselineComplianceFailures
+      expr: trivy_cluster_compliance{title=~".*PSS.*Baseline.*",status="Fail"} > 0
+      for: 1h
+      labels:
+        severity: info
+      annotations:
+        summary: "Pod Security Standards Baseline compliance failures"
+        description: |
+          PSS Baseline has failing checks.
+          Review compliance report for pod security baseline violations.
+
+    - alert: PSSRestrictedComplianceFailures
+      expr: trivy_cluster_compliance{title=~".*PSS.*Restricted.*",status="Fail"} > 0
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod Security Standards Restricted compliance failures"
+        description: |
+          PSS Restricted has failing checks.
+          Review compliance report for pod security restricted violations.
