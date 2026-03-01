@@ -4,3 +4,5 @@ namespace: trivy-system
 resources:
   - namespace.yaml
   - trivy-alerts.yaml
+  - compliance-report-rbac.yaml
+  - compliance-report-cronjob.yaml

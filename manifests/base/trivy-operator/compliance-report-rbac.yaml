@@ -1,0 +1,39 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: compliance-reporter
+  namespace: trivy-system
+  labels:
+    app.kubernetes.io/name: compliance-reporter
+    app.kubernetes.io/part-of: trivy-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: compliance-reporter
+  labels:
+    app.kubernetes.io/name: compliance-reporter
+    app.kubernetes.io/part-of: trivy-operator
+rules:
+- apiGroups: ["aquasecurity.github.io"]
+  resources:
+  - clustercompliancereports
+  - vulnerabilityreports
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: compliance-reporter
+  labels:
+    app.kubernetes.io/name: compliance-reporter
+    app.kubernetes.io/part-of: trivy-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: compliance-reporter
+subjects:
+- kind: ServiceAccount
+  name: compliance-reporter
+  namespace: trivy-system

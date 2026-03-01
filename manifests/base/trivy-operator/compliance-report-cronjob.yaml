@@ -1,0 +1,120 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: compliance-reporter
+  namespace: trivy-system
+  labels:
+    app.kubernetes.io/name: compliance-reporter
+    app.kubernetes.io/part-of: trivy-operator
+spec:
+  schedule: "0 8 * * 1"  # Monday 8 AM
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: compliance-reporter
+        app.kubernetes.io/part-of: trivy-operator
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: compliance-reporter
+            app.kubernetes.io/part-of: trivy-operator
+        spec:
+          serviceAccountName: compliance-reporter
+          restartPolicy: OnFailure
+          containers:
+          - name: reporter
+            image: bitnami/kubectl:1.35
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+
+              ALERTMANAGER_URL="http://kube-prometheus-stack-alertmanager.default.svc.cluster.local:9093"
+
+              # Collect compliance report summaries
+              COMPLIANCE_SUMMARY=""
+              while IFS= read -r line; do
+                NAME=$(echo "$line" | awk '{print $1}')
+                DETAIL=$(kubectl get clustercompliancereport "$NAME" -o jsonpath='{.status.summary}' 2>/dev/null || echo '{}')
+                PASS=$(echo "$DETAIL" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('passCount', 0))" 2>/dev/null || echo "0")
+                FAIL=$(echo "$DETAIL" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('failCount', 0))" 2>/dev/null || echo "0")
+                COMPLIANCE_SUMMARY="${COMPLIANCE_SUMMARY}${NAME}: ${PASS} pass / ${FAIL} fail\n"
+              done < <(kubectl get clustercompliancereport --no-headers 2>/dev/null || true)
+
+              if [ -z "$COMPLIANCE_SUMMARY" ]; then
+                COMPLIANCE_SUMMARY="No compliance reports found"
+              fi
+
+              # Count vulnerabilities by severity
+              VULN_CRITICAL=$(kubectl get vulnerabilityreport -A -o jsonpath='{range .items[*]}{.report.summary.criticalCount}{"\n"}{end}' 2>/dev/null | awk '{s+=$1} END {print s+0}')
+              VULN_HIGH=$(kubectl get vulnerabilityreport -A -o jsonpath='{range .items[*]}{.report.summary.highCount}{"\n"}{end}' 2>/dev/null | awk '{s+=$1} END {print s+0}')
+              VULN_MEDIUM=$(kubectl get vulnerabilityreport -A -o jsonpath='{range .items[*]}{.report.summary.mediumCount}{"\n"}{end}' 2>/dev/null | awk '{s+=$1} END {print s+0}')
+              VULN_TOTAL=$(kubectl get vulnerabilityreport -A --no-headers 2>/dev/null | wc -l | tr -d ' ')
+
+              # Top 5 images by critical vulnerabilities
+              TOP_IMAGES=$(kubectl get vulnerabilityreport -A -o jsonpath='{range .items[*]}{.report.summary.criticalCount}{" "}{.report.artifact.repository}:{.report.artifact.tag}{"\n"}{end}' 2>/dev/null \
+                | sort -rn | head -5 | awk '{if ($1 > 0) printf "%s (%s critical)\\n", $2, $1}')
+
+              if [ -z "$TOP_IMAGES" ]; then
+                TOP_IMAGES="No critical vulnerabilities found"
+              fi
+
+              # Build description
+              DESCRIPTION="Weekly Compliance Summary\n\n"
+              DESCRIPTION+="== Compliance Benchmarks ==\n${COMPLIANCE_SUMMARY}\n"
+              DESCRIPTION+="== Vulnerability Counts ==\n"
+              DESCRIPTION+="Reports scanned: ${VULN_TOTAL}\n"
+              DESCRIPTION+="Critical: ${VULN_CRITICAL} | High: ${VULN_HIGH} | Medium: ${VULN_MEDIUM}\n\n"
+              DESCRIPTION+="== Top Images by Critical Vulns ==\n${TOP_IMAGES}"
+
+              # Post to AlertManager
+              TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+              PAYLOAD=$(cat <<EOF
+              [
+                {
+                  "labels": {
+                    "alertname": "WeeklyComplianceSummary",
+                    "severity": "none",
+                    "component": "trivy-operator",
+                    "alert_type": "compliance_report"
+                  },
+                  "annotations": {
+                    "summary": "Weekly Security Compliance Report - Critical: ${VULN_CRITICAL}, High: ${VULN_HIGH}",
+                    "description": "$(echo -e "$DESCRIPTION" | sed 's/"/\\"/g')"
+                  },
+                  "startsAt": "${TIMESTAMP}",
+                  "generatorURL": "https://trivy.homelab.local/compliance"
+                }
+              ]
+              EOF
+              )
+
+              # Send to AlertManager API
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X POST "${ALERTMANAGER_URL}/api/v2/alerts" \
+                -H "Content-Type: application/json" \
+                -d "$PAYLOAD")
+
+              if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+                echo "Compliance report posted to AlertManager (HTTP ${HTTP_CODE})"
+                echo -e "$DESCRIPTION"
+              else
+                echo "Failed to post to AlertManager (HTTP ${HTTP_CODE})"
+                echo -e "$DESCRIPTION"
+                exit 1
+              fi
