@@ -42,7 +42,7 @@
       "matchPackageNames": [
         "kube-prometheus-stack",
         "loki",
-        "promtail"
+        "alloy"
       ],
       "groupName": "Monitoring stack",
       "labels": [

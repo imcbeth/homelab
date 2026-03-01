@@ -1,0 +1,110 @@
+# Grafana Alloy configuration for Raspberry Pi cluster
+# Replaces Promtail (EOL March 2026) as log collector
+# Deployed as DaemonSet - one pod per node (5 total)
+# Collects logs from all Kubernetes pods and sends to Loki
+
+# DaemonSet controller (one pod per node)
+controller:
+  type: daemonset
+  # Run on all nodes including control-plane
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+
+# Alloy container configuration
+alloy:
+  # Resource limits per pod (5 pods total)
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+
+  # River configuration for Kubernetes log collection
+  configMap:
+    content: |
+      // Discover all Kubernetes pods
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // Relabel targets: filter to Running pods and add useful labels
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        // Only scrape running pods
+        rule {
+          source_labels = ["__meta_kubernetes_pod_phase"]
+          regex         = "Running"
+          action        = "keep"
+        }
+
+        // Add namespace label
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        // Add pod name label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        // Add container name label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+
+        // Add node name label (useful for Pi cluster debugging)
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+
+        // Selective pod label mapping (stay under Loki's 15 label limit)
+        // Kubernetes pods can have 17+ labels with Istio; only map useful ones
+        rule {
+          action = "labelmap"
+          regex  = "__meta_kubernetes_pod_label_(app|app_kubernetes_io_name|app_kubernetes_io_instance|app_kubernetes_io_component|app_kubernetes_io_part_of|k8s_app|service_name)"
+        }
+      }
+
+      // Tail container logs via Kubernetes API
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.pods.receiver]
+      }
+
+      // Parse CRI log format
+      loki.process "pods" {
+        stage.cri {}
+        forward_to = [loki.write.default.receiver]
+      }
+
+      // Send logs to Loki
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.loki.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+# Config reloader sidecar (must have resource limits for Gatekeeper)
+configReloader:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 50Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+# ServiceMonitor for Prometheus metrics collection
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: kube-prometheus-stack

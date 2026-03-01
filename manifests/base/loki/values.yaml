@@ -115,8 +115,8 @@ lokiCanary:
       cpu: 50m
       memory: 64Mi
 
-# Note: Promtail is deployed separately via its own ArgoCD application
-# See manifests/applications/promtail.yaml
+# Note: Alloy (log collector) is deployed separately via its own ArgoCD application
+# See manifests/applications/alloy.yaml
 
 # Monitoring - Enable ServiceMonitor for Prometheus metrics collection
 monitoring:
