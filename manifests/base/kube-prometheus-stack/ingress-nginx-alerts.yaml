@@ -1,0 +1,117 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ingress-nginx-alerts
+  namespace: default
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: ingress_nginx_availability
+    interval: 60s
+    rules:
+    - alert: IngressHighServerErrorRate
+      expr: |
+        (
+          sum(rate(nginx_ingress_controller_requests{status=~"5.."}[5m]))
+          / sum(rate(nginx_ingress_controller_requests[5m]))
+        ) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Ingress NGINX server error rate above 5%"
+        description: |
+          The ingress controller is returning 5xx errors at {{ $value | humanizePercentage }} rate.
+          Check upstream backend health and logs.
+
+    - alert: IngressHostHighErrorRate
+      expr: |
+        (
+          sum by (host) (rate(nginx_ingress_controller_requests{status=~"5.."}[5m]))
+          / sum by (host) (rate(nginx_ingress_controller_requests[5m]))
+        ) > 0.10
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Ingress host {{ $labels.host }} error rate above 10%"
+        description: |
+          Host {{ $labels.host }} is returning 5xx errors at {{ $value | humanizePercentage }} rate.
+          Investigate the backend service health.
+
+    - alert: IngressHighClientErrorRate
+      expr: |
+        (
+          sum(rate(nginx_ingress_controller_requests{status=~"4.."}[5m]))
+          / sum(rate(nginx_ingress_controller_requests[5m]))
+        ) > 0.30
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Ingress NGINX client error rate above 30%"
+        description: |
+          The ingress controller is returning 4xx errors at {{ $value | humanizePercentage }} rate.
+          This may indicate scanning activity or misconfigured clients.
+
+  - name: ingress_nginx_latency
+    interval: 60s
+    rules:
+    - alert: IngressHighLatencyP95
+      expr: |
+        histogram_quantile(0.95,
+          sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m]))
+        ) > 5
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Ingress NGINX p95 request latency above 5 seconds"
+        description: |
+          p95 request duration is {{ $value | humanizeDuration }}.
+          Check backend response times and resource utilization.
+
+    - alert: IngressHostHighLatencyP95
+      expr: |
+        histogram_quantile(0.95,
+          sum by (le, host) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m]))
+        ) > 10
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Ingress host {{ $labels.host }} p95 latency above 10 seconds"
+        description: |
+          Host {{ $labels.host }} p95 request duration is {{ $value | humanizeDuration }}.
+          Investigate specific backend performance.
+
+  - name: ingress_nginx_controller
+    interval: 60s
+    rules:
+    - alert: IngressConfigReloadFailed
+      expr: nginx_ingress_controller_config_last_reload_successful == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Ingress NGINX config reload failed"
+        description: |
+          The ingress controller failed to reload its configuration.
+          New Ingress resources or changes are NOT being applied.
+          Check controller logs for syntax errors.
+
+    - alert: IngressControllerDown
+      expr: up{job=~".*ingress-nginx.*"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Ingress NGINX controller is down"
+        description: |
+          The ingress-nginx controller metrics endpoint is unreachable.
+          The controller pod may be crashed or unresponsive.
