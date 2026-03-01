@@ -9,6 +9,7 @@ cni:
   # Ambient mode redirects traffic at CNI level
   ambient:
     enabled: true
+    ztunnelSockDir: /var/run
 
   # Resource limits per CNI pod
   resources:
