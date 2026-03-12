@@ -168,14 +168,14 @@
 - [x] **Secrets Migrated to SealedSecrets** (2026-01-14)
   - unipoller-secret, external-dns (cloudflare + unifi), alertmanager-smtp-credentials
   - snmp-exporter-credentials, cert-manager cloudflare token, synology-csi client-info
-  - pihole-web-password (8 secrets total)
+  - (7 secrets total; pihole-web-password removed when Pi-hole was decommissioned Feb 2026)
 - [x] **External Secrets Operator Removed** - Evaluation complete, not needed (2026-01-14)
 - [x] **Secrets Directory Cleaned** - Only bootstrap secret (ArgoCD SSH key) remains (2026-01-14)
 - [x] **Documentation Updated** - CLAUDE_NOTES.md and secrets/README.md updated
 - [x] Set up SealedSecrets sealing key rotation automation - SealedSecrets controller key rotation enabled (30d, 2026-02-05); cert-manager separately handles TLS cert renewal automatically
 - [x] Create runbook for adding new SealedSecrets (added to SEALED-SECRETS.md, PR #489, 2026-03-01)
 
-### 9. **Network Policies** ✅ COMPLETE (2026-01-25)
+### 9. **Network Policies** ✅ Complete (2026-01-25)
 - [x] Define NetworkPolicies for namespace isolation (18 namespaces)
 - [x] Implement ingress/egress rules for sensitive workloads
   - [x] localstack: Allow velero, ingress-nginx, prometheus; egress DNS only
@@ -421,7 +421,7 @@ Items are organized by priority, not by timeline. Focus on:
 ```
 Wave -100: tigera-operator (CNI foundation - ArgoCD-managed)
 Wave  -50: argocd (self-management)
-Wave  -35: metal-lb (networking foundation)
+Wave  -35: metallb (networking foundation)
 Wave  -30: synology-csi (storage driver)
 Wave  -25: sealed-secrets (secrets management)
 Wave  -20: unipoller (UniFi metrics collection)
