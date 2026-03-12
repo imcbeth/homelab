@@ -1,6 +1,6 @@
 # Homelab TODO & Improvements
 
-## ✅ **Recently Completed** (December 2025 - January 2026)
+## ✅ **Recently Completed** (December 2025 - March 2026)
 
 ### Infrastructure Fixes (January 2026)
 - **Tigera Operator Migration** - Migrated Calico CNI to GitOps-managed Tigera operator (PRs #346-352, 2026-01-30)
@@ -33,7 +33,7 @@
 - **Log Aggregation** - Loki + Alloy deployed, 7-day retention, collecting logs from all pods on all nodes (including control-plane)
 - **Prometheus Stack Fixes** - Fixed node-exporter scraping, Grafana PVC issues, cleaned up control plane monitoring
 - **Control Plane Monitoring** - Re-enabled kube-scheduler and kube-controller-manager monitoring
-- **ServiceMonitor Enablement** - Enabled metrics collection for Loki and Promtail
+- **ServiceMonitor Enablement** - Enabled metrics collection for Loki and Alloy
 
 ### DNS & Service Discovery
 - **External-DNS Deployment** - Dual provider setup (Cloudflare + UniFi webhook) for split-horizon DNS (2025-12-27)
@@ -54,7 +54,7 @@
 
 ## 🎯 **High Priority**
 
-### 1. **Blackbox Exporter**
+### 1. **Blackbox Exporter** ✅ Complete
 - [x] **Blackbox Exporter** - Fully operational (deployed 2025-12-27, verified 2025-12-28)
 - [x] Deploy blackbox exporter for endpoint monitoring (v0.25.0, 2 replicas)
 - [x] Monitor external services availability (DNS, HTTP/HTTPS probes configured)
@@ -63,7 +63,7 @@
 - [x] Add alerts for service downtime (12 PrometheusRule alerts configured)
 - [x] Monitor Synology NAS web interface availability (10.0.1.204 monitored)
 
-### 2. **Enhanced Alerting**
+### 2. **Enhanced Alerting** ✅ Complete
 - [x] **AlertManager SMTP Email** - Configured Gmail SMTP for critical alerts (2025-12-27)
 - [x] **Alert Routing** - Critical → email, warning/info → null (reduce noise)
 - [x] **Velero Backup Alerts** - 7 PrometheusRule alerts for backup monitoring
@@ -75,11 +75,11 @@
 - [x] **Alert runbooks** - Documented in secrets/SEALED-SECRETS.md and k8s-docs-n37 (2026-01-14)
 - [x] **Test alert routing** - Verified email delivery (121 sent, 0 failed) (2026-01-14)
 
-### 3. **Backup Strategy** ⭐ Critical
+### 3. **Backup Strategy** ✅ Complete
 - [x] **Velero** - Deployed for Kubernetes cluster backup (2025-12-27)
 - [x] **CSI Snapshots** - Configured Velero to use CSI snapshots exclusively (2026-01-05)
 - [x] **snapshot-controller** - Deployed v6.3.1 for VolumeSnapshot processing (2026-01-05)
-- [x] Backup critical PVCs (Prometheus 50Gi, Grafana 5Gi, Loki 20Gi, Pi-hole 5Gi)
+- [x] Backup critical PVCs (Prometheus 50Gi, Grafana 5Gi, Loki 20Gi)
 - [x] Daily PVC backups (2 AM, 30-day retention) - CSI snapshots operational
 - [x] Weekly cluster resource backups (3 AM Sunday, 90-day retention)
 - [x] Velero backup monitoring alerts (7 PrometheusRule alerts)
@@ -96,7 +96,7 @@
 
 ## 🔍 **Monitoring & Observability Enhancements**
 
-### 4. **Custom Dashboards**
+### 4. **Custom Dashboards** ✅ Complete
 - [x] **Custom Grafana Dashboards** - 4 dashboards deployed via ConfigMap provisioning (2025-12-28)
 - [x] Pi cluster temperature monitoring dashboard (per-node CPU temps with Raspberry Pi 5 specifics)
 - [x] Node resource utilization dashboard (CPU, memory, disk per node)
@@ -109,11 +109,11 @@
   - [x] Add to kustomization and deploy via GitOps (N/A - all already deployed)
   - [x] Verify dashboards load correctly after migration (All 30 dashboards confirmed via sidecar)
   - [x] Document dashboard creation and modification workflow (Added comprehensive audit section)
-- [x] Network utilization dashboard - Deployed initial cluster-wide network utilization view (PR pending, 2026-02-05)
+- [x] Network utilization dashboard - Deployed initial cluster-wide network utilization view (2026-02-05)
 - [x] Storage performance metrics (iSCSI latency, IOPS, throughput) - Dashboard deployed (PR #383, 2026-02-05)
 - [x] Application performance monitoring (APM) dashboard - 8-row overview with service health, CPU/memory, blackbox endpoints, API server, network I/O, saturation (2026-02-13)
 
-### 5. **Metrics Server Deployment**
+### 5. **Metrics Server Deployment** ✅ Complete
 - [x] **Metrics Server** - Deployed for kubectl top and HPA (2025-12-28)
 - [x] Deploy metrics-server for kubectl top commands
 - [x] Enable Horizontal Pod Autoscaler (HPA) capabilities
@@ -135,13 +135,13 @@
 
 ## 🛡️ **Security & Compliance**
 
-### 7. **Security Scanning & Runtime Protection**
+### 7. **Security Scanning & Runtime Protection** ✅ Complete
 - [x] **Trivy Operator** - Container vulnerability scanning (deployed 2026-01-05, chart 0.31.0)
   - [x] ServiceMonitor configured for Prometheus metrics
   - [x] VulnerabilityReports available via kubectl
   - [x] Scanning all cluster images automatically
   - [x] Node-collector tolerations for control-plane scanning (PR #345, 2026-01-30)
-- [x] **Falco** - Runtime security monitoring (deployed 2026-01-29, chart 8.0.0)
+- [x] **Falco** - Runtime security monitoring (deployed 2026-01-29, chart 8.0.1)
   - [x] Modern eBPF driver for ARM64 efficiency
   - [x] DaemonSet running on all nodes including control-plane
   - [x] Falcosidekick with AlertManager and Loki integration
@@ -168,15 +168,15 @@
 - [x] **Secrets Migrated to SealedSecrets** (2026-01-14)
   - unipoller-secret, external-dns (cloudflare + unifi), alertmanager-smtp-credentials
   - snmp-exporter-credentials, cert-manager cloudflare token, synology-csi client-info
-  - pihole-web-password (8 secrets total)
+  - (7 secrets total; pihole-web-password removed when Pi-hole was decommissioned Feb 2026)
 - [x] **External Secrets Operator Removed** - Evaluation complete, not needed (2026-01-14)
 - [x] **Secrets Directory Cleaned** - Only bootstrap secret (ArgoCD SSH key) remains (2026-01-14)
 - [x] **Documentation Updated** - CLAUDE_NOTES.md and secrets/README.md updated
-- [x] Set up SealedSecrets sealing key rotation automation - SealedSecrets controller key rotation enabled (30d, PR pending, 2026-02-05); cert-manager separately handles TLS cert renewal automatically
+- [x] Set up SealedSecrets sealing key rotation automation - SealedSecrets controller key rotation enabled (30d, 2026-02-05); cert-manager separately handles TLS cert renewal automatically
 - [x] Create runbook for adding new SealedSecrets (added to SEALED-SECRETS.md, PR #489, 2026-03-01)
 
-### 9. **Network Policies** ✅ COMPLETE (2026-01-25)
-- [x] Define NetworkPolicies for namespace isolation (9 namespaces)
+### 9. **Network Policies** ✅ Complete (2026-01-25)
+- [x] Define NetworkPolicies for namespace isolation (18 namespaces)
 - [x] Implement ingress/egress rules for sensitive workloads
   - [x] localstack: Allow velero, ingress-nginx, prometheus; egress DNS only
   - [x] unipoller: Allow prometheus; egress DNS + UniFi controller
@@ -187,6 +187,15 @@
   - [x] cert-manager: Allow webhook validation, prometheus; egress DNS + K8s API + Let's Encrypt + Cloudflare (2026-01-25)
   - [x] external-dns: Allow prometheus, internal webhook; egress DNS + K8s API + Cloudflare + UniFi (2026-01-25)
   - [x] metallb-system: Allow prometheus, memberlist, webhook; egress DNS + K8s API (2026-01-25)
+  - [x] ingress-nginx: Allow external traffic, prometheus; egress DNS + K8s API
+  - [x] istio-system: Allow prometheus, webhook; egress DNS + K8s API + HBONE port 15008
+  - [x] gatekeeper-system: Allow prometheus, webhook; egress DNS + K8s API
+  - [x] falco: Allow prometheus, alertmanager, loki; egress DNS + K8s API
+  - [x] default: Allow ingress-nginx, prometheus; egress DNS + K8s API
+  - [x] argocd: Allow ingress-nginx, prometheus; egress DNS + K8s API + GitHub
+  - [x] synology-csi: Allow K8s API; egress DNS + NAS iSCSI
+  - [x] kube-system: Allow prometheus; egress DNS + K8s API (metrics-server port 10250)
+  - [x] tigera-operator: Allow prometheus; egress DNS + K8s API
 - [x] Test policy enforcement (all tests passed)
 - [x] Document network segmentation strategy in k8s-docs-n37 (PR #60, 2026-01-29)
 
@@ -204,9 +213,9 @@
 - [x] Performance impact analysis on Pi 5 cluster (~38m CPU, ~145Mi memory)
 - [x] Document decision and implementation plan
 - **Status:** Istio Ambient Mesh deployed with mTLS on 29 pods across 6 namespaces
-- **Note:** All 22 ArgoCD apps Synced and Healthy (OutOfSync resolved 2026-02-05, PRs #379-381)
+- **Note:** All 25 ArgoCD apps Synced and Healthy (OutOfSync resolved 2026-02-05, PRs #379-381)
 
-### 11. **Ingress Enhancements**
+### 11. **Ingress Enhancements** ✅ Complete
 - [x] Document current nginx-ingress configuration *(Updated network-info.md with all 5 Ingresses, rate limits, hardening config)*
 - [x] Implement rate limiting for public endpoints *(Already configured: 50-100 RPS + 20 conn limits on all Ingresses)*
 - [ ] ~~Add ModSecurity WAF rules~~ *Deferred: 256Mi memory limit insufficient for OWASP CRS (~512-768Mi needed); not justified for private 10.0.10.0/24 network*
@@ -312,8 +321,8 @@
 - [ ] Test node drain and pod eviction scenarios
 
 ### 18. **Resource Optimization**
-- [ ] Audit resource requests/limits across all workloads
-- [ ] Identify over-provisioned pods
+- [x] Audit resource requests/limits across all workloads (7 workloads adjusted, 2026-02-11)
+- [x] Identify over-provisioned pods (resource right-sizing audit complete, net +928Mi requests)
 - [ ] Implement pod resource quotas per namespace
 - [ ] Storage capacity planning and alerting
 - [ ] Network bandwidth monitoring and optimization
@@ -379,11 +388,11 @@
 
 Items are organized by priority, not by timeline. Focus on:
 
-### **Phase 1: Foundation & Reliability**
-1. Backup strategy (Velero + critical PVC backups)
-2. Enhanced alerting (AlertManager notifications)
-3. Metrics server deployment
-4. Blackbox exporter for endpoint monitoring
+### **Phase 1: Foundation & Reliability** ✅ Complete
+1. ✅ Backup strategy (Velero + critical PVC backups)
+2. ✅ Enhanced alerting (AlertManager notifications)
+3. ✅ Metrics server deployment
+4. ✅ Blackbox exporter for endpoint monitoring
 
 ### **Phase 2: Security & Observability** ✅ Complete
 1. ✅ Security scanning (Trivy Operator)
@@ -393,7 +402,7 @@ Items are organized by priority, not by timeline. Focus on:
 
 ### **Phase 3: Advanced Features** ✅ Complete
 1. ✅ GitOps enhancements (Renovate deployed 2026-01-23)
-2. ✅ Network policies implementation (9 namespaces isolated 2026-01-25)
+2. ✅ Network policies implementation (18 namespaces isolated)
 3. ✅ Development tools and CI/CD (Argo Workflows deployed 2026-01-24)
 4. ✅ Service mesh (Istio Ambient deployed 2026-01-28)
 
@@ -412,7 +421,7 @@ Items are organized by priority, not by timeline. Focus on:
 ```
 Wave -100: tigera-operator (CNI foundation - ArgoCD-managed)
 Wave  -50: argocd (self-management)
-Wave  -35: metal-lb, pi-hole (networking foundation)
+Wave  -35: metallb (networking foundation)
 Wave  -30: synology-csi (storage driver)
 Wave  -25: sealed-secrets (secrets management)
 Wave  -20: unipoller (UniFi metrics collection)
@@ -433,12 +442,7 @@ Wave   -5: velero, falco (backup, runtime security)
 - **Solution**: LocalStack moved to wave -7, now deploys before Velero
 - **Status**: Resolved - Velero BackupStorageLocation is available on startup
 
-**2. Pi-hole Early Deployment**
-- **Current**: Wave -35 (same as MetalLB)
-- **Analysis**: Could move to -30 or -25 (only needs MetalLB for LoadBalancer IP)
-- **Decision**: Keep at -35 for early DNS availability (acceptable)
-
-**3. UniFi Poller Timing**
+**2. UniFi Poller Timing**
 - **Current**: Wave -20 (before monitoring stack)
 - **Analysis**: Could move to -10 or -5 (no critical dependencies)
 - **Decision**: Keep at -20 (metrics available when Prometheus starts)
@@ -461,11 +465,8 @@ Wave   -5: velero, falco (backup, runtime security)
 
 ### 🎯 Recommended Actions
 
-1. **Future**: Consider sync wave for Argo Workflows at `-8`
-
-2. **Optional Optimizations**:
+1. **Optional Optimizations**:
    - Move UniFi Poller to -10 (aligns with other non-critical monitoring)
-   - Move Pi-hole to -30 (after MetalLB, with CSI)
 
 ### 📊 Sync Wave Best Practices
 
