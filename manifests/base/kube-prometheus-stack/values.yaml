@@ -1118,7 +1118,7 @@ prometheusOperator:
       image:
         registry: registry.k8s.io
         repository: ingress-nginx/kube-webhook-certgen
-        tag: v1.6.8
+        tag: v1.6.9
         sha: ""
         pullPolicy: IfNotPresent
       # Resource limits required by Gatekeeper require-resource-limits constraint
