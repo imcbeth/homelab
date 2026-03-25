@@ -1,0 +1,35 @@
+# Vertical Pod Autoscaler (VPA) — Fairwinds Helm chart
+# Deployed in recommendation-only mode initially:
+#   - Recommender: enabled (generates CPU/memory recommendations)
+#   - Updater: disabled (no automatic pod evictions/resizing yet)
+#   - Admission Controller: disabled (no live pod injection)
+#
+# VPA objects for key workloads are deployed via vpa-objects.yaml with
+# updateMode: Off so recommendations are visible in Grafana/kubectl without
+# any automatic changes. Enable Updater + switch updateMode: Auto once
+# recommendations have been reviewed (suggested: 2-4 weeks of data).
+
+# ── Recommender ─────────────────────────────────────────────────────────────
+recommender:
+  enabled: true
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+  podLabels:
+    app.kubernetes.io/name: vpa-recommender
+
+# ── Updater ──────────────────────────────────────────────────────────────────
+# Disabled — enable after reviewing recommendations for 2-4 weeks.
+# When enabling: set updateMode: Auto on individual VPA objects, not globally.
+updater:
+  enabled: false
+
+# ── Admission Controller ─────────────────────────────────────────────────────
+# Disabled — only needed when using updateMode: Auto or Initial.
+# Requires cert management (webhook TLS). Re-enable alongside Updater if needed.
+admissionController:
+  enabled: false

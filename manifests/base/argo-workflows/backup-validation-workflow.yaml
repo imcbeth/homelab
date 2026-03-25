@@ -1,0 +1,316 @@
+# Monthly Velero DR validation workflow.
+#
+# Runs on the 1st of each month at 06:00 and exercises the full backup/restore cycle:
+#   1. Verify the Velero BSL is Available
+#   2. Create a test namespace (velero-dr-test) with a marker ConfigMap
+#   3. Take a Velero Backup of that namespace (no volume snapshots needed)
+#   4. Delete the test namespace to simulate a disaster
+#   5. Restore from the backup
+#   6. Verify the marker ConfigMap exists with the expected data
+#   7. Clean up (runs on both success and failure via onExit handler)
+#
+# On failure, AlertManager receives a firing alert via the existing
+# Velero PrometheusRule (VeleroBackupFailed).
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: velero-backup-validation
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: velero-backup-validation
+    app.kubernetes.io/component: dr-validation
+spec:
+  schedule: "0 6 1 * *"
+  timezone: "America/Edmonton"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  workflowSpec:
+    serviceAccountName: velero-validator
+    entrypoint: validate-dr
+    onExit: cleanup-handler
+
+    # Ensure Gatekeeper require-labels is satisfied on all workflow pods
+    podMetadata:
+      labels:
+        app.kubernetes.io/name: velero-backup-validation
+
+    # Default resource limits for all steps (Gatekeeper require-resource-limits)
+    templateDefaults:
+      container:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+
+    # TTL: keep completed workflows 2h (success) or 8h (failure) for log review
+    ttlStrategy:
+      secondsAfterSuccess: 7200
+      secondsAfterFailure: 28800
+
+    templates:
+      # -----------------------------------------------------------------------
+      # Main entrypoint — sequential DR validation steps
+      # -----------------------------------------------------------------------
+      - name: validate-dr
+        steps:
+          - - name: check-bsl
+              template: check-bsl
+          - - name: create-test-resources
+              template: create-test-resources
+          - - name: create-backup
+              template: create-backup
+          - - name: wait-for-backup
+              template: wait-for-backup
+          - - name: delete-test-namespace
+              template: delete-test-namespace
+          - - name: create-restore
+              template: create-restore
+          - - name: wait-for-restore
+              template: wait-for-restore
+          - - name: verify-restore
+              template: verify-restore
+
+      # -----------------------------------------------------------------------
+      # onExit handler — always cleans up even if the workflow fails
+      # -----------------------------------------------------------------------
+      - name: cleanup-handler
+        steps:
+          - - name: cleanup
+              template: cleanup
+
+      # -----------------------------------------------------------------------
+      # Step 1: Check Velero BSL is Available
+      # -----------------------------------------------------------------------
+      - name: check-bsl
+        container:
+          image: bitnami/kubectl:latest
+          command: [sh, -c]
+          args:
+            - |
+              set -uo pipefail
+              echo "=== Checking Velero backup storage location ==="
+              BSL_STATUS=$(kubectl get backupstoragelocation default -n velero \
+                -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound")
+              echo "BSL status: $BSL_STATUS"
+              if [ "$BSL_STATUS" != "Available" ]; then
+                echo "ERROR: BSL is not Available (got: $BSL_STATUS)"
+                exit 1
+              fi
+              echo "BSL is Available — proceeding with DR validation"
+
+      # -----------------------------------------------------------------------
+      # Step 2: Create test namespace and marker ConfigMap
+      # -----------------------------------------------------------------------
+      - name: create-test-resources
+        container:
+          image: bitnami/kubectl:latest
+          command: [sh, -c]
+          args:
+            - |
+              set -uo pipefail
+              TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+              WORKFLOW_NAME="{{workflow.name}}"
+              echo "=== Creating test namespace velero-dr-test ==="
+              kubectl create namespace velero-dr-test \
+                --dry-run=client -o yaml | kubectl apply -f -
+              echo "=== Creating marker ConfigMap (timestamp: $TIMESTAMP) ==="
+              kubectl create configmap dr-test-marker \
+                -n velero-dr-test \
+                --from-literal=timestamp="$TIMESTAMP" \
+                --from-literal=workflow="$WORKFLOW_NAME" \
+                --from-literal=status="pre-restore" \
+                --dry-run=client -o yaml | kubectl apply -f -
+              echo "Test resources created successfully"
+              kubectl get configmap dr-test-marker -n velero-dr-test -o yaml
+
+      # -----------------------------------------------------------------------
+      # Step 3: Create a Velero Backup of the test namespace
+      # -----------------------------------------------------------------------
+      - name: create-backup
+        container:
+          image: bitnami/kubectl:latest
+          command: [sh, -c]
+          args:
+            - |
+              set -uo pipefail
+              BACKUP_NAME="dr-test-{{workflow.name}}"
+              echo "=== Creating Velero backup: $BACKUP_NAME ==="
+              cat <<EOF | kubectl apply -f -
+              apiVersion: velero.io/v1
+              kind: Backup
+              metadata:
+                name: $BACKUP_NAME
+                namespace: velero
+                labels:
+                  app.kubernetes.io/name: dr-validation
+              spec:
+                includedNamespaces:
+                  - velero-dr-test
+                ttl: 24h0m0s
+                storageLocation: default
+                snapshotVolumes: false
+                defaultVolumesToFsBackup: false
+              EOF
+              echo "Backup $BACKUP_NAME submitted"
+
+      # -----------------------------------------------------------------------
+      # Step 4: Wait for backup to complete (timeout: 10 min)
+      # -----------------------------------------------------------------------
+      - name: wait-for-backup
+        container:
+          image: bitnami/kubectl:latest
+          command: [sh, -c]
+          args:
+            - |
+              set -uo pipefail
+              BACKUP_NAME="dr-test-{{workflow.name}}"
+              echo "=== Waiting for backup $BACKUP_NAME to complete ==="
+              sleep 3
+              for i in $(seq 1 60); do
+                PHASE=$(kubectl get backup "$BACKUP_NAME" -n velero \
+                  -o jsonpath='{.status.phase}' 2>/dev/null || echo "Pending")
+                echo "[$i/60] Backup phase: $PHASE"
+                if [ "$PHASE" = "Completed" ]; then
+                  echo "Backup completed successfully"
+                  kubectl get backup "$BACKUP_NAME" -n velero -o jsonpath=\
+                    '{.status.completionTimestamp}' | xargs -I{} echo "Completed at: {}"
+                  exit 0
+                fi
+                if [ "$PHASE" = "Failed" ] || [ "$PHASE" = "PartiallyFailed" ]; then
+                  echo "ERROR: Backup failed with phase: $PHASE"
+                  kubectl get backup "$BACKUP_NAME" -n velero \
+                    -o jsonpath='{.status.failureReason}' | xargs echo "Reason:"
+                  exit 1
+                fi
+                sleep 10
+              done
+              echo "ERROR: Backup timed out after 10 minutes"
+              exit 1
+
+      # -----------------------------------------------------------------------
+      # Step 5: Delete test namespace to simulate a disaster
+      # -----------------------------------------------------------------------
+      - name: delete-test-namespace
+        container:
+          image: bitnami/kubectl:latest
+          command: [sh, -c]
+          args:
+            - |
+              set -uo pipefail
+              echo "=== Deleting test namespace (simulating disaster) ==="
+              kubectl delete namespace velero-dr-test --wait=true --timeout=120s
+              echo "Namespace deleted — proceeding with restore"
+
+      # -----------------------------------------------------------------------
+      # Step 6: Create a Velero Restore
+      # -----------------------------------------------------------------------
+      - name: create-restore
+        container:
+          image: bitnami/kubectl:latest
+          command: [sh, -c]
+          args:
+            - |
+              set -uo pipefail
+              BACKUP_NAME="dr-test-{{workflow.name}}"
+              RESTORE_NAME="dr-restore-{{workflow.name}}"
+              echo "=== Creating Velero restore: $RESTORE_NAME from $BACKUP_NAME ==="
+              cat <<EOF | kubectl apply -f -
+              apiVersion: velero.io/v1
+              kind: Restore
+              metadata:
+                name: $RESTORE_NAME
+                namespace: velero
+                labels:
+                  app.kubernetes.io/name: dr-validation
+              spec:
+                backupName: $BACKUP_NAME
+                includedNamespaces:
+                  - velero-dr-test
+                restorePVs: false
+              EOF
+              echo "Restore $RESTORE_NAME submitted"
+
+      # -----------------------------------------------------------------------
+      # Step 7: Wait for restore to complete (timeout: 10 min)
+      # -----------------------------------------------------------------------
+      - name: wait-for-restore
+        container:
+          image: bitnami/kubectl:latest
+          command: [sh, -c]
+          args:
+            - |
+              set -uo pipefail
+              RESTORE_NAME="dr-restore-{{workflow.name}}"
+              echo "=== Waiting for restore $RESTORE_NAME to complete ==="
+              sleep 3
+              for i in $(seq 1 60); do
+                PHASE=$(kubectl get restore "$RESTORE_NAME" -n velero \
+                  -o jsonpath='{.status.phase}' 2>/dev/null || echo "Pending")
+                echo "[$i/60] Restore phase: $PHASE"
+                if [ "$PHASE" = "Completed" ]; then
+                  echo "Restore completed successfully"
+                  exit 0
+                fi
+                if [ "$PHASE" = "Failed" ] || [ "$PHASE" = "PartiallyFailed" ]; then
+                  echo "ERROR: Restore failed with phase: $PHASE"
+                  kubectl get restore "$RESTORE_NAME" -n velero \
+                    -o jsonpath='{.status.warnings}' | xargs echo "Warnings:"
+                  exit 1
+                fi
+                sleep 10
+              done
+              echo "ERROR: Restore timed out after 10 minutes"
+              exit 1
+
+      # -----------------------------------------------------------------------
+      # Step 8: Verify the restored ConfigMap exists with expected data
+      # -----------------------------------------------------------------------
+      - name: verify-restore
+        container:
+          image: bitnami/kubectl:latest
+          command: [sh, -c]
+          args:
+            - |
+              set -uo pipefail
+              echo "=== Verifying restored resources in velero-dr-test ==="
+              # Give the namespace a moment to fully materialise
+              sleep 5
+              CM=$(kubectl get configmap dr-test-marker -n velero-dr-test \
+                -o jsonpath='{.data}' 2>/dev/null || echo "")
+              if [ -z "$CM" ]; then
+                echo "ERROR: dr-test-marker ConfigMap not found after restore"
+                exit 1
+              fi
+              echo "Restored ConfigMap data: $CM"
+              WORKFLOW=$(kubectl get configmap dr-test-marker -n velero-dr-test \
+                -o jsonpath='{.data.workflow}')
+              if [ "$WORKFLOW" != "{{workflow.name}}" ]; then
+                echo "ERROR: ConfigMap data mismatch (got workflow=$WORKFLOW)"
+                exit 1
+              fi
+              echo "=== DR VALIDATION PASSED ==="
+              echo "Backup + restore cycle completed. Data integrity verified."
+
+      # -----------------------------------------------------------------------
+      # Cleanup: remove test namespace and Velero objects (runs on exit)
+      # -----------------------------------------------------------------------
+      - name: cleanup
+        container:
+          image: bitnami/kubectl:latest
+          command: [sh, -c]
+          args:
+            - |
+              set -uo pipefail
+              BACKUP_NAME="dr-test-{{workflow.name}}"
+              RESTORE_NAME="dr-restore-{{workflow.name}}"
+              echo "=== Cleanup: removing test resources ==="
+              kubectl delete namespace velero-dr-test --ignore-not-found=true \
+                --wait=false 2>/dev/null && echo "Namespace deletion requested"
+              kubectl delete restore "$RESTORE_NAME" -n velero \
+                --ignore-not-found=true 2>/dev/null && echo "Restore deleted"
+              kubectl delete backup "$BACKUP_NAME" -n velero \
+                --ignore-not-found=true 2>/dev/null && echo "Backup deleted"
+              echo "Cleanup complete"
