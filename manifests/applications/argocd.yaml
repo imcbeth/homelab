@@ -12,7 +12,7 @@ spec:
   sources:
     - chart: argo-cd
       repoURL: https://argoproj.github.io/argo-helm
-      targetRevision: 9.4.10 # specify the argocd version to install
+      targetRevision: 9.4.15 # specify the argocd version to install
       helm:
         releaseName: argocd
         valueFiles:
