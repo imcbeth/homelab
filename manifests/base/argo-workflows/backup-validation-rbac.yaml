@@ -12,6 +12,36 @@ metadata:
     app.kubernetes.io/name: velero-validator
     app.kubernetes.io/component: dr-validation
 ---
+# Role in argo-workflows namespace: allows the emissary executor (wait sidecar)
+# to write WorkflowTaskResults — required for step completion signalling.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: velero-validator-executor
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: velero-validator
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtaskresults"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: velero-validator-executor
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: velero-validator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: velero-validator-executor
+subjects:
+  - kind: ServiceAccount
+    name: velero-validator
+    namespace: argo-workflows
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
