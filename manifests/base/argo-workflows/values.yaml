@@ -58,6 +58,20 @@ controller:
   containerRuntimeExecutor: emissary
 
 # =============================================================================
+# Executor Configuration (init + wait sidecar containers in each workflow pod)
+# =============================================================================
+# Sets resource limits on the Argo-injected init and wait containers so that
+# Gatekeeper's require-resource-limits constraint is satisfied.
+executor:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# =============================================================================
 # Server Configuration
 # =============================================================================
 server:
