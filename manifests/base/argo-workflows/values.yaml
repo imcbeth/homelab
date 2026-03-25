@@ -145,3 +145,6 @@ createAggregateRoles: true
 crds:
   install: true
   keep: true
+  # Use minified CRDs to avoid the v1 chart's hook Job (which downloads from GitHub
+  # and would be blocked by Gatekeeper's require-resource-limits constraint)
+  full: false
