@@ -1,0 +1,48 @@
+# RBAC for the monthly Velero backup validation workflow.
+# Grants the velero-validator ServiceAccount (in argo-workflows namespace) permissions
+# to create/monitor Velero Backups and Restores, manage the test namespace, and
+# verify restored resources.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: velero-validator
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: velero-validator
+    app.kubernetes.io/component: dr-validation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: velero-validator
+rules:
+  # Namespace management for the ephemeral test namespace
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "delete", "get", "list"]
+  # ConfigMap verification in any namespace (test namespace + velero)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "get", "list", "delete"]
+  # Velero Backup and Restore lifecycle
+  - apiGroups: ["velero.io"]
+    resources: ["backups", "restores"]
+    verbs: ["create", "get", "list", "watch", "delete", "patch"]
+  # BSL health check
+  - apiGroups: ["velero.io"]
+    resources: ["backupstoragelocations"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: velero-validator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: velero-validator
+subjects:
+  - kind: ServiceAccount
+    name: velero-validator
+    namespace: argo-workflows

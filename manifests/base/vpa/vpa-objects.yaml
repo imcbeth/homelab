@@ -1,0 +1,202 @@
+# VPA objects for key cluster workloads — updateMode: Off (recommendations only).
+#
+# Recommendations appear in: kubectl describe vpa <name> -n <namespace>
+# Review after 2-4 weeks, then consider switching to updateMode: Initial or Auto.
+#
+# Excluded from VPA (no point recommending):
+#   - DaemonSets with fixed per-node duties (node-exporter, alloy, calico-node)
+#   - StatefulSets with strict resource budgets (Prometheus — 50Gi iSCSI PVC)
+#   - Helm-managed resources with override values already tuned
+
+# ── Prometheus ───────────────────────────────────────────────────────────────
+# NOTE: updateMode Off — Prometheus has a dedicated 50Gi iSCSI PVC on node01.
+# Eviction would cause the pod/VolumeAttachment node mismatch issue seen 2026-03.
+# Treat recommendations as informational only; apply manually via values.yaml.
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: prometheus
+  namespace: default
+  labels:
+    app.kubernetes.io/name: vpa-prometheus
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: prometheus-kube-prometheus-stack-prometheus
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: prometheus
+        minAllowed:
+          cpu: 50m
+          memory: 512Mi
+        maxAllowed:
+          cpu: "2"
+          memory: 2Gi
+      - containerName: config-reloader
+        minAllowed:
+          cpu: 10m
+          memory: 32Mi
+        maxAllowed:
+          cpu: 200m
+          memory: 128Mi
+
+# ── Grafana ───────────────────────────────────────────────────────────────────
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: grafana
+  namespace: default
+  labels:
+    app.kubernetes.io/name: vpa-grafana
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kube-prometheus-stack-grafana
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: grafana
+        minAllowed:
+          cpu: 25m
+          memory: 128Mi
+        maxAllowed:
+          cpu: 500m
+          memory: 512Mi
+
+# ── Loki ─────────────────────────────────────────────────────────────────────
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: loki
+  namespace: loki
+  labels:
+    app.kubernetes.io/name: vpa-loki
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: loki
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: loki
+        minAllowed:
+          cpu: 50m
+          memory: 256Mi
+        maxAllowed:
+          cpu: "1"
+          memory: 2Gi
+
+# ── ArgoCD Repo Server ────────────────────────────────────────────────────────
+# Repo server handles manifest generation — often the most memory-hungry ArgoCD pod.
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: vpa-argocd-repo-server
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: argocd-repo-server
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: argocd-repo-server
+        minAllowed:
+          cpu: 25m
+          memory: 128Mi
+        maxAllowed:
+          cpu: 500m
+          memory: 2Gi
+
+# ── ArgoCD Application Controller ─────────────────────────────────────────────
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: argocd-application-controller
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: vpa-argocd-app-controller
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: argocd-application-controller
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: argocd-application-controller
+        minAllowed:
+          cpu: 25m
+          memory: 128Mi
+        maxAllowed:
+          cpu: "1"
+          memory: 2Gi
+
+# ── Falco ─────────────────────────────────────────────────────────────────────
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: falco
+  namespace: falco
+  labels:
+    app.kubernetes.io/name: vpa-falco
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: DaemonSet
+    name: falco
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: falco
+        minAllowed:
+          cpu: 50m
+          memory: 128Mi
+        maxAllowed:
+          cpu: "1"
+          memory: 1Gi
+
+# ── Velero ────────────────────────────────────────────────────────────────────
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: velero
+  namespace: velero
+  labels:
+    app.kubernetes.io/name: vpa-velero
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: velero
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: velero
+        minAllowed:
+          cpu: 25m
+          memory: 64Mi
+        maxAllowed:
+          cpu: 500m
+          memory: 512Mi
