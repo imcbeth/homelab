@@ -10,7 +10,7 @@ image:
   # but the velero CRD (v11 and v12 charts) does not include "Queued" in the
   # status.phase enum → all backups fail on creation. Pinned to v1.17.2 until
   # the CRD is updated upstream to allow the "Queued" phase.
-  tag: v1.17.2
+  tag: v1.18.0
   pullPolicy: IfNotPresent
 
 # Disable CRD upgrade job (CRDs installed directly by Helm chart)
