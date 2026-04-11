@@ -14,7 +14,7 @@ spec:
     # Helm chart from Falco repository
     - repoURL: https://falcosecurity.github.io/charts
       chart: falco
-      targetRevision: 8.0.1
+      targetRevision: 8.0.2
       helm:
         valueFiles:
           - $values/manifests/base/falco/values.yaml
