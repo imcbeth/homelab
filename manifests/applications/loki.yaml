@@ -33,6 +33,7 @@ spec:
     - group: "apps"
       kind: "StatefulSet"
       jqPathExpressions:
-        - .spec.volumeClaimTemplates[]?.status
-        - .spec.volumeClaimTemplates[]?.metadata.creationTimestamp
+        # Ignore entire VCT to prevent delete+recreate of Loki StatefulSet
+        # when chart upgrades change VCT fields (which orphans the iSCSI LUN on NAS)
+        - .spec.volumeClaimTemplates
         - .status
