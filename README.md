@@ -35,9 +35,9 @@ kubectl apply -f manifests/applications/
 - **Container Runtime:** containerd
 - **CNI:** Calico via Tigera Operator (ArgoCD-managed, IPIP encapsulation)
 - **Service Mesh:** Istio Ambient (mTLS for 29 pods across 6 namespaces)
-- **GitOps:** ArgoCD managing 27+ applications
+- **GitOps:** ArgoCD managing 25 applications
 - **Monitoring:** Prometheus + Grafana + AlertManager
-- **Logging:** Loki + Promtail with 7-day retention
+- **Logging:** Loki + Alloy with 7-day retention
 - **Security:** Trivy Operator (vulnerability scanning) + Falco (runtime security)
 - **Backup:** Velero with Backblaze B2 for PVC backups
 - **DNS:** External-DNS with Cloudflare + UniFi providers
@@ -51,7 +51,7 @@ kubectl apply -f manifests/applications/
 ### Storage Infrastructure
 - **Synology CSI Driver:** iSCSI integration for persistent volumes
 - **Storage Classes:** `synology-iscsi-retain` for critical data
-- **Backup Strategy:** Velero + Kopia to cloud storage
+- **Backup Strategy:** Velero + CSI snapshots to Backblaze B2
 - **Data Retention:** Monitoring (50Gi), Logs (20Gi), Grafana (5Gi)
 
 ## Directory Structure
@@ -60,7 +60,7 @@ kubectl apply -f manifests/applications/
 - **[`manifests/applications/`](manifests/applications/)** - ArgoCD Application definitions
   - Core infrastructure applications (ArgoCD, Prometheus, Grafana)
   - Monitoring tools (Blackbox Exporter, SNMP Exporter, UniFi Poller)
-  - Utility applications (External-DNS, Cert-Manager, Pi-hole)
+  - Utility applications (External-DNS, Cert-Manager, OPA Gatekeeper, VPA)
   - Backup and storage (Velero, Synology CSI)
 
 - **[`manifests/base/`](manifests/base/)** - Helm charts and Kustomizations
@@ -86,9 +86,9 @@ kubectl apply -f manifests/applications/
 ## Key Documentation Files
 
 ### Architecture Documentation
-- **[docs/CODEMAPS/INDEX.md](docs/CODEMAPS/INDEX.md)** - Architecture overview and codemap index
-- **[docs/CODEMAPS/networking.md](docs/CODEMAPS/networking.md)** - CNI, service mesh, network policies
-- **[docs/CODEMAPS/security.md](docs/CODEMAPS/security.md)** - Trivy, Falco, security monitoring
+- **[.claude/CODEMAPS/INDEX.md](.claude/CODEMAPS/INDEX.md)** - Architecture overview and codemap index
+- **[.claude/CODEMAPS/networking.md](.claude/CODEMAPS/networking.md)** - CNI, service mesh, network policies
+- **[.claude/CODEMAPS/security.md](.claude/CODEMAPS/security.md)** - Trivy, Falco, security monitoring
 
 ### Project Management
 - **[TODO.md](TODO.md)** - Project roadmap and completion tracking
@@ -107,34 +107,42 @@ kubectl apply -f manifests/applications/
 
 ## Project Completion Status
 
-**Overall Progress: ~60% Complete**
+**Overall Progress: ~90% Complete**
 
 Based on the [TODO.md](TODO.md) roadmap:
-- **Recently Completed (January 2026):**
+- **Recently Completed (March–April 2026):**
+  - VPA (Vertical Pod Autoscaler) deployed with 7 VPA objects in Off mode
+  - Monthly DR validation workflow (Argo Workflows CronWorkflow, tested and validated)
+  - Loki log-based alerting via embedded ruler (9 LogQL rules)
+  - Ingress-nginx hardened: security headers, rate limiting, Helm migration
+  - OPA Gatekeeper in deny mode (5 policies, 0 violations)
+  - Calico APIServer deployed for v3 API management
+  - Promtail replaced by Alloy (PR #489, 2026-03-01)
+  - Renovate automated updates running continuously
+
+- **Completed (January–February 2026):**
   - Tigera Operator migration (Calico CNI now ArgoCD-managed)
   - Istio Ambient mesh (mTLS across 6 namespaces)
-  - Falco runtime security monitoring
-  - Trivy Operator vulnerability scanning
-  - Network policies for all namespaces
+  - Falco runtime security + OPA Gatekeeper policy enforcement
+  - Trivy Operator vulnerability scanning with compliance reporting
+  - Network policies for all 18 namespaces
   - Argo Workflows CI/CD platform
-  - Renovate automated dependency updates
-  - Sealed Secrets migration from git-crypt
-  - Velero with Backblaze B2 storage
+  - Sealed Secrets migration, SealedSecrets key rotation (30d)
+  - Resource right-sizing audit (+928Mi optimized)
 
 - **Completed (December 2025):**
   - SNMP monitoring for Synology NAS
-  - Log aggregation with Loki + Promtail
+  - Log aggregation with Loki + Alloy
   - External-DNS dual provider setup
   - Blackbox Exporter endpoint monitoring
-  - Metrics Server deployment
   - Custom Grafana dashboards (30 total)
   - AlertManager SMTP email notifications
 
-### High-Priority Next Steps
-1. **Observability Maturity** - SLOs, distributed tracing, anomaly detection
-2. **Disaster Recovery Testing** - Monthly DR drills, chaos engineering
-3. **Resource Optimization** - VPA, right-sizing analysis
-4. **Documentation** - Operational runbooks, network topology diagrams
+### Remaining Work
+1. **Observability Maturity** - Distributed tracing (Jaeger/Tempo), SLOs
+2. **VPN / Remote Access** - Tailscale or WireGuard
+3. **Chaos Engineering** - Litmus for resilience testing
+4. **Additional Applications** - Harbor registry, Home Assistant
 
 ## Related Repositories
 
@@ -154,5 +162,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 For issues and troubleshooting:
 1. Check the [Documentation Site](https://imcbeth.github.io/k8s-docs-n37/)
-2. Review [CLAUDE_NOTES.md](CLAUDE_NOTES.md) for common solutions
+2. Review [.claude/notes/REFERENCE.md](.claude/notes/REFERENCE.md) for common gotchas and solutions
 3. Validate manifests with `scripts/validate-manifests.sh`
