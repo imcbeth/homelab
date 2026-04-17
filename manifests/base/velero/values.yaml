@@ -243,7 +243,8 @@ schedules:
       includedNamespaces:
         - default      # Prometheus, Grafana
         - loki         # Loki
-        - pihole       # Pi-hole
+        - trivy-system # Trivy vulnerability DB
+        - falco        # Falco Sidekick Redis
       includeClusterResources: false
       defaultVolumesToFsBackup: false  # Disabled: Use CSI snapshots only (faster, more efficient)
       snapshotVolumes: true            # Use CSI volume snapshots via Synology CSI
