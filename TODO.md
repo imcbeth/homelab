@@ -323,10 +323,10 @@
 ### 18. **Resource Optimization**
 - [x] Audit resource requests/limits across all workloads (7 workloads adjusted, 2026-02-11)
 - [x] Identify over-provisioned pods (resource right-sizing audit complete, net +928Mi requests)
+- [x] Implement Vertical Pod Autoscaler (VPA) — fairwinds/vpa v4.11.0, recommender only, 7 VPA objects in Off mode (PR #522, 2026-03-25)
 - [ ] Implement pod resource quotas per namespace
 - [ ] Storage capacity planning and alerting
 - [ ] Network bandwidth monitoring and optimization
-- [ ] Consider implementing Vertical Pod Autoscaler (VPA)
 
 ---
 
@@ -355,13 +355,12 @@
 - [ ] **Synthetic Monitoring** - Automated user journey testing
 
 ### 22. **Disaster Recovery Testing**
-- [ ] **Monthly DR Drills** - Automated disaster recovery validation
+- [x] **Monthly DR Drills** - Automated DR validation CronWorkflow (1st of month 6am MT), 8-step backup/restore cycle, validated 2026-03-25 in 3m45s (PR #522-524)
+- [x] **Velero Restore Testing** - Monthly Argo Workflows CronWorkflow: check-bsl → create-backup → verify-backup → test-restore → verify-restore → cleanup. ✅ 9/9 steps green.
 - [ ] **Chaos Engineering** - Controlled failure injection (Litmus)
-- [ ] **Velero Restore Testing** - Automated monthly PVC restore validation
 - [ ] **Network Partition Testing** - Simulate network failures
 - [ ] **Node Failure Scenarios** - Test cluster resilience to node loss
 - [ ] **Control Plane Failure** - Test etcd backup/restore procedures
-- [ ] **DR Runbook Automation** - Convert manual runbooks to Argo Workflows
 
 ### 23. **Cost Optimization & Efficiency**
 - [ ] **Resource Right-Sizing** - Analyze actual vs requested resources
@@ -406,21 +405,23 @@ Items are organized by priority, not by timeline. Focus on:
 3. ✅ Development tools and CI/CD (Argo Workflows deployed 2026-01-24)
 4. ✅ Service mesh (Istio Ambient deployed 2026-01-28)
 
-### **Phase 4: Optimization & Expansion**
-1. Resource optimization and VPA
-2. Chaos engineering and resilience testing
-3. Advanced networking and VPN
-4. Additional application deployments
+### **Phase 4: Optimization & Expansion** (In Progress)
+1. ✅ Resource optimization and VPA (deployed 2026-03-25)
+2. ✅ Monthly DR validation workflow (deployed 2026-03-25)
+3. Chaos engineering and resilience testing
+4. Advanced networking and VPN (Tailscale/WireGuard)
+5. Additional application deployments (Harbor, Home Assistant)
 
 ---
 
 ## 🔄 **ArgoCD Sync Wave Optimization**
 
-### Current Sync Wave Order (Updated 2026-01-30)
+### Current Sync Wave Order (Updated 2026-04-17)
 
 ```
 Wave -100: tigera-operator (CNI foundation - ArgoCD-managed)
 Wave  -50: argocd (self-management)
+Wave  -40: network-policies (namespace isolation)
 Wave  -35: metallb (networking foundation)
 Wave  -30: synology-csi (storage driver)
 Wave  -25: sealed-secrets (secrets management)
@@ -431,8 +432,9 @@ Wave  -11: alloy (log collection, replaced Promtail 2026-03-01)
 Wave  -10: cert-manager, external-dns, metrics-server (certificates & DNS & metrics)
 Wave   -8: argo-workflows (CI/CD)
 Wave   -7: localstack (S3 mock for Velero)
-Wave   -6: gatekeeper (admission control, policy enforcement)
-Wave   -5: velero, falco (backup, runtime security)
+Wave   -6: gatekeeper (admission control + ConstraintTemplates)
+Wave   -5: gatekeeper-policies, velero, falco (Constraints, backup, runtime security)
+Wave   -4: vpa (Vertical Pod Autoscaler)
 ```
 
 ### ✅ Resolved Issues
