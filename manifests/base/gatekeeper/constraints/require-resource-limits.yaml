@@ -12,5 +12,4 @@ spec:
         kinds: ["Pod"]
     excludedNamespaces:
       - kube-system
-      - tigera-operator
       - calico-system
