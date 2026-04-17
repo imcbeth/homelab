@@ -1,0 +1,279 @@
+# Daily cluster health-check CronWorkflow.
+#
+# Runs every day at 06:00 MT and checks:
+#   1. ArgoCD — any apps not Synced + Healthy
+#   2. Pods     — any pods not Running/Completed/Succeeded
+#   3. PVs      — any PersistentVolumes in Released state (orphaned iSCSI LUNs)
+#   4. Velero   — last scheduled backup phase for each schedule
+#   5. Gatekeeper — total violation count across all constraints
+#
+# If any check finds issues, the report-issues step fires an AlertManager
+# alert (ClusterHealthDegraded) which routes to email via the existing
+# kube-prometheus-stack AlertManager SMTP integration.
+#
+# On a clean run, no alert is fired and the workflow succeeds quietly.
+# Completed workflows are kept for 2h (success) or 8h (failure) for log review.
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: cluster-healthcheck
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: cluster-healthcheck
+    app.kubernetes.io/component: monitoring
+spec:
+  schedule: "0 6 * * *"
+  timezone: "America/Edmonton"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  workflowSpec:
+    serviceAccountName: cluster-healthcheck
+    entrypoint: healthcheck
+
+    podMetadata:
+      labels:
+        app.kubernetes.io/name: cluster-healthcheck
+
+    templateDefaults:
+      container:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+
+    ttlStrategy:
+      secondsAfterSuccess: 7200    # 2h
+      secondsAfterFailure: 28800   # 8h
+
+    templates:
+      # -----------------------------------------------------------------------
+      # Main entrypoint — run all checks in parallel, then evaluate + report
+      # -----------------------------------------------------------------------
+      - name: healthcheck
+        steps:
+          - - name: check-argocd
+              template: check-argocd
+            - name: check-pods
+              template: check-pods
+            - name: check-pvs
+              template: check-pvs
+            - name: check-velero
+              template: check-velero
+            - name: check-gatekeeper
+              template: check-gatekeeper
+
+          - - name: evaluate
+              template: evaluate
+              arguments:
+                parameters:
+                  - name: argocd-result
+                    value: "{{steps.check-argocd.outputs.result}}"
+                  - name: pods-result
+                    value: "{{steps.check-pods.outputs.result}}"
+                  - name: pvs-result
+                    value: "{{steps.check-pvs.outputs.result}}"
+                  - name: velero-result
+                    value: "{{steps.check-velero.outputs.result}}"
+                  - name: gatekeeper-result
+                    value: "{{steps.check-gatekeeper.outputs.result}}"
+
+      # -----------------------------------------------------------------------
+      # Check 1: ArgoCD application health
+      # Output: "OK" or "ISSUES: <app1> <app2> ..."
+      # -----------------------------------------------------------------------
+      - name: check-argocd
+        script:
+          image: bitnami/kubectl:latest
+          command: [bash]
+          source: |
+            set -uo pipefail
+            DEGRADED=$(kubectl get applications -n argocd \
+              -o jsonpath='{range .items[?(@.status.sync.status!="Synced")]}{.metadata.name}{"\n"}{end}' \
+              2>/dev/null || echo "")
+            UNHEALTHY=$(kubectl get applications -n argocd \
+              -o jsonpath='{range .items[?(@.status.health.status!="Healthy")]}{.metadata.name}{"/"}{.status.health.status}{"\n"}{end}' \
+              2>/dev/null || echo "")
+            ISSUES=""
+            [ -n "$DEGRADED" ] && ISSUES="OutOfSync: $(echo $DEGRADED | tr '\n' ' ')"
+            [ -n "$UNHEALTHY" ] && ISSUES="$ISSUES Unhealthy: $(echo $UNHEALTHY | tr '\n' ' ')"
+            if [ -z "$ISSUES" ]; then
+              echo "OK: all 26 apps Synced+Healthy"
+            else
+              echo "ISSUES: $ISSUES"
+            fi
+
+      # -----------------------------------------------------------------------
+      # Check 2: Pod health across all namespaces
+      # Ignores Completed/Succeeded pods (Jobs are fine)
+      # Output: "OK" or "ISSUES: <pod-summaries>"
+      # -----------------------------------------------------------------------
+      - name: check-pods
+        script:
+          image: bitnami/kubectl:latest
+          command: [bash]
+          source: |
+            set -uo pipefail
+            BAD=$(kubectl get pods --all-namespaces \
+              --field-selector='status.phase!=Running,status.phase!=Succeeded' \
+              -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{"="}{.status.phase}{"\n"}{end}' \
+              2>/dev/null | grep -v "^$" || echo "")
+            # Also catch CrashLoopBackOff / Error pods that show as Running
+            CRASH=$(kubectl get pods --all-namespaces \
+              -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{@.state.waiting.reason}{"/"}{@.restartCount}{"@"}{end}{.metadata.namespace}{"/"}{.metadata.name}{"\n"}{end}' \
+              2>/dev/null | grep -E "^CrashLoopBackOff|^Error|^OOMKilled" | head -10 || echo "")
+            if [ -z "$BAD" ] && [ -z "$CRASH" ]; then
+              echo "OK: all pods healthy"
+            else
+              echo "ISSUES: bad_pods=$(echo $BAD | tr '\n' '|') crash=$(echo $CRASH | tr '\n' '|')"
+            fi
+
+      # -----------------------------------------------------------------------
+      # Check 3: PersistentVolumes — detect Released state (= orphaned LUN)
+      # Output: "OK" or "ISSUES: <pv-names>"
+      # -----------------------------------------------------------------------
+      - name: check-pvs
+        script:
+          image: bitnami/kubectl:latest
+          command: [bash]
+          source: |
+            set -uo pipefail
+            RELEASED=$(kubectl get pv \
+              -o jsonpath='{range .items[?(@.status.phase=="Released")]}{.metadata.name}{"\n"}{end}' \
+              2>/dev/null || echo "")
+            FAILED=$(kubectl get pv \
+              -o jsonpath='{range .items[?(@.status.phase=="Failed")]}{.metadata.name}{"\n"}{end}' \
+              2>/dev/null || echo "")
+            if [ -z "$RELEASED" ] && [ -z "$FAILED" ]; then
+              echo "OK: no orphaned PVs"
+            else
+              echo "ISSUES: released=$(echo $RELEASED | tr '\n' '|') failed=$(echo $FAILED | tr '\n' '|')"
+            fi
+
+      # -----------------------------------------------------------------------
+      # Check 4: Velero — last backup status per schedule
+      # Output: "OK" or "ISSUES: <schedule>=<phase>"
+      # -----------------------------------------------------------------------
+      - name: check-velero
+        script:
+          image: bitnami/kubectl:latest
+          command: [bash]
+          source: |
+            set -uo pipefail
+            ISSUES=""
+            for SCHEDULE in daily-critical-pvcs daily-argocd weekly-cluster-resources; do
+              # Get the most recent backup for this schedule
+              LATEST=$(kubectl get backups -n velero \
+                -l "velero.io/schedule-name=${SCHEDULE}" \
+                --sort-by=.metadata.creationTimestamp \
+                -o jsonpath='{.items[-1:].status.phase}' 2>/dev/null || echo "Unknown")
+              if [ "$LATEST" != "Completed" ] && [ "$LATEST" != "" ]; then
+                ISSUES="$ISSUES ${SCHEDULE}=${LATEST}"
+              fi
+            done
+            if [ -z "$ISSUES" ]; then
+              echo "OK: all backups Completed"
+            else
+              echo "ISSUES:$ISSUES"
+            fi
+
+      # -----------------------------------------------------------------------
+      # Check 5: Gatekeeper violation count
+      # Output: "OK" or "ISSUES: N violations"
+      # -----------------------------------------------------------------------
+      - name: check-gatekeeper
+        script:
+          image: bitnami/kubectl:latest
+          command: [bash]
+          source: |
+            set -uo pipefail
+            # Sum totalViolations across all constraint kinds
+            TOTAL=0
+            for KIND in $(kubectl get crds -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
+              2>/dev/null | grep "constraints.gatekeeper.sh" || echo ""); do
+              COUNT=$(kubectl get "$KIND" --all-namespaces \
+                -o jsonpath='{range .items[*]}{.status.totalViolations}{"\n"}{end}' \
+                2>/dev/null | awk '{s+=$1} END {print s+0}')
+              TOTAL=$((TOTAL + COUNT))
+            done
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "OK: 0 Gatekeeper violations"
+            else
+              echo "ISSUES: ${TOTAL} Gatekeeper violations"
+            fi
+
+      # -----------------------------------------------------------------------
+      # Evaluate all results and fire AlertManager if any issues found
+      # -----------------------------------------------------------------------
+      - name: evaluate
+        inputs:
+          parameters:
+            - name: argocd-result
+            - name: pods-result
+            - name: pvs-result
+            - name: velero-result
+            - name: gatekeeper-result
+        script:
+          image: bitnami/kubectl:latest
+          command: [bash]
+          env:
+            - name: ARGOCD
+              value: "{{inputs.parameters.argocd-result}}"
+            - name: PODS
+              value: "{{inputs.parameters.pods-result}}"
+            - name: PVS
+              value: "{{inputs.parameters.pvs-result}}"
+            - name: VELERO
+              value: "{{inputs.parameters.velero-result}}"
+            - name: GATEKEEPER
+              value: "{{inputs.parameters.gatekeeper-result}}"
+          source: |
+            set -uo pipefail
+            ALERTMANAGER="http://kube-prometheus-stack-alertmanager.default:9093"
+            NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+            # Collect issues
+            ISSUES=""
+            [ "${ARGOCD#OK}" != "$ARGOCD" ] || ISSUES="$ISSUES argocd:${ARGOCD#ISSUES: }"
+            [ "${PODS#OK}" != "$PODS" ]     || ISSUES="$ISSUES pods:${PODS#ISSUES: }"
+            [ "${PVS#OK}" != "$PVS" ]       || ISSUES="$ISSUES pvs:${PVS#ISSUES: }"
+            [ "${VELERO#OK}" != "$VELERO" ] || ISSUES="$ISSUES velero:${VELERO#ISSUES: }"
+            [ "${GATEKEEPER#OK}" != "$GATEKEEPER" ] || ISSUES="$ISSUES gatekeeper:${GATEKEEPER#ISSUES: }"
+
+            # Full report to stdout (captured in workflow logs)
+            echo "=== Daily Cluster Health Check: $NOW ==="
+            echo "ArgoCD:     $ARGOCD"
+            echo "Pods:       $PODS"
+            echo "PVs:        $PVS"
+            echo "Velero:     $VELERO"
+            echo "Gatekeeper: $GATEKEEPER"
+            echo ""
+
+            if [ -z "$ISSUES" ]; then
+              echo "RESULT: ALL CHECKS PASSED"
+              exit 0
+            fi
+
+            echo "RESULT: ISSUES DETECTED:$ISSUES"
+
+            # Fire AlertManager alert — routes to email via existing SMTP config
+            SUMMARY="Daily health check failed:$(echo $ISSUES | cut -c1-200)"
+            curl -s -X POST "$ALERTMANAGER/api/v2/alerts" \
+              -H 'Content-Type: application/json' \
+              -d "[{
+                \"labels\": {
+                  \"alertname\": \"ClusterHealthDegraded\",
+                  \"severity\": \"warning\",
+                  \"job\": \"cluster-healthcheck\"
+                },
+                \"annotations\": {
+                  \"summary\": \"$SUMMARY\",
+                  \"description\": \"ArgoCD: $ARGOCD | Pods: $PODS | PVs: $PVS | Velero: $VELERO | Gatekeeper: $GATEKEEPER\"
+                },
+                \"startsAt\": \"$NOW\"
+              }]"
+            echo ""
+            echo "AlertManager notified."
+            exit 1

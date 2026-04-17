@@ -1,0 +1,86 @@
+# RBAC for the daily cluster health-check CronWorkflow.
+# Grants the cluster-healthcheck ServiceAccount read-only access to all
+# resources needed to assess cluster state:
+#   - pods, nodes, pvs, pvc across all namespaces
+#   - ArgoCD Applications
+#   - Velero Backups + BackupStorageLocations
+#   - Gatekeeper Constraints
+#   - Prometheus alerts (via ConfigMap/Secret reads)
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-healthcheck
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: cluster-healthcheck
+    app.kubernetes.io/component: monitoring
+---
+# Role in argo-workflows namespace: emissary executor WorkflowTaskResults
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-healthcheck-executor
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: cluster-healthcheck
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtaskresults"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-healthcheck-executor
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: cluster-healthcheck
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-healthcheck-executor
+subjects:
+  - kind: ServiceAccount
+    name: cluster-healthcheck
+    namespace: argo-workflows
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-healthcheck
+  labels:
+    app.kubernetes.io/name: cluster-healthcheck
+rules:
+  # Core resources — read-only
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "persistentvolumes", "persistentvolumeclaims",
+                "namespaces", "events"]
+    verbs: ["get", "list"]
+  # ArgoCD Applications
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list"]
+  # Velero backup state
+  - apiGroups: ["velero.io"]
+    resources: ["backups", "backupstoragelocations", "schedules"]
+    verbs: ["get", "list"]
+  # Gatekeeper constraint status (any constraint kind)
+  - apiGroups: ["constraints.gatekeeper.sh"]
+    resources: ["*"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-healthcheck
+  labels:
+    app.kubernetes.io/name: cluster-healthcheck
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-healthcheck
+subjects:
+  - kind: ServiceAccount
+    name: cluster-healthcheck
+    namespace: argo-workflows
