@@ -500,6 +500,11 @@ grafana:
     accessModes:
       - ReadWriteOnce
     size: 5Gi
+    # Prevent ArgoCD prune from deleting the PVC during chart upgrades.
+    # Without this, SSA field changes on chart upgrades caused PVC recreation
+    # (new iSCSI LUN provisioned, old LUN orphaned on NAS).
+    annotations:
+      argocd.argoproj.io/sync-options: "Prune=false"
   # Fix fsGroup race condition with Synology CSI and SQLite journal files
   podSecurityContext:
     fsGroupChangePolicy: OnRootMismatch
