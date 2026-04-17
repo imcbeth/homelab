@@ -66,6 +66,19 @@ spec:
           p95 XDS push convergence time is {{ $value | humanizeDuration }}.
           This means configuration changes take too long to propagate to proxies.
 
+    # XDS configs rejected by proxies (push failures)
+    - alert: IstioXDSPushRejections
+      expr: sum(rate(pilot_total_xds_rejects_total[5m])) > 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Istio XDS config pushes are being rejected by proxies"
+        description: |
+          Proxies are rejecting XDS configuration pushes at {{ $value | humanize }}/s.
+          This means configuration updates are not propagating — check istiod logs
+          for rejected resource types (CDS/EDS/LDS/RDS).
+
     # XDS connection terminations spike
     - alert: IstioXDSConnectionTerminations
       expr: rate(istio_xds_connection_terminations_total[5m]) > 0.1
