@@ -29,7 +29,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: external-dns
-        image: registry.k8s.io/external-dns/external-dns:v0.21.0
+        image: registry.k8s.io/external-dns/external-dns:v0.20.0
         args:
         # Webhook provider configuration
         - --provider=webhook
@@ -39,8 +39,9 @@ spec:
         - --source=ingress
         - --source=service
 
-        # Domain filtering - internal k8s domain
+        # Domain filtering - internal domains (split-horizon)
         - --domain-filter=k8s.n37.ca
+        - --domain-filter=lifeonabike.ca
 
         # Policy - upsert-only (safe, won't delete records)
         - --policy=upsert-only

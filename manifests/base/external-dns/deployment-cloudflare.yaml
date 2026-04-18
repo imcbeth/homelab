@@ -23,7 +23,7 @@ spec:
       serviceAccountName: external-dns-cloudflare
       containers:
       - name: external-dns
-        image: registry.k8s.io/external-dns/external-dns:v0.21.0
+        image: registry.k8s.io/external-dns/external-dns:v0.20.0
         args:
         # Provider configuration
         - --provider=cloudflare
@@ -33,9 +33,9 @@ spec:
         - --source=ingress
         - --source=service
 
-        # Domain filtering - use n37.ca zone (k8s.n37.ca is a subdomain)
-        # Ingresses specify exact hostnames, so only those records are created
+        # Domain filtering - managed zones
         - --domain-filter=n37.ca
+        - --domain-filter=lifeonabike.ca
 
         # Policy - upsert-only (safe, won't delete records)
         - --policy=upsert-only

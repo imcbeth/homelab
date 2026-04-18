@@ -1,0 +1,19 @@
+# TLS certificate for www.lifeonabike.ca
+# Issued via Let's Encrypt DNS-01 (Cloudflare) using the cluster-wide prod issuer.
+# The resulting Secret (lifeonabike-ca-tls) is referenced by the Ingress when
+# the web backend is deployed.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: lifeonabike-ca-tls
+  namespace: lifeonabike
+spec:
+  secretName: lifeonabike-ca-tls
+  duration: 2160h    # 90 days
+  renewBefore: 360h  # renew 15 days before expiry
+  issuerRef:
+    name: lets-encrypt-k8s-n37-ca-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - www.lifeonabike.ca
+    - lifeonabike.ca
