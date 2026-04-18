@@ -13,7 +13,7 @@ spec:
       # Reverted from 12.0.0: v12 CRD removed "Queued" from valid backup phases,
       # but velero v1.18.0 binary still sets "Queued" — breaks ALL backups.
       # Re-upgrade once upstream fixes the CRD/binary mismatch.
-      targetRevision: 11.4.0
+      targetRevision: 12.0.0
       helm:
         releaseName: velero
         valueFiles:
