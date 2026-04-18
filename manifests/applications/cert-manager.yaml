@@ -16,7 +16,7 @@ spec:
         valuesObject:
           installCRDs: true
           extraArgs:
-            - --dns01-recursive-nameservers=10.0.10.1:53,1.1.1.1:53,8.8.8.8:53
+            - --dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53
             - --dns01-recursive-nameservers-only
             - --enable-certificate-owner-ref=true
           resources:
