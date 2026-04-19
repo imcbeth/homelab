@@ -19,7 +19,7 @@ data:
           - alert: HighErrorLogRate
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+"} |~ "(?i)(error|err|fatal|exception|panic|fail)" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(error|err|fatal|exception|panic|fail)" [5m])
               ) > 1
             for: 5m
             labels:
@@ -33,7 +33,7 @@ data:
           - alert: CriticalErrorLogs
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+"} |~ "(?i)(critical|fatal|panic|emergency)" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(critical|fatal|panic|emergency)" [5m])
               ) > 0.1
             for: 2m
             labels:
