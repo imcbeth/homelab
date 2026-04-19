@@ -103,7 +103,7 @@ spec:
     - alert: ExposedSecretsDetected
       expr: |
         max by (image_repository, image_tag, namespace, resource_name, resource_kind) (
-          trivy_image_exposedsecrets{severity=~"Critical|High"}
+          trivy_image_exposedsecrets{severity=~"Critical|High", namespace!="localstack"}
         ) > 0
       for: 5m
       labels:
