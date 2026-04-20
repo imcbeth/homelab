@@ -163,7 +163,7 @@ spec:
           source: |
             set -uo pipefail
             ISSUES=""
-            for SCHEDULE in daily-critical-pvcs daily-argocd weekly-cluster-resources; do
+            for SCHEDULE in velero-daily-critical-pvcs velero-daily-argocd velero-weekly-cluster-resources; do
               # Get the most recent backup for this schedule
               LATEST=$(kubectl get backups -n velero \
                 -l "velero.io/schedule-name=${SCHEDULE}" \
