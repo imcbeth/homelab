@@ -291,13 +291,14 @@
 - [ ] DNS monitoring and troubleshooting tools
 - [ ] Consider DNS caching optimizations
 
-### 15. **VPN & Remote Access**
-- [ ] Evaluate **Tailscale** vs **WireGuard** for cluster access
-- [ ] Deploy chosen VPN solution
-- [ ] **oauth2-proxy** - Single Sign-On (SSO) integration
-- [ ] Multi-factor authentication for critical services
-- [ ] Document remote access policies and procedures
-- [ ] VPN performance monitoring
+### 15. **VPN & Remote Access** ✅ Solved by UniFi (2026-04-17)
+- [x] Remote access to cluster — handled by UniFi gateway VPN server (WireGuard/L2TP built-in)
+- [x] Full home network access (NAS 10.0.1.x, cluster 10.0.10.x, MetalLB 10.0.10.10) via UniFi
+- [ ] ~~Deploy Tailscale/WireGuard on cluster~~ — redundant; UniFi VPN is a superset
+- [ ] **oauth2-proxy** - SSO in front of web UIs (future nice-to-have, independent of VPN)
+- [ ] Port-forwarding for public site hosting (planned separately)
+
+**Decision:** UniFi gateway VPN server provides full network access. Cluster-side VPN adds complexity for zero gain. Tailscale Kubernetes Operator remains an option if per-service sharing with others is needed in the future.
 
 ---
 
@@ -310,7 +311,7 @@
 - [ ] Create network topology diagrams to complement the existing network-info.md documentation
 - [ ] Performance baseline documentation
 - [ ] Document on-call procedures and escalation paths
-- [ ] Create k8s-docs-n37 guides for: cert-manager, metallb, ingress-nginx, localstack
+- [x] Create k8s-docs-n37 guides for: cert-manager, metallb, ingress-nginx, localstack (completed in earlier sessions)
 
 ### 17. **Testing & Validation**
 - [ ] Chaos engineering with **Litmus** (lighter than Chaos Monkey)
