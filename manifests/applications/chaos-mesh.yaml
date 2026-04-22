@@ -63,16 +63,18 @@ spec:
       name: chaos-mesh-validation-auth
       jsonPointers:
         - /webhooks
-    # Kubernetes-defaulted fields on DaemonSet and Deployment
+    # Kubernetes-defaulted fields on DaemonSet and Deployment (imagePullPolicy, etc.)
     - kind: DaemonSet
       name: chaos-daemon
-      jsonPointers:
-        - /spec/template/spec/containers/0/imagePullPolicy
-        - /spec/template/spec/initContainers/0/imagePullPolicy
+      jqPathExpressions:
+        - .spec.template.spec.containers[].imagePullPolicy
+        - .spec.template.spec.initContainers[].imagePullPolicy
+        - .spec.revisionHistoryLimit
     - kind: Deployment
       name: chaos-controller-manager
-      jsonPointers:
-        - /spec/template/spec/containers/0/imagePullPolicy
+      jqPathExpressions:
+        - .spec.template.spec.containers[].imagePullPolicy
+        - .spec.revisionHistoryLimit
   syncPolicy:
     automated:
       prune: true

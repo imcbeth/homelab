@@ -18,6 +18,7 @@ spec:
   type: PodChaos
   historyLimit: 5
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: null
   podChaos:
     action: pod-kill
     mode: one
