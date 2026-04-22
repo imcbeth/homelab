@@ -1,0 +1,33 @@
+---
+# CPU Stress Experiment — Resource Limit Enforcement Validation
+# Schedule: Weekly Wednesday 05:00 MT (11:00 UTC)
+# Target: unipoller pod (low-risk, stateless, recovers immediately)
+# Duration: 3 minutes
+# Purpose: Validates Gatekeeper CPU limits actually protect node stability
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: cpu-stress-unipoller
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/name: chaos-mesh
+    app.kubernetes.io/component: experiment
+    chaos-mesh.org/experiment-type: cpu-stress
+spec:
+  schedule: "0 11 * * 3"  # Wednesdays 11:00 UTC = 05:00 MT
+  type: StressChaos
+  historyLimit: 5
+  concurrencyPolicy: Forbid
+  stressChaos:
+    mode: one
+    selector:
+      namespaces:
+        - unipoller
+      labelSelectors:
+        app.kubernetes.io/name: unipoller
+    stressors:
+      cpu:
+        workers: 2
+        load: 80
+    duration: "3m"

@@ -1,0 +1,58 @@
+# Chaos Mesh Helm values
+# Cluster: 5x Raspberry Pi 5 (16GB, ARM64)
+# All resource limits set within Gatekeeper's 2Gi memory cap
+
+controllerManager:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+chaosDaemon:
+  # DaemonSet — one pod per node (5 total)
+  runtime: containerd
+  socketPath: /run/containerd/containerd.sock
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # Allow chaos-daemon to run on control-plane node
+  tolerations:
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/control-plane
+      operator: Exists
+
+dashboard:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  # No auth needed for internal homelab
+  securityMode: false
+  service:
+    type: ClusterIP
+
+dnsServer:
+  create: true
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# Prometheus metrics via kube-prometheus-stack ServiceMonitor
+prometheus:
+  create: false  # Use manual ServiceMonitor instead (see kustomization)

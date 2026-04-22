@@ -314,12 +314,12 @@
 - [x] Create k8s-docs-n37 guides for: cert-manager, metallb, ingress-nginx, localstack (completed in earlier sessions)
 
 ### 17. **Testing & Validation**
-- [ ] Chaos engineering with **Litmus** (lighter than Chaos Monkey)
+- [x] Chaos engineering with **Chaos Mesh** 2.8.2 — 4 scheduled experiments: pod-kill, network-delay, CPU-stress, node-failure simulation (PR #563, 2026-04-21). Note: Litmus has no ARM64 images; Chaos Mesh is the CNCF alternative with official ARM64 support.
 - [ ] Load testing framework for applications
-- [ ] Backup and restore testing automation (monthly validation)
-- [ ] Network failure simulation and recovery testing
+- [x] Backup and restore testing automation (monthly Velero DR validation CronWorkflow, deployed 2026-03-25)
+- [x] Network failure simulation and recovery testing (network-delay-loki experiment via Chaos Mesh, weekly)
 - [ ] Performance regression testing
-- [ ] Test node drain and pod eviction scenarios
+- [x] Test node drain and pod eviction scenarios (pod-failure-node04 experiment via Chaos Mesh, monthly)
 
 ### 18. **Resource Optimization**
 - [x] Audit resource requests/limits across all workloads (7 workloads adjusted, 2026-02-11)

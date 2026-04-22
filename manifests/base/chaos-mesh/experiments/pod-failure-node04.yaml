@@ -1,0 +1,32 @@
+---
+# Node Failure Simulation — node04 Pod Eviction
+# Schedule: Monthly, 1st of month 06:00 MT (12:00 UTC)
+# Target: All pods on node04 (only has Falco Redis PVC — most tolerant of brief outage)
+# Duration: 5 minutes — simulates node04 going offline
+# Purpose: Tests cluster resilience to single-node failure without actual drain
+#          (avoids iSCSI VolumeAttachment issues that actual drain/cordon causes)
+#
+# SAFETY NOTE: node04 iSCSI PVC = falco/falco-falcosidekick-ui-redis-data (2Gi)
+# pod-failure does NOT drop iSCSI sessions (node stays online) — PVC re-attaches cleanly
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: pod-failure-node04
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/name: chaos-mesh
+    app.kubernetes.io/component: experiment
+    chaos-mesh.org/experiment-type: pod-failure
+spec:
+  schedule: "0 12 1 * *"  # 1st of month 12:00 UTC = 06:00 MT
+  type: PodChaos
+  historyLimit: 3
+  concurrencyPolicy: Forbid
+  podChaos:
+    action: pod-failure
+    mode: all
+    selector:
+      nodeSelectors:
+        kubernetes.io/hostname: node04
+    duration: "5m"

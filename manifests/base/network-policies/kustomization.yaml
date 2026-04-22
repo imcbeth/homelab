@@ -22,6 +22,8 @@ resources:
   - ingress-nginx/network-policy.yaml
   # Phase 5: Service mesh namespaces
   - istio-system/network-policy.yaml
+  # Chaos engineering
+  - chaos-mesh/network-policy.yaml
   # Phase 6: Remaining namespaces
   - default/network-policy.yaml
   - default/calico-network-policy-allow-egress-icmp.yaml

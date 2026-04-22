@@ -1,0 +1,113 @@
+---
+# Chaos Mesh NetworkPolicy
+# Purpose: Restrict chaos-mesh components while allowing fault injection egress
+# chaos-daemon (DaemonSet) needs broad egress to inject faults into target namespaces
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chaos-mesh-network-policy
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/name: chaos-mesh
+    app.kubernetes.io/component: chaos-engineering
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Prometheus scraping (controller-manager + chaos-daemon metrics)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 10080  # controller-manager metrics
+        - protocol: TCP
+          port: 31766  # chaos-daemon gRPC/metrics
+
+    # Allow internal namespace communication
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 10080  # controller-manager
+        - protocol: TCP
+          port: 31766  # chaos-daemon gRPC
+        - protocol: TCP
+          port: 2333   # dashboard UI
+
+    # Allow ingress-nginx for dashboard UI
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 2333
+
+    # HBONE for Istio Ambient mesh (if chaos-mesh namespace is ever enrolled)
+    - ports:
+        - protocol: TCP
+          port: 15008
+
+  egress:
+    # DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Kubernetes API (required for chaos-daemon and controller)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 6443  # K8s API via control-plane
+        - protocol: TCP
+          port: 443   # K8s API via ClusterIP
+
+    # Internal namespace communication
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 10080
+        - protocol: TCP
+          port: 31766
+        - protocol: TCP
+          port: 2333
+
+    # chaos-daemon needs egress to ALL namespaces for fault injection
+    # (pod-kill, network chaos, stress all require cross-namespace access)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 15008  # HBONE for Istio Ambient mesh namespaces
+
+    # Allow HTTPS for pulling experiment images (chaos-daemon helper containers)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443

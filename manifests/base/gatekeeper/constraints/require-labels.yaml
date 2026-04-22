@@ -21,6 +21,7 @@ spec:
       - synology-csi
       - localstack
       - trivy-system
+      - chaos-mesh
   parameters:
     labels:
       - "app.kubernetes.io/name"
