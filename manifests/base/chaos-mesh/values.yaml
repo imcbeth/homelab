@@ -11,6 +11,9 @@ controllerManager:
     limits:
       cpu: 200m
       memory: 256Mi
+  # Pin rollme to suppress ArgoCD drift: chart uses randAlphaNum per render
+  podAnnotations:
+    rollme: "pinned"
 
 chaosDaemon:
   # DaemonSet — one pod per node (5 total)
@@ -23,6 +26,9 @@ chaosDaemon:
     limits:
       cpu: 500m
       memory: 512Mi
+  # Pin rollme to suppress ArgoCD drift: chart uses randAlphaNum per render
+  podAnnotations:
+    rollme: "pinned"
   # Allow chaos-daemon to run on control-plane node
   tolerations:
     - effect: NoSchedule
