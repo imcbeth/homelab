@@ -27,4 +27,3 @@ spec:
         - default
       labelSelectors:
         app.kubernetes.io/name: prometheus
-    gracePeriod: 0
