@@ -17,6 +17,13 @@ spec:
     - Ingress
     - Egress
   ingress:
+    # Allow Kubernetes API server webhook calls (MutatingWebhookConfiguration, ValidatingWebhookConfiguration)
+    # Bare rule required: API server runs on control-plane with hostNetwork; Calico IPIP encapsulation
+    # rewrites source IP for cross-node traffic, so ipBlock rules don't work. Bare port rule allows any source.
+    - ports:
+        - protocol: TCP
+          port: 10250  # chaos-controller-manager webhook (Service 443 → container 10250)
+
     # Allow Prometheus scraping (controller-manager + chaos-daemon metrics)
     - from:
         - namespaceSelector:
