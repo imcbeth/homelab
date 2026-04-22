@@ -23,6 +23,7 @@ spec:
   type: PodChaos
   historyLimit: 3
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: null
   podChaos:
     action: pod-failure
     mode: all

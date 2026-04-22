@@ -19,6 +19,7 @@ spec:
   type: NetworkChaos
   historyLimit: 5
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: null
   networkChaos:
     action: delay
     mode: all

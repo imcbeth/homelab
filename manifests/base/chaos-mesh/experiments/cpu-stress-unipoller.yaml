@@ -19,6 +19,7 @@ spec:
   type: StressChaos
   historyLimit: 5
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: null
   stressChaos:
     mode: one
     selector:
