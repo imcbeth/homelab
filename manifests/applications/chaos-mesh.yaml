@@ -51,18 +51,19 @@ spec:
       jsonPointers:
         - /data
     # caBundle auto-populated by chaos-mesh controller from webhook certs
+    # Note: jqPathExpressions required with ServerSideApply — jsonPointers:/webhooks is ignored
     - kind: MutatingWebhookConfiguration
       name: chaos-mesh-mutation
-      jsonPointers:
-        - /webhooks
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
     - kind: ValidatingWebhookConfiguration
       name: chaos-mesh-validation
-      jsonPointers:
-        - /webhooks
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
     - kind: ValidatingWebhookConfiguration
       name: chaos-mesh-validation-auth
-      jsonPointers:
-        - /webhooks
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
     # Kubernetes-defaulted fields on DaemonSet and Deployment (imagePullPolicy, etc.)
     - kind: DaemonSet
       name: chaos-daemon
