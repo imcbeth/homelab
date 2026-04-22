@@ -31,6 +31,48 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: chaos-mesh
+  # Ignore cert/webhook fields auto-populated by chaos-mesh controller
+  ignoreDifferences:
+    # TLS certificates generated and populated by the chaos-mesh controller
+    - kind: Secret
+      name: chaos-mesh-chaosd-client-certs
+      jsonPointers:
+        - /data
+    - kind: Secret
+      name: chaos-mesh-daemon-certs
+      jsonPointers:
+        - /data
+    - kind: Secret
+      name: chaos-mesh-daemon-client-certs
+      jsonPointers:
+        - /data
+    - kind: Secret
+      name: chaos-mesh-webhook-certs
+      jsonPointers:
+        - /data
+    # caBundle auto-populated by chaos-mesh controller from webhook certs
+    - kind: MutatingWebhookConfiguration
+      name: chaos-mesh-mutation
+      jsonPointers:
+        - /webhooks
+    - kind: ValidatingWebhookConfiguration
+      name: chaos-mesh-validation
+      jsonPointers:
+        - /webhooks
+    - kind: ValidatingWebhookConfiguration
+      name: chaos-mesh-validation-auth
+      jsonPointers:
+        - /webhooks
+    # Kubernetes-defaulted fields on DaemonSet and Deployment
+    - kind: DaemonSet
+      name: chaos-daemon
+      jsonPointers:
+        - /spec/template/spec/containers/0/imagePullPolicy
+        - /spec/template/spec/initContainers/0/imagePullPolicy
+    - kind: Deployment
+      name: chaos-controller-manager
+      jsonPointers:
+        - /spec/template/spec/containers/0/imagePullPolicy
   syncPolicy:
     automated:
       prune: true
