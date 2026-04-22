@@ -74,11 +74,13 @@ spec:
         - .spec.template.spec.containers[].imagePullPolicy
         - .spec.template.spec.initContainers[].imagePullPolicy
         - .spec.revisionHistoryLimit
+        - .spec.template.metadata.annotations.rollme
     - kind: Deployment
       name: chaos-controller-manager
       jqPathExpressions:
         - .spec.template.spec.containers[].imagePullPolicy
         - .spec.revisionHistoryLimit
+        - .spec.template.metadata.annotations.rollme
   syncPolicy:
     automated:
       prune: true
