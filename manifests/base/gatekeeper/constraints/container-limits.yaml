@@ -18,6 +18,7 @@ spec:
       - tigera-operator
       - istio-system
       - cert-manager
+      - chaos-mesh
   parameters:
     # Maximum 2 CPU cores and 2Gi RAM per container
     # Prevents any single container from monopolizing a Pi 5 node

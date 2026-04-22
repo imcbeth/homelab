@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Monitoring integration
+  - servicemonitor.yaml
+  # Chaos experiments (Schedule CRDs)
+  - experiments/pod-kill-prometheus.yaml
+  - experiments/network-delay-loki.yaml
+  - experiments/cpu-stress-unipoller.yaml
+  - experiments/pod-failure-node04.yaml

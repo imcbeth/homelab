@@ -1,0 +1,35 @@
+---
+# Network Delay Experiment — Loki Ingestion Resilience
+# Schedule: Weekly Wednesday 04:00 MT (10:00 UTC)
+# Target: Loki pod (tests log backpressure handling in Alloy + Grafana query timeouts)
+# Duration: 5 minutes — short enough to avoid alert fatigue
+# Note: Loki namespace is in Istio Ambient mesh (HBONE on port 15008)
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: network-delay-loki
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/name: chaos-mesh
+    app.kubernetes.io/component: experiment
+    chaos-mesh.org/experiment-type: network-delay
+spec:
+  schedule: "0 10 * * 3"  # Wednesdays 10:00 UTC = 04:00 MT
+  type: NetworkChaos
+  historyLimit: 5
+  concurrencyPolicy: Forbid
+  networkChaos:
+    action: delay
+    mode: all
+    selector:
+      namespaces:
+        - loki
+      labelSelectors:
+        app.kubernetes.io/name: loki
+    delay:
+      latency: "200ms"
+      jitter: "50ms"
+      correlation: "50"
+    duration: "5m"
+    direction: to

@@ -1,0 +1,20 @@
+---
+# ServiceMonitor for Chaos Mesh controller-manager metrics
+# kube-prometheus-stack discovers ServiceMonitors with release label
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: chaos-mesh-controller-manager
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/name: chaos-mesh
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: controller-manager
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

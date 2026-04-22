@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: chaos-mesh
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Deploy after Gatekeeper policies (-5) and monitoring (-4)
+    # Chaos tooling is non-critical infrastructure
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  project: infrastructure
+  sources:
+    # Chaos Mesh Helm chart
+    - repoURL: https://charts.chaos-mesh.org
+      chart: chaos-mesh
+      targetRevision: 2.8.2
+      helm:
+        valueFiles:
+          - $values/manifests/base/chaos-mesh/values.yaml
+    # Values reference from homelab repo
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/chaos-mesh
+      targetRevision: HEAD
+      ref: values
+    # Additional manifests (ServiceMonitor, experiments)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/chaos-mesh
+      targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: chaos-mesh
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

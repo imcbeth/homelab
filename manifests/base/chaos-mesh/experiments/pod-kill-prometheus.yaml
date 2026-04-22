@@ -1,0 +1,29 @@
+---
+# Pod Kill Experiment — Prometheus Self-Healing Validation
+# Schedule: Weekly Wednesday 03:00 MT (09:00 UTC)
+# Target: One Prometheus pod (StatefulSet — should auto-recreate)
+# Purpose: Validates StatefulSet self-healing and iSCSI PVC re-attachment
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: pod-kill-prometheus
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/name: chaos-mesh
+    app.kubernetes.io/component: experiment
+    chaos-mesh.org/experiment-type: pod-kill
+spec:
+  schedule: "0 9 * * 3"   # Wednesdays 09:00 UTC = 03:00 MT
+  type: PodChaos
+  historyLimit: 5
+  concurrencyPolicy: Forbid
+  podChaos:
+    action: pod-kill
+    mode: one
+    selector:
+      namespaces:
+        - default
+      labelSelectors:
+        app.kubernetes.io/name: prometheus
+    gracePeriod: 0
