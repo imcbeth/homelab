@@ -57,25 +57,25 @@ configFiles:
               "urls": ["https://registry-1.docker.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "content": [{"prefix": "**"}]
+              "content": [{"prefix": "**", "platforms": [{"os": "linux", "arch": "arm64"}]}]
             },
             {
               "urls": ["https://ghcr.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "content": [{"prefix": "**"}]
+              "content": [{"prefix": "**", "platforms": [{"os": "linux", "arch": "arm64"}]}]
             },
             {
               "urls": ["https://quay.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "content": [{"prefix": "**"}]
+              "content": [{"prefix": "**", "platforms": [{"os": "linux", "arch": "arm64"}]}]
             },
             {
               "urls": ["https://registry.k8s.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "content": [{"prefix": "**"}]
+              "content": [{"prefix": "**", "platforms": [{"os": "linux", "arch": "arm64"}]}]
             }
           ]
         },
