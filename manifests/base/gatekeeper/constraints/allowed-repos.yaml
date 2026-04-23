@@ -26,3 +26,4 @@ spec:
       - "registry.k8s.io"
       - "gcr.io"
       - "mirror.gcr.io"
+      - "registry.k8s.n37.ca"

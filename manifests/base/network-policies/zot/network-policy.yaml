@@ -1,0 +1,90 @@
+---
+# Zot OCI Registry — NetworkPolicy
+# Ingress: ingress-nginx (registry UI + API), Prometheus (metrics)
+# Egress: DNS, K8s API, external HTTPS (pull-through proxy to Docker Hub/GHCR/quay/k8s.io)
+# Note: HBONE port 15008 bare rules required for Istio Ambient mesh
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zot
+  namespace: zot
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow ingress-nginx to reach Zot registry (UI + API on port 5000)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 5000
+
+    # Allow Prometheus to scrape metrics (port 5000 /metrics endpoint)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 5000
+
+    # Istio Ambient HBONE — bare rule required (ztunnel rewrites destination port)
+    - ports:
+        - protocol: TCP
+          port: 15008
+
+  egress:
+    # DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Kubernetes API (for ServiceAccount token validation)
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    # External HTTPS — required for pull-through proxy to upstream registries:
+    # Docker Hub (registry-1.docker.io), GHCR (ghcr.io), quay.io, registry.k8s.io
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # Istio Ambient HBONE
+    - ports:
+        - protocol: TCP
+          port: 15008

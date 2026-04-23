@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zot
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Deploy after Gatekeeper policies (-5) and monitoring (-4/-3)
+    # Registry is supporting infrastructure, not critical-path for other apps
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: infrastructure
+  sources:
+    # Zot Helm chart
+    - repoURL: https://zotregistry.dev/helm-charts
+      chart: zot
+      targetRevision: 0.1.106
+      helm:
+        valueFiles:
+          - $values/manifests/base/zot/values.yaml
+    # Values reference from homelab repo
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/zot
+      targetRevision: HEAD
+      ref: values
+    # Additional manifests (SealedSecret)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/zot
+      targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zot
+  ignoreDifferences:
+    # StatefulSet VolumeClaimTemplates — prevent ArgoCD from deleting/recreating PVC
+    # (same pattern as Loki, Trivy — protects iSCSI LUN from being orphaned)
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates
+    # Kubernetes-defaulted fields on StatefulSet pod template
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .spec.template.spec.containers[].imagePullPolicy
+        - .spec.revisionHistoryLimit
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
