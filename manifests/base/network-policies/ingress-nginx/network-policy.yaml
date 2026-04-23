@@ -112,3 +112,12 @@ spec:
       ports:
         - protocol: TCP
           port: 4566
+
+    # Backend: zot (OCI registry)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: zot
+      ports:
+        - protocol: TCP
+          port: 5000
