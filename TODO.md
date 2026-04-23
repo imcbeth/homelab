@@ -277,7 +277,7 @@
 **Alternative Tools Considered:**
 - [ ] Evaluate **Tekton** (more complex, higher resource usage)
 - [ ] Evaluate **Gitea** vs **GitLab** for self-hosted git
-- [ ] **Harbor** - Container registry with vulnerability scanning
+- [x] **Zot** - CNCF OCI registry with pull-through proxy + Trivy CVE scanning (PR #571, 2026-04-23). Harbor skipped — no ARM64 images for Pi 5 cluster.
 - [ ] Build and deployment automation for ARM64 custom containers
 
 ---
@@ -342,7 +342,7 @@
 
 ### 20. **Application Deployments**
 - [ ] Home Assistant integration
-- [ ] Private container registry (Harbor or similar)
+- [x] Private container registry — Zot v2.1.16 at registry.k8s.n37.ca (PR #571, 2026-04-23)
 - [ ] Internal wiki or knowledge base
 - [ ] Status page (Uptime Kuma or similar)
 - [ ] Internal chat/collaboration tool
@@ -409,9 +409,9 @@ Items are organized by priority, not by timeline. Focus on:
 ### **Phase 4: Optimization & Expansion** (In Progress)
 1. ✅ Resource optimization and VPA (deployed 2026-03-25)
 2. ✅ Monthly DR validation workflow (deployed 2026-03-25)
-3. Chaos engineering and resilience testing
+3. ✅ Chaos engineering with Chaos Mesh 2.8.2 (PR #563, 2026-04-21)
 4. Advanced networking and VPN (Tailscale/WireGuard)
-5. Additional application deployments (Harbor, Home Assistant)
+5. Additional application deployments — ✅ Zot registry (PR #571, 2026-04-23), Home Assistant (pending)
 
 ---
 

@@ -1,0 +1,156 @@
+# Zot OCI Registry Helm values
+# Cluster: 5x Raspberry Pi 5 (16GB, ARM64)
+# Registry URL: https://registry.k8s.n37.ca
+# Image: ghcr.io/project-zot/zot (linux/arm64/v8 confirmed)
+
+image:
+  repository: ghcr.io/project-zot/zot
+  tag: "v2.1.16"
+
+replicaCount: 1
+
+# Persistence via Synology iSCSI (creates StatefulSet instead of Deployment)
+persistence: true
+pvc:
+  create: true
+  storageClassName: synology-iscsi-delete
+  storage: 50Gi
+  accessModes: ["ReadWriteOnce"]
+
+# Resource limits — must satisfy Gatekeeper container-limits (max 2Gi memory)
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi  # Trivy CVE DB needs ~1.5Gi on first load
+
+# Mount the Zot config from ConfigMap
+mountConfig: true
+configFiles:
+  config.json: |-
+    {
+      "storage": {
+        "rootDirectory": "/var/lib/registry",
+        "gc": true,
+        "gcDelay": "1h",
+        "gcInterval": "24h"
+      },
+      "http": {
+        "address": "0.0.0.0",
+        "port": "5000",
+        "auth": {
+          "htpasswd": {
+            "path": "/secret/htpasswd"
+          }
+        }
+      },
+      "log": {
+        "level": "info"
+      },
+      "extensions": {
+        "sync": {
+          "enable": true,
+          "registries": [
+            {
+              "urls": ["https://registry-1.docker.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "content": [{"prefix": "**"}]
+            },
+            {
+              "urls": ["https://ghcr.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "content": [{"prefix": "**"}]
+            },
+            {
+              "urls": ["https://quay.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "content": [{"prefix": "**"}]
+            },
+            {
+              "urls": ["https://registry.k8s.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "content": [{"prefix": "**"}]
+            }
+          ]
+        },
+        "search": {
+          "enable": true,
+          "cve": {
+            "updateInterval": "2h"
+          }
+        },
+        "ui": {
+          "enable": true
+        },
+        "metrics": {
+          "enable": true,
+          "prometheus": {
+            "path": "/metrics"
+          }
+        },
+        "scrub": {
+          "enable": true,
+          "interval": "24h"
+        }
+      }
+    }
+
+# Mount the SealedSecret (zot-htpasswd) for htpasswd auth
+# Uses externalSecrets so we manage the secret via SealedSecrets, not the chart
+externalSecrets:
+  - secretName: zot-htpasswd
+    mountPath: /secret
+
+# Service — ClusterIP, ingress-nginx handles external access
+service:
+  type: ClusterIP
+  port: 5000
+
+# Ingress via ingress-nginx + cert-manager + external-dns
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
+    external-dns.alpha.kubernetes.io/hostname: registry.k8s.n37.ca
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+  hosts:
+    - host: registry.k8s.n37.ca
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: zot-tls
+      hosts:
+        - registry.k8s.n37.ca
+
+# Prometheus ServiceMonitor
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: "60s"
+    path: "/metrics"
+
+# headless service for StatefulSet (not needed for single replica)
+serviceHeadless:
+  enabled: false
+
+# Recreate strategy required for RWO iSCSI volumes (only one node can attach)
+strategy:
+  type: Recreate
+
+# Probe config
+httpGet:
+  scheme: HTTP
+  port: 5000
+  path: /v2/
