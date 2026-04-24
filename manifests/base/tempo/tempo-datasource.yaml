@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-grafana-datasource
+  namespace: tempo
+  labels:
+    # Grafana sidecar discovers ConfigMaps with this label across ALL namespaces
+    grafana_datasource: "1"
+data:
+  tempo-datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.tempo.svc.cluster.local:3100
+        uid: tempo
+        editable: true
+        jsonData:
+          httpMethod: GET
+          # Link traces to Loki logs
+          derivedFields:
+            - datasourceUid: loki
+              matcherRegex: "traceID=(\\w+)"
+              name: TraceID
+              url: "$${__value.raw}"
+              urlDisplayLabel: View in Tempo
+          # Link traces to Prometheus metrics
+          tracesToMetrics:
+            datasourceUid: prometheus
+            tags:
+              - key: service.name
+                value: service_name
+          # Enable service graph view
+          serviceMap:
+            datasourceUid: prometheus
+          # Node graph visualization
+          nodeGraph:
+            enabled: true
+          # Search configuration
+          search:
+            hide: false
+          lokiSearch:
+            datasourceUid: loki
