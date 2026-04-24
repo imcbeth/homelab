@@ -10,6 +10,8 @@ metadata:
     external-dns.alpha.kubernetes.io/ttl: "300"
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-connections: "20"
+    # No OAuth auth — AWS CLI/SDK clients cannot handle browser OAuth redirects.
+    # Access is rate-limited; use kubectl port-forward for sensitive operations.
 spec:
   ingressClassName: nginx
   tls:
