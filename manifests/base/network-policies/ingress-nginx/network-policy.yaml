@@ -121,3 +121,12 @@ spec:
       ports:
         - protocol: TCP
           port: 5000
+
+    # Backend: uptime-kuma (status page)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 3001
