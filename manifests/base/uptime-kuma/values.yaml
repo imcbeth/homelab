@@ -43,21 +43,13 @@ ingress:
     cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
     external-dns.alpha.kubernetes.io/hostname: status.k8s.n37.ca
     external-dns.alpha.kubernetes.io/ttl: "300"
-    # WebSocket support required for Uptime Kuma real-time updates
+    # WebSocket support required for Uptime Kuma real-time updates.
+    # ingress-nginx handles WebSocket upgrades natively — proxy-read-timeout
+    # and proxy-send-timeout keep the connection alive for long-lived sockets.
+    # Avoid snippet annotations: allow-snippet-annotations is disabled by
+    # default since ingress-nginx v1.9 (CVE-2021-25742).
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/server-snippets: |
-      location / {
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_http_version 1.1;
-        proxy_set_header X-Forwarded-Host $http_host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header Host $host;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_cache_bypass $http_upgrade;
-      }
   hosts:
     - host: status.k8s.n37.ca
       paths:
