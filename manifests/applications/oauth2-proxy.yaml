@@ -1,0 +1,49 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: oauth2-proxy
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  project: infrastructure
+  sources:
+    # oauth2-proxy Helm chart
+    - repoURL: https://oauth2-proxy.github.io/manifests
+      chart: oauth2-proxy
+      targetRevision: 10.4.3
+      helm:
+        valueFiles:
+          - $values/manifests/base/oauth2-proxy/values.yaml
+    # Values reference from homelab repo
+    - repoURL: git@github.com:imcbeth/homelab.git
+      targetRevision: HEAD
+      ref: values
+    # Additional manifests (SealedSecret via kustomization)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/oauth2-proxy
+      targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: oauth2-proxy
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jqPathExpressions:
+        - .spec.template.spec.containers[].imagePullPolicy
+        - .spec.revisionHistoryLimit
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
