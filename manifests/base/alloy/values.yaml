@@ -23,6 +23,17 @@ alloy:
       cpu: 200m
       memory: 512Mi
 
+  # Expose OTLP ports so applications can send traces to Alloy
+  extraPorts:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+
   # River configuration for Kubernetes log collection
   configMap:
     content: |
@@ -90,6 +101,29 @@ alloy:
       loki.write "default" {
         endpoint {
           url = "http://loki.loki.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+      // OTLP trace receiver - applications send traces to Alloy as the collector
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        output {
+          traces = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      // Forward traces to Grafana Tempo
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo.tempo.svc.cluster.local:4317"
+          tls {
+            insecure = true
+          }
         }
       }
 

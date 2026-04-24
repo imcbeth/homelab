@@ -1,0 +1,68 @@
+# Grafana Tempo - distributed tracing backend (monolithic mode)
+# Chart: grafana/tempo v1.24.4 (app v2.9.0)
+# Deployed to: tempo namespace
+
+tempo:
+  # Disable anonymous telemetry reporting
+  reportingEnabled: false
+
+  # Trace receivers
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+
+  # Storage configuration
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+
+  # Retain traces for 7 days
+  retention: 168h
+
+# Persistent storage (10Gi iSCSI LUN on Synology NAS)
+persistence:
+  enabled: true
+  storageClassName: synology-iscsi-delete
+  size: 10Gi
+  accessModes:
+    - ReadWriteOnce
+
+# Resource limits (ARM64 Raspberry Pi 5 nodes)
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+# Prevent Tempo from consuming its entire memory limit
+extraEnv:
+  - name: GOMEMLIMIT
+    value: "900MiB"
+
+# Pod labels for Gatekeeper compliance
+podLabels:
+  app.kubernetes.io/name: tempo
+
+# ServiceMonitor for Prometheus metrics collection
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack
+
+# Extra Service ports for OTLP receivers
+service:
+  type: ClusterIP
+
+# Expose OTLP ports via the Service
+extraVolumeMounts: []
+extraVolumes: []

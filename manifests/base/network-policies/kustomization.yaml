@@ -28,6 +28,9 @@ resources:
   - zot/network-policy.yaml
   # Status monitoring
   - uptime-kuma/network-policy.yaml
+  # Distributed tracing
+  - tempo/namespace.yaml
+  - tempo/network-policy.yaml
   # Phase 6: Remaining namespaces
   - default/network-policy.yaml
   - default/calico-network-policy-allow-egress-icmp.yaml
