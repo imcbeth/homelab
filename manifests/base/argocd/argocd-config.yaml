@@ -106,14 +106,31 @@ dex:
 
 configs:
   cm:
-    url: https://argocd.k8s.n37.ca # Set the external URL for Argo CD
+    url: https://argocd.k8s.n37.ca
     accounts.mcp: apiKey
+    # GitHub OIDC via Dex — replaces local user/password login
+    # Secret keys referenced as $<secret-name>:<key> (secret must be in argocd namespace)
+    dex.config: |
+      connectors:
+        - type: github
+          id: github
+          name: GitHub
+          config:
+            clientID: $argocd-github-secret:client-id
+            clientSecret: $argocd-github-secret:client-secret
+            redirectURI: https://argocd.k8s.n37.ca/api/dex/callback
+            loadAllGroups: false
+            teamNameField: slug
   rbac:
+    # GitHub login → imcbeth username from Dex → role:admin
     policy.csv: |
+      g, imcbeth, role:admin
+      g, mcp, role:readonly
       p, role:readonly, applications, get, *, allow
       p, role:readonly, applications, list, *, allow
       p, role:readonly, clusters, get, *, allow
       p, role:readonly, projects, get, *, allow
       p, role:readonly, repositories, get, *, allow
       p, role:readonly, logs, get, *, allow
-      g, mcp, role:readonly
+    # Deny all by default — explicit grants only
+    policy.default: role:''
