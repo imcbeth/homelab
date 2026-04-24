@@ -130,3 +130,13 @@ spec:
       ports:
         - protocol: TCP
           port: 3001
+
+    # Auth subrequests to oauth2-proxy (nginx auth_request for protected ingresses)
+    # Uses internal ClusterIP to avoid hairpin NAT (same pattern as blackbox-exporter)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: oauth2-proxy
+      ports:
+        - protocol: TCP
+          port: 4180

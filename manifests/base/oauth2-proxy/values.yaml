@@ -1,0 +1,74 @@
+# oauth2-proxy Helm values
+# Chart: oauth2-proxy/oauth2-proxy v10.4.3 (app v7.15.2)
+# Provider: GitHub — restricts access to GitHub user: imcbeth
+# Deployed to: oauth2-proxy namespace
+# Ingress URL: https://oauth.k8s.n37.ca
+
+image:
+  repository: quay.io/oauth2-proxy/oauth2-proxy
+
+# Reference the SealedSecret (keys: client-id, client-secret, cookie-secret)
+config:
+  existingSecret: oauth2-proxy-secret
+
+# oauth2-proxy flags — map keys become --key=value CLI args
+extraArgs:
+  # GitHub provider
+  provider: github
+  # Restrict to a single GitHub user
+  github-user: imcbeth
+  # Allow any email domain (GitHub usernames are the primary restriction)
+  email-domain: "*"
+  # Upstream: static 202 — oauth2-proxy only validates auth, doesn't proxy traffic
+  upstream: static://202
+  # Callback URL registered in the GitHub OAuth App
+  redirect-url: https://oauth.k8s.n37.ca/oauth2/callback
+  # Cookie scoped to all k8s.n37.ca subdomains
+  cookie-domain: .k8s.n37.ca
+  whitelist-domain: .k8s.n37.ca
+  cookie-secure: "true"
+  cookie-name: _oauth2_proxy_k8s
+  # Skip the oauth2-proxy landing page and go straight to GitHub
+  skip-provider-button: "true"
+  # Pass authenticated user info as headers to upstream apps
+  set-xauthrequest: "true"
+  # Listen address
+  http-address: 0.0.0.0:4180
+
+# Pod labels for Gatekeeper compliance
+podLabels:
+  app.kubernetes.io/name: oauth2-proxy
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+service:
+  type: ClusterIP
+  portNumber: 4180
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
+    external-dns.alpha.kubernetes.io/hostname: oauth.k8s.n37.ca
+    external-dns.alpha.kubernetes.io/ttl: "300"
+  hosts:
+    - oauth.k8s.n37.ca
+  tls:
+    - secretName: oauth2-proxy-tls
+      hosts:
+        - oauth.k8s.n37.ca
+
+# Prometheus metrics
+metrics:
+  enabled: true
+  servicemonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack

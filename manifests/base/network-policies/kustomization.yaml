@@ -26,6 +26,8 @@ resources:
   - chaos-mesh/network-policy.yaml
   # Container registry
   - zot/network-policy.yaml
+  # Authentication proxy
+  - oauth2-proxy/network-policy.yaml
   # Status monitoring
   - uptime-kuma/network-policy.yaml
   # Distributed tracing
