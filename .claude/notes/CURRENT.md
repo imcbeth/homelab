@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-04-23 (Session 2)
+**Last Updated:** 2026-04-23 (Session 3)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -61,6 +61,12 @@
 - **Gotcha:** First pull blocks until on-demand sync completes. ARM64 filter is critical — without it, all 12+ platform variants are downloaded (~41s for nginx:latest)
 - **PRs:** #571 (deployment), #572 (ingress-nginx egress fix + arm64 filter)
 
+**oauth2-proxy:** ✅ Deployed 2026-04-23 (PR #576)
+- GitHub OAuth provider, restricted to user `imcbeth`, cookie domain `.k8s.n37.ca`
+- Uptime Kuma (status.k8s.n37.ca) protected immediately
+- Add 3 annotations to any ingress to protect additional services
+- `auth-url` uses internal ClusterIP to avoid hairpin NAT
+
 **Uptime Kuma:** ✅ Deployed 2026-04-23 (PR #573)
 - Status page at https://status.k8s.n37.ca — monitors all cluster services
 - Helm chart v2.25.0 (app v1.23.17), 5Gi iSCSI PVC (synology-iscsi-delete), Recreate strategy
@@ -72,7 +78,7 @@
 - Grafana datasource auto-discovered; trace↔logs (Loki uid: loki) + trace↔metrics (Prometheus) correlation
 - Loki datasource given fixed `uid: loki` so cross-datasource links resolve
 
-**Network Policies:** Complete (21 namespaces, uptime-kuma + tempo added)
+**Network Policies:** Complete (22 namespaces, oauth2-proxy added)
 - Covered: localstack, unipoller, loki, trivy-system, velero, argo-workflows, cert-manager, external-dns, metallb-system, ingress-nginx, istio-system, gatekeeper-system, falco, default, argocd, synology-csi, kube-system, tigera-operator
 - Remaining uncovered: calico-system (Gatekeeper-exempted), kube-node-lease, kube-public, secrets-source, velero-test (all empty or system-managed)
 - DNS egress rules fixed across all policies (AND semantics, not OR)
@@ -88,7 +94,7 @@
 - NetworkPolicy enabled (PR #291 fixed K8s API egress)
 - UI accessible at https://workflows.k8s.n37.ca (PR #293)
 
-**ArgoCD:** 30 apps — all Synced+Healthy as of 2026-04-23 (chaos-mesh + zot + uptime-kuma + tempo added)
+**ArgoCD:** 31 apps — all Synced+Healthy as of 2026-04-23 (chaos-mesh + zot + uptime-kuma + tempo + oauth2-proxy added)
 - argo-cd chart 9.5.3, kube-prometheus-stack 83.7.0, external-dns v0.21.0, unipoller v2.39.0 (all updated 2026-04-21)
 - ingress-nginx migrated from Kustomize to Helm chart (v4.14.3) via ArgoCD
 - ServerSideApply drift fully resolved for istio-ztunnel and tigera-operator
@@ -161,6 +167,34 @@
 ---
 
 ## Recent Sessions
+
+### 2026-04-23 (Session 3): oauth2-proxy GitHub Authentication
+
+**Completed Work:**
+
+**oauth2-proxy (PR #576, merged):**
+- `manifests/applications/oauth2-proxy.yaml` — ArgoCD Application, sync-wave -3, three-source pattern
+- `manifests/base/oauth2-proxy/values.yaml` — GitHub provider, `github-user: imcbeth`, cookie domain `.k8s.n37.ca`, `upstream: static://202` (validate-only), `skip-provider-button: true`
+- `manifests/base/oauth2-proxy/oauth2-proxy-secret-sealed.yaml` — client-id, client-secret, cookie-secret sealed for `oauth2-proxy` namespace
+- `manifests/base/network-policies/oauth2-proxy/namespace.yaml` + `network-policy.yaml` — namespace pre-created for network-policies app (wave -40); ingress from ingress-nginx :4180; egress to GitHub API (0.0.0.0/0:443 excluding RFC1918)
+- Updated ingress-nginx NetworkPolicy: egress to oauth2-proxy :4180 for auth_request subrequests
+- Updated Uptime Kuma ingress: `auth-url` (internal ClusterIP), `auth-signin` (external), `auth-response-headers`
+
+**Key Gotchas:**
+- `auth-url` must use internal ClusterIP (`oauth2-proxy.oauth2-proxy.svc.cluster.local:4180`) not the external hostname — external URL causes hairpin NAT issues (same pattern as blackbox-exporter)
+- Always add `namespace.yaml` to `network-policies/` when adding a new namespace NetworkPolicy — the network-policies app runs at wave -40 before any app creates the namespace
+
+**Adding auth to future services:** Add these 3 annotations to any ingress:
+```
+nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.oauth2-proxy.svc.cluster.local:4180/oauth2/auth"
+nginx.ingress.kubernetes.io/auth-signin: "https://oauth.k8s.n37.ca/oauth2/start?rd=$escaped_request_uri"
+nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Email"
+```
+
+**Pull Requests:**
+- **PR #576:** [Merged] feat: deploy oauth2-proxy with GitHub authentication
+
+---
 
 ### 2026-04-23 (Session 2): Uptime Kuma, Grafana Tempo, Zot Docs
 
