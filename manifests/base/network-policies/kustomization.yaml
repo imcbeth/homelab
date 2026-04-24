@@ -26,6 +26,8 @@ resources:
   - chaos-mesh/network-policy.yaml
   # Container registry
   - zot/network-policy.yaml
+  # Status monitoring
+  - uptime-kuma/network-policy.yaml
   # Phase 6: Remaining namespaces
   - default/network-policy.yaml
   - default/calico-network-policy-allow-egress-icmp.yaml

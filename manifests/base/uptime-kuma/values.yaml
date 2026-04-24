@@ -1,0 +1,61 @@
+# Uptime Kuma Helm values
+# Chart: uptime-kuma/uptime-kuma v2.25.0 (app v1.23.17)
+# Cluster: 5x Raspberry Pi 5 (ARM64)
+# URL: https://status.k8s.n37.ca
+
+image:
+  repository: docker.io/louislam/uptime-kuma
+  tag: "1.23.17-debian"
+
+# Deployment (not StatefulSet) with Recreate strategy — RWO iSCSI PVC
+useDeploy: true
+
+strategy:
+  type: Recreate
+
+podLabels:
+  app.kubernetes.io/name: uptime-kuma
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# iSCSI-backed persistence on Synology NAS
+volume:
+  enabled: true
+  storageClassName: synology-iscsi-delete
+  accessMode: ReadWriteOnce
+  size: 5Gi
+
+service:
+  type: ClusterIP
+  port: 3001
+
+ingress:
+  enabled: true
+  # className key not supported in this chart version — use annotation
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
+    external-dns.alpha.kubernetes.io/hostname: status.k8s.n37.ca
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    # WebSocket support required for Uptime Kuma real-time updates.
+    # ingress-nginx handles WebSocket upgrades natively — proxy-read-timeout
+    # and proxy-send-timeout keep the connection alive for long-lived sockets.
+    # Avoid snippet annotations: allow-snippet-annotations is disabled by
+    # default since ingress-nginx v1.9 (CVE-2021-25742).
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  hosts:
+    - host: status.k8s.n37.ca
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: uptime-kuma-tls
+      hosts:
+        - status.k8s.n37.ca

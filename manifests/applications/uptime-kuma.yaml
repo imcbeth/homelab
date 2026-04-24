@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: uptime-kuma
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: infrastructure
+  sources:
+    - repoURL: https://dirsigler.github.io/uptime-kuma-helm
+      chart: uptime-kuma
+      targetRevision: 2.25.0
+      helm:
+        valueFiles:
+          - $values/manifests/base/uptime-kuma/values.yaml
+    - repoURL: git@github.com:imcbeth/homelab.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: uptime-kuma
+  ignoreDifferences:
+    # Kubernetes-defaulted fields
+    - group: apps
+      kind: Deployment
+      jqPathExpressions:
+        - .spec.template.spec.containers[].imagePullPolicy
+        - .spec.revisionHistoryLimit
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
