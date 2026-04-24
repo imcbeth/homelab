@@ -5,8 +5,7 @@
 # Ingress URL: https://oauth.k8s.n37.ca
 
 image:
-  registry: ""
-  repository: quay.io/oauth2-proxy/oauth2-proxy
+  repository: oauth2-proxy/oauth2-proxy
 
 # Reference the SealedSecret (keys: client-id, client-secret, cookie-secret)
 config:
