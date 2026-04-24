@@ -18,26 +18,29 @@ data:
         editable: true
         jsonData:
           httpMethod: GET
-          # Link traces to Loki logs
-          derivedFields:
-            - datasourceUid: loki
-              matcherRegex: "traceID=(\\w+)"
-              name: TraceID
-              url: "$${__value.raw}"
-              urlDisplayLabel: View in Tempo
-          # Link traces to Prometheus metrics
+          # Trace → Logs correlation (tracesToLogs is the Tempo datasource field;
+          # derivedFields belongs on the Loki datasource for log → trace links)
+          tracesToLogs:
+            datasourceUid: loki
+            tags:
+              - key: service.name
+                value: service_name
+            spanStartTimeShift: "-1h"
+            spanEndTimeShift: "1h"
+            filterByTraceID: false
+            filterBySpanID: false
+          # Trace → Metrics correlation
           tracesToMetrics:
             datasourceUid: prometheus
             tags:
               - key: service.name
                 value: service_name
-          # Enable service graph view
+          # Service graph view (requires Tempo metrics generator or Prometheus)
           serviceMap:
             datasourceUid: prometheus
           # Node graph visualization
           nodeGraph:
             enabled: true
-          # Search configuration
           search:
             hide: false
           lokiSearch:

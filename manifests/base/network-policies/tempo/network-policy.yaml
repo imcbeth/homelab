@@ -12,7 +12,10 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # OTLP gRPC traces from Alloy (runs in loki namespace as DaemonSet)
+    # OTLP traces from Alloy (runs in loki namespace as DaemonSet).
+    # Alloy is the single OTLP collector — application pods send traces to
+    # Alloy (:4317), which forwards them here. Direct-to-Tempo paths are
+    # intentionally not allowed; route all traces through Alloy.
     - from:
         - namespaceSelector:
             matchLabels:

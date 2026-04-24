@@ -10,16 +10,21 @@ metadata:
 spec:
   project: infrastructure
   sources:
+    # Tempo Helm chart
     - repoURL: https://grafana.github.io/helm-charts
       chart: tempo
       targetRevision: 1.24.4
       helm:
         valueFiles:
           - $values/manifests/base/tempo/values.yaml
+    # Values reference from homelab repo (no path — only provides $values)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      targetRevision: HEAD
+      ref: values
+    # Additional manifests (Grafana datasource ConfigMap)
     - repoURL: git@github.com:imcbeth/homelab.git
       path: manifests/base/tempo
       targetRevision: HEAD
-      ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: tempo
