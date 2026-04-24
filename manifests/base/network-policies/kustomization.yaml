@@ -27,6 +27,7 @@ resources:
   # Container registry
   - zot/network-policy.yaml
   # Authentication proxy
+  - oauth2-proxy/namespace.yaml
   - oauth2-proxy/network-policy.yaml
   # Status monitoring
   - uptime-kuma/network-policy.yaml
