@@ -1,9 +1,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - servicemonitor.yaml
   - prometheusrule.yaml
   # uptime-kuma-metrics-token-sealed.yaml is intentionally excluded:
   # ArgoCD's bundled kustomize fails to parse bitnami.com/v1alpha1 SealedSecrets
   # (MalformedYAMLError on encrypted binary data). Apply manually:
   #   kubectl apply -f manifests/base/uptime-kuma/uptime-kuma-metrics-token-sealed.yaml
+  #
+  # ServiceMonitor and token secret are in manifests/base/kube-prometheus-stack/
+  # (default namespace) so Prometheus Operator RBAC can read the token secret.
