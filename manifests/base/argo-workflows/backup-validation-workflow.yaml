@@ -86,7 +86,7 @@ spec:
       # -----------------------------------------------------------------------
       - name: check-bsl
         container:
-          image: bitnami/kubectl:latest
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [sh, -c]
           args:
             - |
@@ -106,7 +106,7 @@ spec:
       # -----------------------------------------------------------------------
       - name: create-test-resources
         container:
-          image: bitnami/kubectl:latest
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [sh, -c]
           args:
             - |
@@ -131,7 +131,7 @@ spec:
       # -----------------------------------------------------------------------
       - name: create-backup
         container:
-          image: bitnami/kubectl:latest
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [sh, -c]
           args:
             - |
@@ -161,7 +161,7 @@ spec:
       # -----------------------------------------------------------------------
       - name: wait-for-backup
         container:
-          image: bitnami/kubectl:latest
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [sh, -c]
           args:
             - |
@@ -195,7 +195,7 @@ spec:
       # -----------------------------------------------------------------------
       - name: delete-test-namespace
         container:
-          image: bitnami/kubectl:latest
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [sh, -c]
           args:
             - |
@@ -209,7 +209,7 @@ spec:
       # -----------------------------------------------------------------------
       - name: create-restore
         container:
-          image: bitnami/kubectl:latest
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [sh, -c]
           args:
             - |
@@ -238,7 +238,7 @@ spec:
       # -----------------------------------------------------------------------
       - name: wait-for-restore
         container:
-          image: bitnami/kubectl:latest
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [sh, -c]
           args:
             - |
@@ -270,7 +270,7 @@ spec:
       # -----------------------------------------------------------------------
       - name: verify-restore
         container:
-          image: bitnami/kubectl:latest
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [sh, -c]
           args:
             - |
@@ -299,7 +299,7 @@ spec:
       # -----------------------------------------------------------------------
       - name: cleanup
         container:
-          image: bitnami/kubectl:latest
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [sh, -c]
           args:
             - |
