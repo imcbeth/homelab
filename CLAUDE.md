@@ -61,16 +61,16 @@ For all cluster reads/queries, prefer MCP tools over `kubectl` via Bash:
 Reserve `kubectl` via Bash for writes, port-forwards, and operations not covered by MCP.
 
 ### Conflict Resolution on PRs
-Use `git rebase origin/main` (not merge) for conflict resolution. Verify the current branch and target remote, then use `git push --force-with-lease`. No confirmation needed before the force-push.
+Use `git rebase origin/main` (not merge) for conflict resolution, then `git push --force-with-lease`. No confirmation needed before the force-push.
 
 ## Secrets
 
 All secrets managed via SealedSecrets (GitOps-compatible). Seal with:
 ```bash
 kubeseal --cert <(kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
-  -o jsonpath='{.items[0].data.tls\.crt}' | base64 -d) --format yaml < secret.yaml > app-credentials-sealed.yaml
+  -o jsonpath='{.items[0].data.tls\.crt}' | base64 -d) --format yaml < secret.yaml > sealed-secret.yaml
 ```
-Sealed files must be named `*-sealed.yaml` — this excludes them from yamllint (SealedSecrets contain long base64 values that fail linting) and avoids the `.gitattributes` `*secret*` git-crypt rule.
+Sealed files must be named `*-sealed.yaml` to pass pre-commit yamllint line-length checks.
 
 ## Cluster Quick Reference
 
@@ -111,4 +111,4 @@ Sealed files must be named `*-sealed.yaml` — this excludes them from yamllint 
 
 ## Documentation Companion Repo
 
-Application guides live in the Docusaurus documentation companion repo/site. If you have a local checkout, it may be located at `~/k8s-docs-n37`, but treat that as an optional machine-specific path rather than the canonical location. After making significant changes to an application, update the corresponding `docs/applications/<app>.md` file there. Active branch: `docs/april-2026-updates`.
+Application guides live in `~/k8s-docs-n37` (Docusaurus site). After making significant changes to an application, update the corresponding `docs/applications/<app>.md` file there. Active branch: `docs/april-2026-updates`.
