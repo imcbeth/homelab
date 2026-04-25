@@ -2,11 +2,14 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: uptime-kuma
-  namespace: uptime-kuma
+  namespace: default
   labels:
     release: kube-prometheus-stack
     app.kubernetes.io/name: uptime-kuma
 spec:
+  namespaceSelector:
+    matchNames:
+      - uptime-kuma
   selector:
     matchLabels:
       app.kubernetes.io/name: uptime-kuma
