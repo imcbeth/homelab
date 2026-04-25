@@ -19,6 +19,9 @@ spec:
     - repoURL: git@github.com:imcbeth/homelab.git
       targetRevision: HEAD
       ref: values
+    - repoURL: git@github.com:imcbeth/homelab.git
+      targetRevision: HEAD
+      path: manifests/base/uptime-kuma
   destination:
     server: https://kubernetes.default.svc
     namespace: uptime-kuma
