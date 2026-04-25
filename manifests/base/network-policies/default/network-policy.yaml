@@ -148,6 +148,8 @@ spec:
         - protocol: TCP
           port: 3000   # grafana
         - protocol: TCP
+          port: 3001   # uptime-kuma metrics
+        - protocol: TCP
           port: 443    # operator webhooks
         - protocol: TCP
           port: 5443   # calico-apiserver
