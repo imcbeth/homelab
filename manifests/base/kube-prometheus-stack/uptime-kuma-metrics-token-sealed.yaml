@@ -1,0 +1,13 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: uptime-kuma-metrics-token
+  namespace: default
+spec:
+  encryptedData:
+    token: AgAiPvBG+5cFPYH+Hs6EQeA5hUpQgFp9vPOOeLXtXj/Wpu+fGJLSbc03N225shkh7e01PJcZzK+L/LJYXpP9D+1YnSwti+co8wCmXf40B5GQHnzB50YoroX7lNYqSnS+eoHFf5uJcq0HQhoujXncV5fQ9RHotp7ZIgoPFDXUXHFN8lDwZ531OzZcVs0LzMhnWl+RRw6wJsKGSb3k+f8VoCAB3kJT6egZS6IX+sWSf63W5jGIT4XmzU+ouy3P/6RAHr1+LyCqcM27FFIK4aKL96yrkayvY0uT3DTmtFSos26E0yNlDAMr/5UlfHQYvBcrVCMG5gR7oV4JEyqKrChLdOJuw2jEatJNY9RulFd56E4YK0HYZ/HibAZGmKXM+o8f+bpx7FEfYUZRi0l/6HX22Tga5Lx0I2ylzhbn9cFdroTwM5hlC4Napb8KgvXucEjdSwRsvaHMDVAZsZnX8ETxr9L0rD9vHBcKaLwS/EWige5bCbt+dNugpvqIbwQZ4l1rcNyta2OfXm0y+5mChIQj2V24oaOugc5ICWFfPU3DYA8PIX9sxDbrBeWE8TTuNWNx3gdzTkcBHQ9YoFgF5DTS/kl3TqZZFnWzcq/ZjucCMEKdZ3JpDy81S47dJdeCrc6oXJnDDFAY5TnSj2Jj2VWjEt0Bj3Xmj0WJL2nySU3Dt1snTdC2/xa/xmszQ8Y7Dj97dmLLsghm9c/vLZxSituFPM29ENN+aUmNqHkU4PDEgxJN3nzGyGd856Lo1tOhTw==
+  template:
+    metadata:
+      name: uptime-kuma-metrics-token
+      namespace: default

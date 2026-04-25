@@ -24,3 +24,5 @@ resources:
   - apm-alerts.yaml
   - ingress-nginx-alerts.yaml
   - calico-kube-controllers-servicemonitor.yaml
+  - uptime-kuma-servicemonitor.yaml
+  - uptime-kuma-metrics-token-sealed.yaml
