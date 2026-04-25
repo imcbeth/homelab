@@ -30,7 +30,7 @@ spec:
           restartPolicy: OnFailure
           containers:
           - name: reporter
-            image: bitnami/kubectl:latest
+            image: registry.k8s.n37.ca/bitnami/kubectl:latest
             resources:
               requests:
                 cpu: 50m

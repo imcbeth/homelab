@@ -44,6 +44,17 @@ configFiles:
           "htpasswd": {
             "path": "/secret/htpasswd"
           }
+        },
+        "accessControl": {
+          "repositories": {
+            "**": {
+              "anonymousPolicy": ["read"]
+            }
+          },
+          "adminPolicy": {
+            "users": ["admin"],
+            "actions": ["read", "create", "update", "delete"]
+          }
         }
       },
       "log": {
