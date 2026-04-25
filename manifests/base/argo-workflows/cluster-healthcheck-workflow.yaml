@@ -116,9 +116,15 @@ spec:
           command: [bash]
           source: |
             set -uo pipefail
+            # Only flag pods that have been non-Running/Succeeded for >5 minutes.
+            # This prevents false positives from transient workflow step pods (e.g.
+            # this workflow's own sibling pods) that are still pulling images on startup.
             BAD=$(kubectl get pods --all-namespaces \
               --field-selector='status.phase!=Running,status.phase!=Succeeded' \
-              -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{"="}{.status.phase}{"\n"}{end}' \
+              -o json 2>/dev/null | \
+              jq -r '.items[] |
+                select((now - (.metadata.creationTimestamp | fromdateiso8601)) > 300) |
+                "\(.metadata.namespace)/\(.metadata.name)=\(.status.phase)"' \
               2>/dev/null | grep -v "^$" || echo "")
             # Also catch CrashLoopBackOff / Error pods that show as Running
             CRASH=$(kubectl get pods --all-namespaces \
