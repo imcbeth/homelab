@@ -21,14 +21,15 @@ server:
 controller:
   replicas: 2 # Increase the number of application controller replicas
   # Resource limits for application controller
-  # OOMKilled 13 times in 46h at 1Gi — 25 apps need more headroom
+  # OOMKilled at 1Gi (25 apps) → bumped to 1536Mi; OOMKilled again at 1536Mi (31 apps, v3.3.8)
+  # Gatekeeper max is 2Gi — bumped to 2Gi 2026-04-25
   resources:
     requests:
       cpu: 100m
-      memory: 512Mi
+      memory: 1Gi
     limits:
       cpu: 500m
-      memory: 1536Mi
+      memory: 2Gi
   metrics:
     enabled: true
     serviceMonitor:
