@@ -68,9 +68,9 @@ Use `git rebase origin/main` (not merge) for conflict resolution, then `git push
 All secrets managed via SealedSecrets (GitOps-compatible). Seal with:
 ```bash
 kubeseal --cert <(kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
-  -o jsonpath='{.items[0].data.tls\.crt}' | base64 -d) --format yaml < secret.yaml > app-credentials-sealed.yaml
+  -o jsonpath='{.items[0].data.tls\.crt}' | base64 -d) --format yaml < secret.yaml > sealed-secret.yaml
 ```
-Sealed files must be named `*-sealed.yaml` — this excludes them from yamllint (SealedSecrets contain long base64 values that fail linting) and avoids the `.gitattributes` `*secret*` git-crypt rule.
+Sealed files must be named `*-sealed.yaml` to pass pre-commit yamllint line-length checks.
 
 ## Cluster Quick Reference
 
