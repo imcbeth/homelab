@@ -5,6 +5,7 @@ metadata:
   namespace: uptime-kuma
   labels:
     release: kube-prometheus-stack
+    app.kubernetes.io/name: uptime-kuma
 spec:
   selector:
     matchLabels:

@@ -27,7 +27,7 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "TLS cert for {{ $labels.monitor_name }} expires in {{ $value | humanizeDuration }}"
+            summary: "TLS cert for {{ $labels.monitor_name }} expires in {{ $value }} days"
             description: >-
               The TLS certificate for '{{ $labels.monitor_name }}' ({{ $labels.monitor_url }})
               expires in less than 14 days ({{ $value }} days remaining).

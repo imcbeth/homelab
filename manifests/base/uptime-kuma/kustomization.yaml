@@ -3,3 +3,7 @@ kind: Kustomization
 resources:
   - servicemonitor.yaml
   - prometheusrule.yaml
+  # uptime-kuma-metrics-token-sealed.yaml is intentionally excluded:
+  # ArgoCD's bundled kustomize fails to parse bitnami.com/v1alpha1 SealedSecrets
+  # (MalformedYAMLError on encrypted binary data). Apply manually:
+  #   kubectl apply -f manifests/base/uptime-kuma/uptime-kuma-metrics-token-sealed.yaml
