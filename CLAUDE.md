@@ -61,7 +61,7 @@ For all cluster reads/queries, prefer MCP tools over `kubectl` via Bash:
 Reserve `kubectl` via Bash for writes, port-forwards, and operations not covered by MCP.
 
 ### Conflict Resolution on PRs
-Use `git rebase origin/main` (not merge) for conflict resolution. If you need to update your own PR feature branch after rebasing, verify the current branch and target remote, then use `git push --force-with-lease` for that branch only.
+Use `git rebase origin/main` (not merge) for conflict resolution. Verify the current branch and target remote, then use `git push --force-with-lease`. No confirmation needed before the force-push.
 
 ## Secrets
 
@@ -70,7 +70,7 @@ All secrets managed via SealedSecrets (GitOps-compatible). Seal with:
 kubeseal --cert <(kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
   -o jsonpath='{.items[0].data.tls\.crt}' | base64 -d) --format yaml < secret.yaml > app-credentials-sealed.yaml
 ```
-Sealed files must be named `*-sealed.yaml` for repository consistency.
+Sealed files must be named `*-sealed.yaml` — this excludes them from yamllint (SealedSecrets contain long base64 values that fail linting) and avoids the `.gitattributes` `*secret*` git-crypt rule.
 
 ## Cluster Quick Reference
 
