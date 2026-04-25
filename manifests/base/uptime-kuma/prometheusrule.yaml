@@ -1,0 +1,33 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: uptime-kuma
+      interval: 60s
+      rules:
+        - alert: UptimeKumaMonitorDown
+          expr: monitor_status == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Monitor {{ $labels.monitor_name }} is down"
+            description: >-
+              Uptime Kuma monitor '{{ $labels.monitor_name }}' ({{ $labels.monitor_type }}:
+              {{ $labels.monitor_url }}) has been reporting DOWN for more than 2 minutes.
+
+        - alert: UptimeKumaMonitorCertExpirySoon
+          expr: monitor_cert_days_remaining > 0 and monitor_cert_days_remaining < 14
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "TLS cert for {{ $labels.monitor_name }} expires in {{ $value }} days"
+            description: >-
+              The TLS certificate for '{{ $labels.monitor_name }}' ({{ $labels.monitor_url }})
+              expires in less than 14 days ({{ $value }} days remaining).
