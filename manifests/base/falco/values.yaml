@@ -176,13 +176,14 @@ falcosidekick:
   enabled: true
 
   # Resource limits for sidekick
+  # Bumped memory limit from 64Mi → 128Mi after both replicas OOMKilled 2026-04-08
   resources:
     requests:
       cpu: 10m
-      memory: 32Mi
+      memory: 64Mi
     limits:
       cpu: 100m
-      memory: 64Mi
+      memory: 128Mi
 
   # Web UI for viewing alerts
   webui:
