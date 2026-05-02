@@ -144,7 +144,8 @@
   ],
   "ignoreDeps": [
     "synology-csi",
-    "registry.k8s.io/ingress-nginx/kube-webhook-certgen"
+    "registry.k8s.io/ingress-nginx/kube-webhook-certgen",
+    "golift/unifi-poller"
   ],
   "vulnerabilityAlerts": {
     "enabled": true,
