@@ -16,9 +16,8 @@ spec:
         releaseName: argo-workflows
         valueFiles:
           - $values/manifests/base/argo-workflows/values.yaml
-    # Values file reference
+    # Values file reference (ref only — no path, to avoid duplicate manifest rendering)
     - repoURL: git@github.com:imcbeth/homelab.git
-      path: manifests/base/argo-workflows
       targetRevision: HEAD
       ref: values
     # Additional resources (SealedSecret, WorkflowTemplates)
