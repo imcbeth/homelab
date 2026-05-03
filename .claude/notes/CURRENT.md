@@ -53,13 +53,16 @@
 - Weekend schedule (Sat/Sun 6am-9pm)
 - Grouped updates: ArgoCD, monitoring, networking, security, backup
 
-**Zot OCI Registry:** ✅ Deployed 2026-04-23
+**Zot OCI Registry:** ✅ Deployed 2026-04-23, extended 2026-04-25 (PR #595)
 - Pull-through cache: Docker Hub, GHCR, quay.io, registry.k8s.io
 - ARM64-only sync (`platforms: [{os: linux, arch: arm64}]`) — fast first-pulls (~seconds vs ~41s for multi-platform)
 - CVE scanning (built-in Trivy, 2h update interval), Prometheus ServiceMonitor, 50Gi iSCSI PVC
 - URL: https://registry.k8s.n37.ca — auth: `admin` + SealedSecret htpasswd
+- **Anonymous read enabled:** `accessControl.repositories["**"].anonymousPolicy: ["read"]` — pods pull without imagePullSecrets; admin write remains restricted
+- Workloads routing through Zot: both argo-workflow CronWorkflows, trivy compliance-reporter, all 3 external-dns deployments (19 image refs)
 - **Gotcha:** First pull blocks until on-demand sync completes. ARM64 filter is critical — without it, all 12+ platform variants are downloaded (~41s for nginx:latest)
-- **PRs:** #571 (deployment), #572 (ingress-nginx egress fix + arm64 filter)
+- **Gotcha:** Path format is flat (no upstream prefix). `registry.k8s.n37.ca/registry.k8s.io/image` would require Zot `destination` field in sync config — without it, that path fails. Use `registry.k8s.n37.ca/image` directly.
+- **PRs:** #571 (deployment), #572 (ingress-nginx egress fix + arm64 filter), #595 (anonymous read + workload routing)
 
 **oauth2-proxy:** ✅ Deployed 2026-04-23 (PR #576)
 - GitHub OAuth provider, restricted to user `imcbeth`, cookie domain `.k8s.n37.ca`
@@ -168,6 +171,41 @@
 
 ## Recent Sessions
 
+### 2026-05-02/03: ArgoCD SSO Fix, chaos-mesh Recovery, Argo Workflows v4, oauth2-proxy Login Fix
+
+**Completed Work:**
+
+**ArgoCD GitHub SSO — users saw no apps after login (PR #609, merged):**
+- Root cause: default `scopes: '[groups]'` + empty GitHub `groups` claim = `g, imcbeth, role:admin` never fired
+- Fix: added `scopes: '[preferred_username]'` to `manifests/base/argocd/argocd-config.yaml`
+
+**chaos-mesh — all pods on node04 crashing (node04 image corruption):**
+- Root cause: containerd content store corruption on node04; chaos-mesh images resolved to `pause:latest`
+- Fix: tainted node04 → deleted Deployment pods → `crictl rmi` all chaos-mesh images via debug pod → untainted → fresh pull
+
+**Argo Workflows v4 CronWorkflow fix (PR #610, open):**
+- Root cause: v4.0 renamed `schedule:` (string) → `schedules:` (array); both CronWorkflows used old format → silently never fired
+- Fix: updated both `cluster-healthcheck-workflow.yaml` and `backup-validation-workflow.yaml`
+- Also fixed: removed `path:` from ref-only source in `manifests/applications/argo-workflows.yaml` to stop duplicate resource warnings
+- **Pending merge + `kubectl apply -f manifests/applications/argo-workflows.yaml`**
+
+**oauth2-proxy login redirect — all 3 protected ingresses returned blank 401 (PR #611, merged):**
+- Root cause: `$escaped_request_uri` not in ingress-nginx v1.14.3 nginx variable allowlist → auth-signin annotation silently rejected → no `error_page 401` redirect generated in nginx.conf
+- Fix: changed `$scheme%3A%2F%2F$host$escaped_request_uri` → `$scheme://$host$uri` in all 3 ingresses
+- Used `$uri` (not `$request_uri`) to avoid `&` in query strings breaking the `rd=` parameter
+- Affected: `argo-workflows/argo-workflows-ingress`, `falco/falco-ui-ingress`, `uptime-kuma/values.yaml`
+
+**Key Gotchas:**
+- ingress-nginx v1.14.x has a strict nginx variable allowlist for `auth-signin`; `$escaped_request_uri` is NOT on it → annotation silently rejected, no redirect generated
+- Use `$scheme://$host$uri` (not `$request_uri`) in `auth-signin` `rd=` param to avoid `&` in query strings breaking redirect
+
+**Pull Requests:**
+- **PR #609:** [Merged] fix: set argocd rbac scopes to preferred_username for GitHub SSO
+- **PR #610:** [Open] fix: update CronWorkflows to v4 schedules array, fix duplicate resources — needs merge + kubectl apply
+- **PR #611:** [Merged] fix: replace $escaped_request_uri with $uri in oauth2-proxy auth-signin
+
+---
+
 ### 2026-04-23 (Session 3): oauth2-proxy GitHub Authentication
 
 **Completed Work:**
@@ -187,9 +225,10 @@
 **Adding auth to future services:** Add these 3 annotations to any ingress:
 ```
 nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.oauth2-proxy.svc.cluster.local:4180/oauth2/auth"
-nginx.ingress.kubernetes.io/auth-signin: "https://oauth.k8s.n37.ca/oauth2/start?rd=$escaped_request_uri"
+nginx.ingress.kubernetes.io/auth-signin: "https://oauth.k8s.n37.ca/oauth2/start?rd=$scheme://$host$uri"
 nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Email"
 ```
+Note: `$escaped_request_uri` is NOT in ingress-nginx v1.14.x's allowlist — use `$uri` (path only). `$request_uri` works but breaks if the URL has `&` in query params.
 
 **Pull Requests:**
 - **PR #576:** [Merged] feat: deploy oauth2-proxy with GitHub authentication
