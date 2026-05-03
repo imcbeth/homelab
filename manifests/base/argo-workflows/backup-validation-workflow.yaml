@@ -20,7 +20,8 @@ metadata:
     app.kubernetes.io/name: velero-backup-validation
     app.kubernetes.io/component: dr-validation
 spec:
-  schedule: "0 6 1 * *"
+  schedules:
+    - "0 6 1 * *"
   timezone: "America/Edmonton"
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300

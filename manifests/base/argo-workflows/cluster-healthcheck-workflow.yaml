@@ -22,7 +22,8 @@ metadata:
     app.kubernetes.io/name: cluster-healthcheck
     app.kubernetes.io/component: monitoring
 spec:
-  schedule: "0 6 * * *"
+  schedules:
+    - "0 6 * * *"
   timezone: "America/Edmonton"
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 600
