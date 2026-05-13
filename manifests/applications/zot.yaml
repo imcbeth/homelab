@@ -15,7 +15,7 @@ spec:
     # Zot Helm chart
     - repoURL: https://zotregistry.dev/helm-charts
       chart: zot
-      targetRevision: 0.1.112
+      targetRevision: 0.1.113
       helm:
         valueFiles:
           - $values/manifests/base/zot/values.yaml
