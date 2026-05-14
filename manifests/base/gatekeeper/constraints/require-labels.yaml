@@ -22,6 +22,10 @@ spec:
       - localstack
       - trivy-system
       - chaos-mesh
+      - strimzi-system
+      - kafka
+      - flink-operator
+      - flink-demo
   parameters:
     labels:
       - "app.kubernetes.io/name"
