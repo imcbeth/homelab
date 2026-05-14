@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flink-test-data
+  namespace: flink-demo
+  labels:
+    app.kubernetes.io/name: flink-demo
+    app.kubernetes.io/component: test-data
+data:
+  sales-data.csv: |
+    id,product,category,price,quantity,timestamp
+    1,Widget Pro 3000,Electronics,299.99,5,2026-05-01T09:00:00Z
+    2,Mechanical Keyboard,Electronics,149.99,12,2026-05-01T09:05:00Z
+    3,USB-C Hub 7-port,Electronics,49.99,30,2026-05-01T09:10:00Z
+    4,Noise-Cancelling Headphones,Electronics,399.00,8,2026-05-01T09:15:00Z
+    5,Raspberry Pi 5 16GB,Electronics,120.00,25,2026-05-01T09:20:00Z
+    6,Ergonomic Chair,Office,549.00,3,2026-05-01T10:00:00Z
+    7,Standing Desk 60in,Office,799.99,2,2026-05-01T10:05:00Z
+    8,Monitor Arm Dual,Office,89.99,10,2026-05-01T10:10:00Z
+    9,Whiteboard 4x3,Office,129.00,5,2026-05-01T10:15:00Z
+    10,Webcam 4K,Office,199.99,15,2026-05-01T10:20:00Z
+    11,Python Crash Course,Books,39.99,50,2026-05-01T11:00:00Z
+    12,Kubernetes in Action,Books,59.99,20,2026-05-01T11:05:00Z
+    13,Designing Data-Intensive Apps,Books,54.99,35,2026-05-01T11:10:00Z
+    14,The Pragmatic Programmer,Books,49.99,28,2026-05-01T11:15:00Z
+    15,SSD 2TB NVMe,Storage,179.99,18,2026-05-01T12:00:00Z

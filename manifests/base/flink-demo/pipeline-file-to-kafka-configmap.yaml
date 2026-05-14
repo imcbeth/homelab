@@ -1,0 +1,130 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flink-pipeline-file-to-kafka
+  namespace: flink-demo
+  labels:
+    app.kubernetes.io/name: flink-demo
+    app.kubernetes.io/component: pipeline-script
+data:
+  pipeline_file_to_kafka.py: |
+    #!/usr/bin/env python3
+    """
+    File-to-Kafka Pipeline
+    Reads sales data from a CSV file and publishes each row to a Kafka topic as a JSON event.
+    Runs as a Flink Application mode job — terminates after all records are published.
+    """
+    import json
+    import logging
+    import os
+    from datetime import datetime, timezone
+
+    from pyflink.common import SimpleStringSchema
+    from pyflink.datastream import StreamExecutionEnvironment
+    from pyflink.datastream.connectors.kafka import (
+        DeliveryGuarantee,
+        KafkaRecordSerializationSchema,
+        KafkaSink,
+    )
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+    )
+    logger = logging.getLogger("file-to-kafka")
+
+    KAFKA_BROKERS = os.getenv(
+        "KAFKA_BOOTSTRAP_SERVERS",
+        "kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092",
+    )
+    KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "flink-events")
+    DATA_FILE = os.getenv("DATA_FILE", "/opt/flink/data/sales-data.csv")
+
+
+    def read_csv_records(path):
+        logger.info("Opening CSV file: %s", path)
+        with open(path) as f:
+            lines = f.readlines()
+
+        if len(lines) < 2:
+            raise ValueError(f"CSV file has no data rows: {path}")
+
+        header = [col.strip() for col in lines[0].split(",")]
+        logger.info("CSV columns: %s", header)
+
+        records = []
+        for i, line in enumerate(lines[1:], start=1):
+            line = line.strip()
+            if not line:
+                continue
+            values = [v.strip() for v in line.split(",")]
+            if len(values) != len(header):
+                logger.warning(
+                    "Row %d: column mismatch (expected %d, got %d) — skipping: %r",
+                    i, len(header), len(values), line,
+                )
+                continue
+            record = dict(zip(header, values))
+            record["pipeline_stage"] = "file-to-kafka"
+            record["ingested_at"] = datetime.now(timezone.utc).isoformat()
+            payload = json.dumps(record)
+            records.append(payload)
+            logger.info(
+                "Row %d | id=%-4s  product=%-22s  category=%-15s  price=$%-8s  qty=%s",
+                i,
+                record.get("id", "?"),
+                record.get("product", "?"),
+                record.get("category", "?"),
+                record.get("price", "?"),
+                record.get("quantity", "?"),
+            )
+
+        logger.info("Total records parsed: %d", len(records))
+        return records
+
+
+    def main():
+        logger.info("=" * 70)
+        logger.info("Flink Pipeline: File -> Kafka")
+        logger.info("  File  : %s", DATA_FILE)
+        logger.info("  Broker: %s", KAFKA_BROKERS)
+        logger.info("  Topic : %s", KAFKA_TOPIC)
+        logger.info("=" * 70)
+
+        records = read_csv_records(DATA_FILE)
+        if not records:
+            logger.error("No valid records to publish — exiting")
+            return
+
+        env = StreamExecutionEnvironment.get_execution_environment()
+        env.set_parallelism(1)
+
+        logger.info("Creating in-memory data stream from %d records", len(records))
+        stream = env.from_collection(records)
+
+        logger.info("Configuring Kafka sink -> topic=%s (AT_LEAST_ONCE)", KAFKA_TOPIC)
+        sink = (
+            KafkaSink.builder()
+            .set_bootstrap_servers(KAFKA_BROKERS)
+            .set_record_serializer(
+                KafkaRecordSerializationSchema.builder()
+                .set_topic(KAFKA_TOPIC)
+                .set_value_serialization_schema(SimpleStringSchema())
+                .build()
+            )
+            .set_delivery_guarantee(DeliveryGuarantee.AT_LEAST_ONCE)
+            .build()
+        )
+
+        stream.sink_to(sink)
+
+        logger.info("Submitting Flink job 'file-to-kafka'...")
+        env.execute("file-to-kafka")
+
+        logger.info("=" * 70)
+        logger.info("Job complete — %d records published to topic '%s'", len(records), KAFKA_TOPIC)
+        logger.info("=" * 70)
+
+
+    if __name__ == "__main__":
+        main()

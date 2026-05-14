@@ -32,6 +32,12 @@ resources:
   # Flink operator
   - flink-operator/namespace.yaml
   - flink-operator/network-policy.yaml
+  # Kafka message broker
+  - kafka/namespace.yaml
+  - kafka/network-policy.yaml
+  # Flink streaming jobs
+  - flink-demo/namespace.yaml
+  - flink-demo/network-policy.yaml
   # Authentication proxy
   - oauth2-proxy/namespace.yaml
   - oauth2-proxy/network-policy.yaml

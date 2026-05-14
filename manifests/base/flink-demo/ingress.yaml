@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flink-demo
+  namespace: flink-demo
+  labels:
+    app.kubernetes.io/name: flink-demo
+    app.kubernetes.io/component: ingress
+  annotations:
+    # TLS via cert-manager (Let's Encrypt)
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # GitHub SSO via oauth2-proxy
+    nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.oauth2-proxy.svc.cluster.local/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://oauth.k8s.n37.ca/oauth2/start?rd=$scheme://$host$uri"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Email"
+    # Flink UI uses long-polling WebSocket connections
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - flink.k8s.n37.ca
+      secretName: flink-demo-tls
+  rules:
+    - host: flink.k8s.n37.ca
+      http:
+        paths:
+          # file-to-kafka Flink UI (port 8081 on the REST service)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: file-to-kafka-rest
+                port:
+                  number: 8081

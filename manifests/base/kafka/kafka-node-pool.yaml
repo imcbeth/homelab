@@ -1,0 +1,25 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: combined
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: kafka-cluster
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: kafka-node-pool
+spec:
+  # Single combined broker+controller node (KRaft, no ZooKeeper)
+  replicas: 1
+  roles:
+    - controller
+    - broker
+  storage:
+    # Ephemeral — demo data is transient; use persistent for production
+    type: ephemeral
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi

@@ -1,0 +1,100 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-network-policy
+  namespace: kafka
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Istio ambient mesh HBONE tunnel (ztunnel rewrites dest port to 15008)
+    - ports:
+        - protocol: TCP
+          port: 15008
+
+    # ztunnel link-local health probes
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+
+    # Kafka clients from Flink demo jobs (producer and consumer)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: flink-demo
+      ports:
+        - protocol: TCP
+          port: 9092  # Kafka plain listener
+
+    # Inter-broker and KRaft controller communication within kafka namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kafka
+      ports:
+        - protocol: TCP
+          port: 9092  # Kafka listener
+        - protocol: TCP
+          port: 9094  # KRaft inter-controller
+        - protocol: TCP
+          port: 9404  # Prometheus JMX metrics (if enabled)
+
+  egress:
+    # DNS resolution via kube-dns
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Kubernetes API server (ClusterIP)
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # Kubernetes API server (control plane nodes)
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    # Istio ambient mesh communication (ztunnel, istiod)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 15008  # ztunnel HBONE
+        - protocol: TCP
+          port: 15012  # istiod gRPC
+        - protocol: TCP
+          port: 15017  # istiod webhook
+
+    # Inter-broker and KRaft controller communication within kafka namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+        - protocol: TCP
+          port: 9094

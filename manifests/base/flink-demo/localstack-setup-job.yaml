@@ -1,0 +1,68 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: localstack-flink-setup
+  namespace: flink-demo
+  labels:
+    app.kubernetes.io/name: flink-demo
+    app.kubernetes.io/component: localstack-setup
+  annotations:
+    # Run before the FlinkDeployments so the S3 bucket exists
+    argocd.argoproj.io/hook: PreSync
+    # Delete previous run before creating a new one (idempotent)
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: flink-demo
+        app.kubernetes.io/component: localstack-setup
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: default
+      containers:
+        - name: setup
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          env:
+            - name: LOCALSTACK_ENDPOINT
+              value: "http://localstack.localstack.svc.cluster.local:4566"
+            - name: S3_BUCKET
+              value: "flink-output"
+          command: [/bin/bash, -c]
+          args:
+            - |
+              set -uo pipefail
+              echo "=== LocalStack S3 Setup ==="
+              echo "Endpoint : ${LOCALSTACK_ENDPOINT}"
+              echo "Bucket   : ${S3_BUCKET}"
+              echo ""
+
+              # Allow ztunnel HBONE tunnel to establish for the new pod
+              sleep 5
+
+              echo "Checking LocalStack health..."
+              curl -sf "${LOCALSTACK_ENDPOINT}/_localstack/health" | grep -q '"s3": "running"' \
+                && echo "LocalStack S3 is running" \
+                || echo "Warning: LocalStack health check inconclusive — continuing"
+
+              echo "Creating bucket s3://${S3_BUCKET}..."
+              HTTP_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+                -X PUT "${LOCALSTACK_ENDPOINT}/${S3_BUCKET}")
+
+              if [ "${HTTP_STATUS}" = "200" ] || [ "${HTTP_STATUS}" = "409" ]; then
+                echo "Bucket '${S3_BUCKET}' ready (HTTP ${HTTP_STATUS})"
+              else
+                echo "Warning: unexpected HTTP ${HTTP_STATUS} — bucket may already exist or creation failed"
+              fi
+
+              echo ""
+              echo "=== Setup complete ==="
+              echo "Output will be written to: s3://${S3_BUCKET}/events/<YYYY>/<MM>/<DD>/<HH>/<uuid>.json"
