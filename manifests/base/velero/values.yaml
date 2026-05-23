@@ -30,7 +30,7 @@ resources:
 # Note: CSI plugin is integrated into Velero v1.14+, no separate plugin needed
 initContainers:
   - name: velero-plugin-for-aws
-    image: velero/velero-plugin-for-aws:v1.14.0
+    image: velero/velero-plugin-for-aws:v1.14.1
     imagePullPolicy: IfNotPresent
     resources:
       requests:
