@@ -12,7 +12,7 @@ spec:
   sources:
     - chart: metallb
       repoURL: https://metallb.github.io/metallb
-      targetRevision: 0.15.3 # specify the MetalLB version to install
+      targetRevision: 0.16.1 # specify the MetalLB version to install
       helm:
         releaseName: metallb
         valueFiles:
