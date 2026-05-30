@@ -13,7 +13,7 @@ metadata:
     app.kubernetes.io/component: kafka-cluster
 spec:
   kafka:
-    version: 3.9.0
+    version: 4.1.2
     # Listeners — plain (no TLS) on port 9092 for internal cluster access
     listeners:
       - name: plain

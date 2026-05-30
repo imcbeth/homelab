@@ -39,6 +39,11 @@ spec:
       name: flink-operator-flink-operator-webhook-configuration
       jqPathExpressions:
         - .webhooks[].clientConfig.caBundle
+    # Kubernetes adds spec.conversion.strategy=None after SSA apply; not in chart
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpressions:
+        - .spec.conversion
   syncPolicy:
     automated:
       prune: true
