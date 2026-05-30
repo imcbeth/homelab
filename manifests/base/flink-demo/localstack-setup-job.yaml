@@ -54,13 +54,14 @@ spec:
                 || echo "Warning: LocalStack health check inconclusive — continuing"
 
               echo "Creating bucket s3://${S3_BUCKET}..."
-              HTTP_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
                 -X PUT "${LOCALSTACK_ENDPOINT}/${S3_BUCKET}")
 
               if [ "${HTTP_STATUS}" = "200" ] || [ "${HTTP_STATUS}" = "409" ]; then
                 echo "Bucket '${S3_BUCKET}' ready (HTTP ${HTTP_STATUS})"
               else
-                echo "Warning: unexpected HTTP ${HTTP_STATUS} — bucket may already exist or creation failed"
+                echo "ERROR: bucket creation failed with HTTP ${HTTP_STATUS}" >&2
+                exit 1
               fi
 
               echo ""

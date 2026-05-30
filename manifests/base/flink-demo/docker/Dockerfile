@@ -23,11 +23,9 @@ RUN curl -fsSL \
     -o /opt/flink/lib/flink-sql-connector-kafka-3.3.0-1.20.jar && \
     echo "Downloaded flink-sql-connector-kafka-3.3.0-1.20.jar"
 
-# Copy pipeline scripts into the image as fallback
-# (ConfigMaps mounted at /opt/flink/scripts/ take precedence at runtime)
+# Pipeline scripts are mounted from ConfigMaps at /opt/flink/scripts/ at runtime.
+# The directory must exist for the mount to succeed.
 RUN mkdir -p /opt/flink/scripts
-COPY pipeline_file_to_kafka.py /opt/flink/scripts/
-COPY pipeline_kafka_to_s3.py   /opt/flink/scripts/
 
 # Verify Python and PyFlink are working
 RUN python3 -c "import pyflink; print('PyFlink', pyflink.__version__, 'OK')"
