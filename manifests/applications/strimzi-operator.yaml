@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: strimzi-operator
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Deploy after Flink operator (-3), before Kafka cluster (+1)
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: infrastructure
+  sources:
+    # Strimzi Kafka Operator Helm chart
+    - repoURL: https://strimzi.io/charts/
+      chart: strimzi-kafka-operator
+      targetRevision: 1.0.0
+      helm:
+        valueFiles:
+          - $values/manifests/base/strimzi-operator/values.yaml
+    # Values reference from homelab repo
+    - repoURL: git@github.com:imcbeth/homelab.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: strimzi-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m

@@ -61,7 +61,7 @@ For all cluster reads/queries, prefer MCP tools over `kubectl` via Bash:
 Reserve `kubectl` via Bash for writes, port-forwards, and operations not covered by MCP.
 
 ### Conflict Resolution on PRs
-Use `git rebase origin/main` (not merge) for conflict resolution. Verify the current branch and target remote, then use `git push --force-with-lease`. No confirmation needed before the force-push.
+Use `git rebase origin/main` (not merge) for conflict resolution, then `git push --force-with-lease`. No confirmation needed before the force-push.
 
 ## Secrets
 
@@ -111,4 +111,4 @@ Sealed files must be named `*-sealed.yaml` — this excludes them from yamllint 
 
 ## Documentation Companion Repo
 
-Application guides live in the Docusaurus documentation companion repo/site. If you have a local checkout, it may be located at `~/k8s-docs-n37`, but treat that as an optional machine-specific path rather than the canonical location. After making significant changes to an application, update the corresponding `docs/applications/<app>.md` file there. Active branch: `docs/april-2026-updates`.
+Application guides live in the `k8s-docs-n37` repo (Docusaurus site). The canonical location is the GitHub repository; `~/k8s-docs-n37` is a machine-specific local checkout path. After making significant changes to an application, update the corresponding `docs/applications/<app>.md` file there. Active branch: `docs/april-2026-updates`.

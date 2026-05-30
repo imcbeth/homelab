@@ -1,0 +1,19 @@
+# Strimzi Kafka Operator v1.0.0 values
+# Chart: strimzi/strimzi-kafka-operator
+
+# Watch all namespaces so Kafka clusters can be deployed anywhere (e.g., kafka namespace)
+watchAnyNamespace: true
+
+# Operator pod labels (required by Gatekeeper require-labels constraint)
+labels:
+  app.kubernetes.io/name: strimzi-kafka-operator
+
+# Resource limits for the operator pod
+# Gatekeeper max memory limit is 2Gi; 384Mi is sufficient for the operator
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 384Mi

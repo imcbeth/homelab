@@ -14,3 +14,7 @@ spec:
       - kube-system
       - calico-system
       - chaos-mesh
+      - strimzi-system
+      - kafka
+      - flink-operator
+      - flink-demo

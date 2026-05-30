@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: flink-operator
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Deploy after Gatekeeper policies (-5), before Strimzi (-2) and app workloads
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  project: infrastructure
+  sources:
+    # Flink Kubernetes Operator Helm chart
+    - repoURL: https://archive.apache.org/dist/flink/flink-kubernetes-operator-1.14.0/
+      chart: flink-kubernetes-operator
+      targetRevision: 1.14.0
+      helm:
+        valueFiles:
+          - $values/manifests/base/flink-operator/values.yaml
+    # Values reference from homelab repo
+    - repoURL: git@github.com:imcbeth/homelab.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: flink-operator
+  # Ignore caBundle auto-injected by the operator's admission webhook controller.
+  # Name pattern: flink-operator-<release-namespace>-webhook-configuration
+  # Both mutating and validating webhooks need this or ArgoCD stays OutOfSync.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      name: flink-operator-flink-operator-webhook-configuration
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: flink-operator-flink-operator-webhook-configuration
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
