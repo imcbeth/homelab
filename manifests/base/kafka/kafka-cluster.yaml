@@ -45,3 +45,15 @@ spec:
         limits:
           cpu: 200m
           memory: 256Mi
+    template:
+      userOperatorContainer:
+        # JVM startup on ARM64 + Kafka AdminClient init takes ~35s before the
+        # health server on :8081 comes up. Strimzi sets a startup probe on the
+        # topic-operator container (failureThreshold=12 → 135s budget) but omits
+        # one for the user-operator, so the liveness probe (initialDelay=10s,
+        # failureThreshold=3) kills it at ~30s — before the JVM is ready.
+        startupProbe:
+          failureThreshold: 12
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
