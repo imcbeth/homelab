@@ -22,16 +22,20 @@ spec:
         - ipBlock:
             cidr: 169.254.7.127/32
 
-    # Strimzi operator — AdminClient reconciliation and rolling update checks
+    # Strimzi operator — AdminClient reconciliation and rolling update checks.
+    # describeMetadataQuorum first connects to bootstrap (9092), discovers the
+    # controller endpoint (CONTROLPLANE-9090), then connects to port 9090.
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: strimzi-system
       ports:
         - protocol: TCP
-          port: 9092  # Kafka bootstrap (AdminClient)
+          port: 9090  # KRaft CONTROLPLANE (quorum controller)
         - protocol: TCP
-          port: 9091  # Kafka replication (internal)
+          port: 9091  # Kafka REPLICATION (broker-to-broker)
+        - protocol: TCP
+          port: 9092  # Kafka PLAIN (bootstrap/AdminClient)
 
     # Kafka clients from Flink demo jobs (producer and consumer)
     - from:
@@ -49,11 +53,13 @@ spec:
               kubernetes.io/metadata.name: kafka
       ports:
         - protocol: TCP
-          port: 9092  # Kafka listener
+          port: 9090  # KRaft CONTROLPLANE
         - protocol: TCP
-          port: 9094  # KRaft inter-controller
+          port: 9091  # KRaft REPLICATION
         - protocol: TCP
-          port: 9404  # Prometheus JMX metrics (if enabled)
+          port: 9092  # Kafka plain listener
+        - protocol: TCP
+          port: 9404  # Prometheus JMX metrics
 
   egress:
     # DNS resolution via kube-dns
@@ -106,6 +112,8 @@ spec:
               kubernetes.io/metadata.name: kafka
       ports:
         - protocol: TCP
-          port: 9092
+          port: 9090  # KRaft CONTROLPLANE
         - protocol: TCP
-          port: 9094
+          port: 9091  # KRaft REPLICATION
+        - protocol: TCP
+          port: 9092  # Kafka plain listener
