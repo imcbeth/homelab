@@ -20,17 +20,23 @@ spec:
           - $values/manifests/base/flink-operator/values.yaml
     # Values reference from homelab repo
     - repoURL: git@github.com:imcbeth/homelab.git
-      path: manifests/base/flink-operator
       targetRevision: HEAD
       ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: flink-operator
-  # Ignore caBundle auto-injected by the operator's admission webhook controller
+  # Ignore caBundle auto-injected by the operator's admission webhook controller.
+  # Name pattern: flink-operator-<release-namespace>-webhook-configuration
+  # Both mutating and validating webhooks need this or ArgoCD stays OutOfSync.
   ignoreDifferences:
     - group: admissionregistration.k8s.io
       kind: MutatingWebhookConfiguration
-      name: flink-operator-webhook
+      name: flink-operator-flink-operator-webhook-configuration
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: flink-operator-flink-operator-webhook-configuration
       jqPathExpressions:
         - .webhooks[].clientConfig.caBundle
   syncPolicy:

@@ -68,9 +68,9 @@ Use `git rebase origin/main` (not merge) for conflict resolution, then `git push
 All secrets managed via SealedSecrets (GitOps-compatible). Seal with:
 ```bash
 kubeseal --cert <(kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key=active \
-  -o jsonpath='{.items[0].data.tls\.crt}' | base64 -d) --format yaml < secret.yaml > sealed-secret.yaml
+  -o jsonpath='{.items[0].data.tls\.crt}' | base64 -d) --format yaml < secret.yaml > app-credentials-sealed.yaml
 ```
-Sealed files must be named `*-sealed.yaml` to pass pre-commit yamllint line-length checks.
+Sealed files must be named `*-sealed.yaml` — this excludes them from yamllint (SealedSecrets contain long base64 values that fail linting) and avoids the `.gitattributes` `*secret*` git-crypt rule.
 
 ## Cluster Quick Reference
 
@@ -111,4 +111,4 @@ Sealed files must be named `*-sealed.yaml` to pass pre-commit yamllint line-leng
 
 ## Documentation Companion Repo
 
-Application guides live in `~/k8s-docs-n37` (Docusaurus site). After making significant changes to an application, update the corresponding `docs/applications/<app>.md` file there. Active branch: `docs/april-2026-updates`.
+Application guides live in the `k8s-docs-n37` repo (Docusaurus site). The canonical location is the GitHub repository; `~/k8s-docs-n37` is a machine-specific local checkout path. After making significant changes to an application, update the corresponding `docs/applications/<app>.md` file there. Active branch: `docs/april-2026-updates`.

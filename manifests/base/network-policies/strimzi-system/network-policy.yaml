@@ -72,3 +72,19 @@ spec:
           port: 15012  # istiod gRPC
         - protocol: TCP
           port: 15017  # istiod webhook
+
+    # Strimzi operator reconciles Kafka pods (broker/replication/metrics ports).
+    # Must reach kafka namespace for health checks and cluster management.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kafka
+      ports:
+        - protocol: TCP
+          port: 9092  # Kafka bootstrap / broker
+        - protocol: TCP
+          port: 9093  # Kafka replication
+        - protocol: TCP
+          port: 9094  # Kafka controller (KRaft)
+        - protocol: TCP
+          port: 9404  # JMX Prometheus metrics

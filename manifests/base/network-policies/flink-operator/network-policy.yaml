@@ -72,3 +72,13 @@ spec:
           port: 15012  # istiod gRPC
         - protocol: TCP
           port: 15017  # istiod webhook
+
+    # Flink operator polls JobManager REST API on managed FlinkDeployment pods.
+    # Required for reconciliation of all watched namespaces.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: flink-demo
+      ports:
+        - protocol: TCP
+          port: 8081  # Flink JobManager REST API

@@ -20,7 +20,6 @@ spec:
           - $values/manifests/base/strimzi-operator/values.yaml
     # Values reference from homelab repo
     - repoURL: git@github.com:imcbeth/homelab.git
-      path: manifests/base/strimzi-operator
       targetRevision: HEAD
       ref: values
   destination:
