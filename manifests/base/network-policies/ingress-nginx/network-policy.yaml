@@ -140,3 +140,12 @@ spec:
       ports:
         - protocol: TCP
           port: 4180
+
+    # Backend: flink-demo JobManager REST UI
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: flink-demo
+      ports:
+        - protocol: TCP
+          port: 8081

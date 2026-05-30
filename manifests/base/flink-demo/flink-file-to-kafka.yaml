@@ -1,0 +1,67 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: file-to-kafka
+  namespace: flink-demo
+  labels:
+    app.kubernetes.io/name: flink-demo
+    app.kubernetes.io/component: file-to-kafka
+spec:
+  # Custom image: apache/flink:1.20-java17 + Python3 + PyFlink + Kafka JAR + boto3
+  # Build with: cd manifests/base/flink-demo/docker && ./build-and-push.sh
+  image: registry.k8s.n37.ca/flink-demo:1.0.0
+  flinkVersion: v1_20
+
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "1"
+    # Suppress verbose Flink internal logs; pipeline logs use INFO
+    rootLogger.level: INFO
+
+  serviceAccount: flink-demo
+
+  jobManager:
+    resource:
+      memory: "512m"
+      cpu: 0.25
+
+  taskManager:
+    resource:
+      memory: "512m"
+      cpu: 0.25
+
+  # Mount CSV data and pipeline script from ConfigMaps
+  podTemplate:
+    spec:
+      volumes:
+        - name: test-data
+          configMap:
+            name: flink-test-data
+        - name: pipeline-script
+          configMap:
+            name: flink-pipeline-file-to-kafka
+            defaultMode: 0755
+      containers:
+        - name: flink-main-container
+          volumeMounts:
+            - name: test-data
+              mountPath: /opt/flink/data
+            - name: pipeline-script
+              mountPath: /opt/flink/scripts
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
+            - name: KAFKA_TOPIC
+              value: "flink-events"
+            - name: DATA_FILE
+              value: "/opt/flink/data/sales-data.csv"
+
+  job:
+    # flink-python.jar bootstraps PyFlink; the -py flag points to the script
+    jarURI: local:///opt/flink/opt/flink-python.jar
+    entryClass: org.apache.flink.client.python.PythonDriver
+    args:
+      - "-py"
+      - "/opt/flink/scripts/pipeline_file_to_kafka.py"
+    parallelism: 1
+    # stateless: job restarts from scratch (re-reads file, re-publishes)
+    upgradeMode: stateless

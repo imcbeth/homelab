@@ -1,0 +1,71 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: kafka-to-s3
+  namespace: flink-demo
+  labels:
+    app.kubernetes.io/name: flink-demo
+    app.kubernetes.io/component: kafka-to-s3
+spec:
+  # Custom image: apache/flink:1.20-java17 + Python3 + PyFlink + Kafka JAR + boto3
+  image: registry.k8s.n37.ca/flink-demo:1.0.0
+  flinkVersion: v1_20
+
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "1"
+    rootLogger.level: INFO
+    # No checkpointing for this demo — restarts replay from EARLIEST offset
+    # For production: enable checkpointing with a persistent state backend
+
+  serviceAccount: flink-demo
+
+  jobManager:
+    resource:
+      memory: "512m"
+      cpu: 0.25
+
+  taskManager:
+    resource:
+      memory: "512m"
+      cpu: 0.25
+
+  # Mount pipeline script from ConfigMap
+  podTemplate:
+    spec:
+      volumes:
+        - name: pipeline-script
+          configMap:
+            name: flink-pipeline-kafka-to-s3
+            defaultMode: 0755
+      containers:
+        - name: flink-main-container
+          volumeMounts:
+            - name: pipeline-script
+              mountPath: /opt/flink/scripts
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
+            - name: KAFKA_TOPIC
+              value: "flink-events"
+            - name: KAFKA_CONSUMER_GROUP
+              value: "flink-kafka-to-s3"
+            - name: S3_ENDPOINT_URL
+              value: "http://localstack.localstack.svc.cluster.local:4566"
+            - name: S3_BUCKET
+              value: "flink-output"
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            - name: AWS_ACCESS_KEY_ID
+              value: "test"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "test"
+
+  job:
+    jarURI: local:///opt/flink/opt/flink-python.jar
+    entryClass: org.apache.flink.client.python.PythonDriver
+    args:
+      - "-py"
+      - "/opt/flink/scripts/pipeline_kafka_to_s3.py"
+    parallelism: 1
+    # stateless: restarts replay from EARLIEST offset in Kafka
+    upgradeMode: stateless
