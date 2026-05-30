@@ -22,6 +22,17 @@ spec:
         - ipBlock:
             cidr: 169.254.7.127/32
 
+    # Strimzi operator — AdminClient reconciliation and rolling update checks
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: strimzi-system
+      ports:
+        - protocol: TCP
+          port: 9092  # Kafka bootstrap (AdminClient)
+        - protocol: TCP
+          port: 9091  # Kafka replication (internal)
+
     # Kafka clients from Flink demo jobs (producer and consumer)
     - from:
         - namespaceSelector:
