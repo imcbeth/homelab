@@ -84,14 +84,18 @@ spec:
         - protocol: TCP
           port: 6443
 
-    # Istio ambient mesh communication (ztunnel, istiod)
+    # ztunnel HBONE — bare rule required: ztunnel runs hostNetwork and binds to
+    # node IPs, not istio-system pod IPs, so namespace-scoped selectors don't match.
+    - ports:
+        - protocol: TCP
+          port: 15008
+
+    # istiod control plane (xDS gRPC, webhook)
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: istio-system
       ports:
-        - protocol: TCP
-          port: 15008  # ztunnel HBONE
         - protocol: TCP
           port: 15012  # istiod gRPC
         - protocol: TCP
