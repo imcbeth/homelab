@@ -100,7 +100,7 @@
 **ArgoCD:** 39 apps — all Synced+Healthy ✅ (as of 2026-05-31 evening). Exception: flink-operator CRD drift (pre-existing, not blocking).
 - flink-demo: both FlinkDeployments running. file-to-kafka FINISHED/STABLE (batch), kafka-to-s3 RUNNING/STABLE (streaming).
 - **Renovate batch 1 (10 PRs, 2026-05-31):** argo-cd 9.5.11, kube-prometheus-stack 86.1.0, istio 1.29.3, sealed-secrets, velero 12.0.1, busybox all upgraded. ArgoCD self-upgraded during batch (repo-server cycled briefly, auto-recovered).
-- **Renovate batch 2 (8 PRs, 2026-05-31):** Istio 1.30.0, Alloy 1.8.2, oauth2-proxy chart 10.6.0, Prometheus 3.12.0, synology-csi 1.3.0, csi-attacher 4.12.0, csi-node-driver-registrar 2.17.0, external-snapshotter 8.6.0. Skipped: #642 (flink-operator image 1.15.0 — chart pinned to 1.14.0 archive, would be mismatched), #650 (Flink 1.20→2.2 major — needs image rebuild + PyFlink API testing).
+- **Renovate batch 2 (8+3 PRs, 2026-05-31):** Istio 1.30.0, Alloy 1.8.2, oauth2-proxy chart 10.6.0, Prometheus 3.12.0, synology-csi 1.3.0, csi-attacher 4.12.0, csi-node-driver-registrar 2.17.0, external-snapshotter 8.6.0. Plus flink-operator 1.15.0 (image + chart URL together, PR #656), Flink Dockerfile 2.2 base image.
 - **Zot:** chart 0.1.116, app v2.1.17 ✅. StatefulSet recreated (chart removed immutable `serviceName` field; `RespectIgnoreDifferences` didn't prevent SSA managed-field release from triggering admission check — fix was StatefulSet delete → recreate). PVC `zot-pvc-zot-0` (50Gi iSCSI) survived.
 - **MetalLB:** 0.16.1 with `frrk8s.enabled: false` ✅. Chart 0.16 enabled frr-k8s BGP backend by default; DaemonSet init containers have no chart-level resource config → blocked by Gatekeeper. Cluster uses L2 mode only, so frr-k8s disabled cleanly.
 - ingress-nginx migrated from Kustomize to Helm chart (v4.14.3) via ArgoCD
@@ -202,9 +202,13 @@
 **Second Renovate batch (8 PRs, merged same evening):**
 - Merged: #641 (alloy 1.8.2), #643 (external-snapshotter 8.6.0), #644 (oauth2-proxy chart 10.6.0), #645 (istio 1.30.0), #646 (prometheus 3.12.0), #647 (csi-attacher 4.12.0), #648 (csi-node-driver-registrar 2.17.0), #649 (synology-csi 1.3.0)
 - Applied: `kubectl apply` for istio-base/cni/istiod, alloy, oauth2-proxy (all changed Application manifests); synology-csi auto-synced via base/
-- Skipped #642: flink-operator image tag 1.15.0 with chart pinned to `1.14.0` archive URL — would create operator binary/CRD mismatch; needs chart URL + tag updated together
-- Skipped #650: Flink base image 1.20 → 2.2 (major) — running `:1.0.0` image unaffected immediately but next rebuild would need PyFlink 2.x API testing
+- Skipped then fixed #642 + #650 (see below)
 - All apps Synced+Healthy post-batch (flink-operator CRD drift pre-existing, not related)
+
+**Third pass — flink-operator 1.15.0 + Flink Dockerfile 2.2 (PRs #642, #650, #656):**
+- **#642** (flink-operator image 1.15.0) + **#656** (chart URL `1.14.0` → `1.15.0` archive): merged together so chart CRDs and operator binary stay in sync. Applied `kubectl apply -f manifests/applications/flink-operator.yaml`. Pod immediately rolled to `apache/flink-kubernetes-operator:1.15.0` ✅
+- **#650** (Flink Dockerfile `1.20-java17` → `2.2-java17`): merged. No immediate cluster impact — running FlinkDeployments use pre-built `registry.k8s.n37.ca/flink-demo:1.0.0`. Next image rebuild will use Flink 2.2 and will need PyFlink pipeline testing against Flink 2.x APIs.
+- **All Renovate PRs closed.** No open Renovate PRs remain.
 
 **Also completed earlier in this context window (session archiving + first Renovate batch):**
 - Archived 5 oldest sessions from CURRENT.md into `sessions/` files
