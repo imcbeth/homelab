@@ -439,7 +439,7 @@ alertmanager:
     logFormat: logfmt
     logLevel: info
     replicas: 1
-    retention: 120h
+    retention: 720h
     storage: {}
     externalUrl:
     routePrefix: /
@@ -1519,7 +1519,7 @@ prometheus:
     scrapeConfigSelectorNilUsesHelmValues: true
     scrapeConfigSelector: {}
     scrapeConfigNamespaceSelector: {}
-    retention: 10d
+    retention: 30d
     retentionSize: ""
     tsdb:
       outOfOrderTimeWindow: 0s
