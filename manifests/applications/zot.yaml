@@ -38,6 +38,12 @@ spec:
       kind: StatefulSet
       jqPathExpressions:
         - .spec.volumeClaimTemplates
+    # zot chart 0.1.116 removed serviceName from StatefulSet — it's immutable,
+    # so we must exclude it from the SSA apply via RespectIgnoreDifferences
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .spec.serviceName
     # Kubernetes-defaulted fields on StatefulSet pod template
     - group: apps
       kind: StatefulSet
@@ -51,6 +57,7 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
