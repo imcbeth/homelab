@@ -1,0 +1,125 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argo-events-network-policy
+  namespace: argo-events
+  labels:
+    app.kubernetes.io/name: argo-events
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Istio Ambient mesh HBONE tunnel (ztunnel)
+    - ports:
+        - protocol: TCP
+          port: 15008
+    # ztunnel health probes via link-local address
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+    # Prometheus scrape — controller metrics (7777) and NATS exporter (7777)
+    # kube-prometheus-stack is deployed in the `default` namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 7777
+    # NATS JetStream internal cluster communication
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 4222   # NATS client
+        - protocol: TCP
+          port: 6222   # NATS cluster
+        - protocol: TCP
+          port: 8222   # NATS monitoring HTTP
+    # Webhook event source — external events in via ingress-nginx
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 12000  # Argo Events webhook server
+  egress:
+    # Istio Ambient mesh HBONE tunnel (ztunnel, any destination pod)
+    - ports:
+        - protocol: TCP
+          port: 15008
+    # DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Kubernetes API server
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 6443
+    # Istiod (xDS config + webhook)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 15012  # istiod gRPC
+        - protocol: TCP
+          port: 15017  # istiod webhook
+    # NATS JetStream internal cluster communication
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 4222   # NATS client
+        - protocol: TCP
+          port: 6222   # NATS cluster
+    # Argo Workflows — Sensors submit workflows via the server API
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-workflows
+      ports:
+        - protocol: TCP
+          port: 2746
+    # Kafka — for Kafka EventSource triggers
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+    # External HTTPS — GitHub webhooks, container registries, etc.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443

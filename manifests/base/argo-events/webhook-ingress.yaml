@@ -1,0 +1,29 @@
+# Exposes the lifeonabike-github EventSource so GitHub can POST push events.
+# external-dns creates the DNS record; cert-manager issues the TLS cert.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lifeonabike-webhook
+  namespace: argo-events
+  annotations:
+    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
+    external-dns.alpha.kubernetes.io/hostname: build-webhook.k8s.n37.ca
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - build-webhook.k8s.n37.ca
+      secretName: lifeonabike-webhook-tls
+  rules:
+    - host: build-webhook.k8s.n37.ca
+      http:
+        paths:
+          - path: /push
+            pathType: Prefix
+            backend:
+              service:
+                name: lifeonabike-github-eventsource-svc
+                port:
+                  number: 12000

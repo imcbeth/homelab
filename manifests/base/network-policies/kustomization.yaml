@@ -15,6 +15,7 @@ resources:
   - velero/network-policy.yaml
   # CI/CD namespaces
   - argo-workflows/network-policy.yaml
+  - argo-events/network-policy.yaml
   # Phase 4: Core infrastructure namespaces
   - cert-manager/network-policy.yaml
   - external-dns/network-policy.yaml

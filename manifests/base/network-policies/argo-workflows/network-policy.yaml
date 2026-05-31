@@ -36,6 +36,14 @@ spec:
       ports:
         - protocol: TCP
           port: 2746   # Server port
+    # Allow argo-events Sensors to submit workflows
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-events
+      ports:
+        - protocol: TCP
+          port: 2746   # Argo Workflows server API
     # Allow internal namespace communication (workflow pods)
     - from:
         - podSelector: {}
@@ -92,6 +100,14 @@ spec:
               - 10.0.0.0/8      # Block private ranges (except explicitly allowed)
               - 172.16.0.0/12
               - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow pushing to local Zot registry (via ingress-nginx, MetalLB pool 10.0.10.10-99)
+    # Required for Kaniko to push built images from workflow pods.
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
       ports:
         - protocol: TCP
           port: 443

@@ -18,3 +18,4 @@ spec:
       - kafka
       - flink-operator
       - flink-demo
+      - argo-events

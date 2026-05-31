@@ -1,0 +1,126 @@
+# Build workflow for lifeonabike.ca
+#
+# Clones https://github.com/imcbeth/lifeonabike.ca, builds the Docker image
+# with Kaniko, and pushes two tags to the local Zot registry:
+#   registry.k8s.n37.ca/lifeonabike/lifeonabike.ca:<git-sha>
+#   registry.k8s.n37.ca/lifeonabike/lifeonabike.ca:latest
+#
+# Triggered by Argo Events on push to main (see manifests/base/argo-events/).
+# Can also be submitted manually:
+#   argo submit --from workflowtemplate/lifeonabike-build -n argo-workflows
+#
+# Prerequisites (one-time cluster setup):
+#   kubectl create secret docker-registry lifeonabike-registry-creds \
+#     --docker-server=registry.k8s.n37.ca \
+#     --docker-username=admin \
+#     --docker-password='<password>' \
+#     -n argo-workflows
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: lifeonabike-build
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: lifeonabike-build
+    app.kubernetes.io/component: ci
+spec:
+  entrypoint: build-and-push
+  serviceAccountName: argo-workflow   # created by the argo-workflows Helm chart
+
+  arguments:
+    parameters:
+      - name: revision
+        value: main
+
+  volumeClaimTemplates:
+    - metadata:
+        name: workspace
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 2Gi
+
+  volumes:
+    - name: registry-creds
+      secret:
+        secretName: lifeonabike-registry-creds
+        items:
+          - key: .dockerconfigjson
+            path: config.json
+
+  # Default resource limits applied to all step containers (Gatekeeper: require-resource-limits)
+  templateDefaults:
+    container:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+  ttlStrategy:
+    secondsAfterSuccess: 3600    # 1h
+    secondsAfterFailure: 28800   # 8h
+
+  templates:
+    - name: build-and-push
+      steps:
+        - - name: clone
+            template: git-clone
+        - - name: build
+            template: kaniko-build
+            arguments:
+              parameters:
+                - name: image-tag
+                  value: "{{steps.clone.outputs.parameters.sha}}"
+
+    # ── Step 1: shallow-clone the app repo, capture git SHA ──────────────────
+    - name: git-clone
+      outputs:
+        parameters:
+          - name: sha
+            valueFrom:
+              path: /tmp/sha
+      container:
+        image: alpine/git:2.43.0
+        command: [sh, -c]
+        args:
+          - |
+            git clone https://github.com/imcbeth/lifeonabike.ca.git /workspace \
+              --branch {{workflow.parameters.revision}} \
+              --single-branch \
+              --depth 1 && \
+            git -C /workspace rev-parse --short HEAD > /tmp/sha
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+
+    # ── Step 2: build image with Kaniko, push sha + latest tags ──────────────
+    - name: kaniko-build
+      inputs:
+        parameters:
+          - name: image-tag
+      container:
+        image: gcr.io/kaniko-project/executor:v1.23.2
+        # Building a Docker image is memory-intensive — override the templateDefaults.
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1536Mi
+        args:
+          - --dockerfile=/workspace/deploy/Dockerfile
+          - --context=/workspace
+          - --destination=registry.k8s.n37.ca/lifeonabike/lifeonabike.ca:{{inputs.parameters.image-tag}}
+          - --destination=registry.k8s.n37.ca/lifeonabike/lifeonabike.ca:latest
+          - --cache=true
+          - --cache-repo=registry.k8s.n37.ca/lifeonabike/lifeonabike.ca/cache
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+          - name: registry-creds
+            mountPath: /kaniko/.docker
