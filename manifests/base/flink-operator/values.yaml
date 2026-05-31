@@ -4,7 +4,7 @@
 # Use Docker Hub image (ARM64 confirmed); default ghcr.io image is the same binary
 image:
   repository: apache/flink-kubernetes-operator
-  tag: "1.14.0"
+  tag: "1.15.0"
 
 # Watch all namespaces so FlinkDeployments can be created in any namespace
 # (e.g., flink-demo, and future application namespaces)
