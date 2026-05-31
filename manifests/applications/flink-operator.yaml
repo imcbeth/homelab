@@ -12,9 +12,9 @@ spec:
   project: infrastructure
   sources:
     # Flink Kubernetes Operator Helm chart
-    - repoURL: https://archive.apache.org/dist/flink/flink-kubernetes-operator-1.14.0/
+    - repoURL: https://archive.apache.org/dist/flink/flink-kubernetes-operator-1.15.0/
       chart: flink-kubernetes-operator
-      targetRevision: 1.14.0
+      targetRevision: 1.15.0
       helm:
         valueFiles:
           - $values/manifests/base/flink-operator/values.yaml
