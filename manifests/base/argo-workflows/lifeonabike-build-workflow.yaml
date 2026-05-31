@@ -53,10 +53,14 @@ spec:
           - key: .dockerconfigjson
             path: config.json
 
-  # Required by Gatekeeper require-labels constraint (all workflow pods)
+  # Required by Gatekeeper require-labels constraint (all workflow pods).
+  # ambient.istio.io/redirection: disabled — ztunnel resets TLS connections to
+  # non-mesh destinations (Zot registry via MetalLB, GitHub); bypass interception.
   podMetadata:
     labels:
       app.kubernetes.io/name: lifeonabike-build
+    annotations:
+      ambient.istio.io/redirection: disabled
 
   # Default resource limits applied to all step containers (Gatekeeper: require-resource-limits)
   templateDefaults:
