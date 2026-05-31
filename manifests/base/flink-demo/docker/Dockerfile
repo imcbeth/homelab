@@ -6,7 +6,11 @@ RUN apt-get update && \
         python3 \
         python3-pip \
         python3-venv \
-        curl && \
+        curl \
+        openjdk-17-jdk-headless \
+        build-essential \
+        python3-dev && \
+    ln -sf /usr/lib/jvm/java-17-openjdk-arm64/include /opt/java/openjdk/include && \
     ln -sf /usr/bin/python3 /usr/bin/python && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -28,4 +32,4 @@ RUN curl -fsSL \
 RUN mkdir -p /opt/flink/scripts
 
 # Verify Python and PyFlink are working
-RUN python3 -c "import pyflink; print('PyFlink', pyflink.__version__, 'OK')"
+RUN python3 -c "import pyflink; print('PyFlink OK')"
