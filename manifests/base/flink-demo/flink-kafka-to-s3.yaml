@@ -21,12 +21,12 @@ spec:
 
   jobManager:
     resource:
-      memory: "512m"
+      memory: "1Gi"
       cpu: 0.25
 
   taskManager:
     resource:
-      memory: "512m"
+      memory: "1Gi"
       cpu: 0.25
 
   # Mount pipeline script from ConfigMap
