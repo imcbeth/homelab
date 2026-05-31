@@ -37,6 +37,16 @@ spec:
         - protocol: TCP
           port: 5000
 
+    # Allow argo-workflows Kaniko to push built images directly (bypasses
+    # ingress-nginx; pod-to-MetalLB HTTPS is broken due to in-cluster routing)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-workflows
+      ports:
+        - protocol: TCP
+          port: 5000
+
     # Istio Ambient HBONE — bare rule required (ztunnel rewrites destination port)
     - ports:
         - protocol: TCP

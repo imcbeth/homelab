@@ -11,10 +11,11 @@
 #
 # Prerequisites (one-time cluster setup):
 #   kubectl create secret docker-registry lifeonabike-registry-creds \
-#     --docker-server=registry.k8s.n37.ca \
+#     --docker-server=zot.zot.svc.cluster.local:5000 \
 #     --docker-username=admin \
 #     --docker-password='<password>' \
 #     -n argo-workflows
+#   (Uses in-cluster HTTP endpoint — pod-to-MetalLB HTTPS is broken in-cluster)
 #
 #   kubectl create secret generic github-clone-token \
 #     --from-literal=token='<github-pat>' \
@@ -135,10 +136,15 @@ spec:
         args:
           - --dockerfile=/workspace/deploy/Dockerfile
           - --context=/workspace
-          - --destination=registry.k8s.n37.ca/lifeonabike/lifeonabike.ca:{{inputs.parameters.image-tag}}
-          - --destination=registry.k8s.n37.ca/lifeonabike/lifeonabike.ca:latest
+          # Push directly to Zot's in-cluster ClusterIP over HTTP — pod-to-MetalLB
+          # HTTPS is broken in-cluster. Kubelet pulls (node-level) still use the
+          # external registry.k8s.n37.ca hostname and are unaffected.
+          - --insecure
+          - --destination=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca:{{inputs.parameters.image-tag}}
+          - --destination=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca:latest
           - --cache=true
-          - --cache-repo=registry.k8s.n37.ca/lifeonabike/lifeonabike.ca/cache
+          - --cache-repo=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca/cache
+          - --insecure-pull
         volumeMounts:
           - name: workspace
             mountPath: /workspace
