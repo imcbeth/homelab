@@ -1,4 +1,4 @@
-FROM apache/flink:1.20-java17
+FROM apache/flink:2.2-java17
 
 # Install Python 3 and pip (ARM64 compatible — base image is multi-arch)
 RUN apt-get update && \
