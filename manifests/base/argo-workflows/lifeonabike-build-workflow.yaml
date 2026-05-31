@@ -15,6 +15,10 @@
 #     --docker-username=admin \
 #     --docker-password='<password>' \
 #     -n argo-workflows
+#
+#   kubectl create secret generic github-clone-token \
+#     --from-literal=token='<github-pat>' \
+#     -n argo-workflows
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -48,6 +52,11 @@ spec:
         items:
           - key: .dockerconfigjson
             path: config.json
+
+  # Required by Gatekeeper require-labels constraint (all workflow pods)
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: lifeonabike-build
 
   # Default resource limits applied to all step containers (Gatekeeper: require-resource-limits)
   templateDefaults:
@@ -88,11 +97,18 @@ spec:
         command: [sh, -c]
         args:
           - |
-            git clone https://github.com/imcbeth/lifeonabike.ca.git /workspace \
+            git clone https://x-access-token:${GITHUB_TOKEN}@github.com/imcbeth/lifeonabike.ca.git /workspace \
               --branch {{workflow.parameters.revision}} \
               --single-branch \
               --depth 1 && \
+            git -C /workspace remote set-url origin https://github.com/imcbeth/lifeonabike.ca.git && \
             git -C /workspace rev-parse --short HEAD > /tmp/sha
+        env:
+          - name: GITHUB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: github-clone-token
+                key: token
         volumeMounts:
           - name: workspace
             mountPath: /workspace
