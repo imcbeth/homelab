@@ -15,6 +15,10 @@
 #     --docker-username=admin \
 #     --docker-password='<password>' \
 #     -n argo-workflows
+#
+#   kubectl create secret generic github-clone-token \
+#     --from-literal=token='<github-pat>' \
+#     -n argo-workflows
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -97,6 +101,7 @@ spec:
               --branch {{workflow.parameters.revision}} \
               --single-branch \
               --depth 1 && \
+            git -C /workspace remote set-url origin https://github.com/imcbeth/lifeonabike.ca.git && \
             git -C /workspace rev-parse --short HEAD > /tmp/sha
         env:
           - name: GITHUB_TOKEN
