@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-05-31 (evening)
+**Last Updated:** 2026-05-31 (evening, late)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -99,7 +99,8 @@
 
 **ArgoCD:** 39 apps — all Synced+Healthy ✅ (as of 2026-05-31 evening). Exception: flink-operator CRD drift (pre-existing, not blocking).
 - flink-demo: both FlinkDeployments running. file-to-kafka FINISHED/STABLE (batch), kafka-to-s3 RUNNING/STABLE (streaming).
-- **Renovate batch (10 PRs, 2026-05-31):** argo-cd 9.5.11, kube-prometheus-stack 86.1.0, istio 1.29.3, sealed-secrets, velero 12.0.1, busybox all upgraded. ArgoCD self-upgraded during batch (repo-server cycled briefly, auto-recovered).
+- **Renovate batch 1 (10 PRs, 2026-05-31):** argo-cd 9.5.11, kube-prometheus-stack 86.1.0, istio 1.29.3, sealed-secrets, velero 12.0.1, busybox all upgraded. ArgoCD self-upgraded during batch (repo-server cycled briefly, auto-recovered).
+- **Renovate batch 2 (8 PRs, 2026-05-31):** Istio 1.30.0, Alloy 1.8.2, oauth2-proxy chart 10.6.0, Prometheus 3.12.0, synology-csi 1.3.0, csi-attacher 4.12.0, csi-node-driver-registrar 2.17.0, external-snapshotter 8.6.0. Skipped: #642 (flink-operator image 1.15.0 — chart pinned to 1.14.0 archive, would be mismatched), #650 (Flink 1.20→2.2 major — needs image rebuild + PyFlink API testing).
 - **Zot:** chart 0.1.116, app v2.1.17 ✅. StatefulSet recreated (chart removed immutable `serviceName` field; `RespectIgnoreDifferences` didn't prevent SSA managed-field release from triggering admission check — fix was StatefulSet delete → recreate). PVC `zot-pvc-zot-0` (50Gi iSCSI) survived.
 - **MetalLB:** 0.16.1 with `frrk8s.enabled: false` ✅. Chart 0.16 enabled frr-k8s BGP backend by default; DaemonSet init containers have no chart-level resource config → blocked by Gatekeeper. Cluster uses L2 mode only, so frr-k8s disabled cleanly.
 - ingress-nginx migrated from Kustomize to Helm chart (v4.14.3) via ArgoCD
@@ -119,13 +120,11 @@
 - External-DNS (Cloudflare + UniFi) will manage A records from Ingress annotations
 - **Next step**: Add Ingress to `lifeonabike` namespace when web backend is ready
 
-**Istio Ambient Mesh:** Updated (2026-03-01)
-- Upgraded from 1.28.4 → 1.29.0 (Renovate PR #469)
-- 29 pods across 6 namespaces with mTLS (HBONE protocol)
-- Namespaces: default, loki, argo-workflows, localstack, unipoller, trivy-system
-- Resource usage: ~38m CPU, ~145Mi memory (istiod + cni + ztunnel)
+**Istio Ambient Mesh:** Updated 2026-05-31 → **1.30.0** (PR #645)
+- Path: 1.28.4 → 1.29.0 → 1.29.3 → 1.30.0
+- 29+ pods across 10 namespaces with mTLS (HBONE protocol, Ambient mode)
+- Namespaces: default, loki, argo-workflows, localstack, unipoller, trivy-system, kafka, strimzi-system, flink-operator, flink-demo
 - Waypoint proxies: Skipped (L4 mTLS sufficient, add later if L7 needed)
-- 1.29.0 changes: DNS capture default on, iptables reconciliation auto-enabled, GOMEMLIMIT auto-set
 - **Gotcha:** ztunnel tunnels ALL inter-pod traffic through port 15008, rewriting dest port. NetworkPolicies need bare port 15008 ingress/egress rules (not namespace-scoped). Also need link-local 169.254.7.127/32 for ztunnel health probes.
 
 **Argo Workflows Alerting:** Complete (2026-01-30)
@@ -200,7 +199,14 @@
 - **PR #651:** [Merged] fix: ignore zot StatefulSet serviceName removed in chart 0.1.116
 - **PR #652:** [Merged] fix(metallb): disable frr-k8s backend (L2-only cluster)
 
-**Also completed earlier in this context window (session archiving + Renovate batch):**
+**Second Renovate batch (8 PRs, merged same evening):**
+- Merged: #641 (alloy 1.8.2), #643 (external-snapshotter 8.6.0), #644 (oauth2-proxy chart 10.6.0), #645 (istio 1.30.0), #646 (prometheus 3.12.0), #647 (csi-attacher 4.12.0), #648 (csi-node-driver-registrar 2.17.0), #649 (synology-csi 1.3.0)
+- Applied: `kubectl apply` for istio-base/cni/istiod, alloy, oauth2-proxy (all changed Application manifests); synology-csi auto-synced via base/
+- Skipped #642: flink-operator image tag 1.15.0 with chart pinned to `1.14.0` archive URL — would create operator binary/CRD mismatch; needs chart URL + tag updated together
+- Skipped #650: Flink base image 1.20 → 2.2 (major) — running `:1.0.0` image unaffected immediately but next rebuild would need PyFlink 2.x API testing
+- All apps Synced+Healthy post-batch (flink-operator CRD drift pre-existing, not related)
+
+**Also completed earlier in this context window (session archiving + first Renovate batch):**
 - Archived 5 oldest sessions from CURRENT.md into `sessions/` files
 - Created kafka.md and flink.md guides in k8s-docs-n37 (PRs #640 and #81, merged)
 - Merged 10 Renovate PRs (#619–#628) with `--admin` bypass; applied all Application manifests
