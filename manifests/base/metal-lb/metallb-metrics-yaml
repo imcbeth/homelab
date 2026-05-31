@@ -86,6 +86,12 @@ speaker:
       # Enable the PodMonitor resource creation by the Helm chart
       enabled: true
 
+# Disable frr-k8s backend — cluster uses L2 mode only (no BGP).
+# frr-k8s DaemonSet has init containers with no chart-level resource config,
+# which would be blocked by Gatekeeper require-resource-limits.
+frrk8s:
+  enabled: false
+
 prometheus:
   podMonitors:
     enabled: true
