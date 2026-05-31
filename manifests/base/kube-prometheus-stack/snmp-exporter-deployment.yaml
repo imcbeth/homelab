@@ -19,7 +19,7 @@ spec:
     spec:
       initContainers:
       - name: config-processor
-        image: busybox:1.37
+        image: busybox:1.38
         resources:
           requests:
             cpu: 10m
