@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-04-23 (Session 3)
+**Last Updated:** 2026-05-31
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -97,7 +97,7 @@
 - NetworkPolicy enabled (PR #291 fixed K8s API egress)
 - UI accessible at https://workflows.k8s.n37.ca (PR #293)
 
-**ArgoCD:** 31 apps — all Synced+Healthy as of 2026-04-23 (chaos-mesh + zot + uptime-kuma + tempo + oauth2-proxy added)
+**ArgoCD:** 35 apps — strimzi-operator, flink-operator, kafka, flink-demo added 2026-05-30. kafka Synced+Healthy ✅ (as of 2026-05-31). flink-demo OutOfSync (FlinkDeployments Missing — waiting for Docker image). Others Synced+Healthy.
 - argo-cd chart 9.5.3, kube-prometheus-stack 83.7.0, external-dns v0.21.0, unipoller v2.39.0 (all updated 2026-04-21)
 - ingress-nginx migrated from Kustomize to Helm chart (v4.14.3) via ArgoCD
 - ServerSideApply drift fully resolved for istio-ztunnel and tigera-operator
@@ -170,6 +170,102 @@
 ---
 
 ## Recent Sessions
+
+### 2026-05-30: Kafka + Flink Demo Infrastructure — PR Reviews, Deployment, Post-Merge Fixes
+
+**Completed Work:**
+
+**PR Reviews + Fixes (#617, #618):**
+- Resolved all 15 Copilot review comments across both PRs with code fixes and reply comments
+- Key fixes: CLAUDE.md sealed-secret filename (`*-sealed.yaml` required to avoid git-crypt and yamllint), ValidatingWebhookConfiguration ignoreDifferences for flink-operator, webhook name corrected to `flink-operator-flink-operator-webhook-configuration`, removed `path:` from ref-only ArgoCD sources, LocalStack hook `exit 1` on failure, Dockerfile script duplication removed
+- PR #617 merged by user; PR #618 rebased onto updated main (CLAUDE.md + kustomization.yaml conflicts resolved)
+- PR #618 merged; all 4 ArgoCD Application manifests applied via `kubectl apply`
+
+**Post-Merge Infrastructure Fixes (PRs #629–#634):**
+- **PR #629:** `kafka version: 3.9.0 → 4.1.2` (Strimzi 1.0.0 only supports Kafka 4.x); added `ignoreDifferences` for Flink CRD `spec.conversion.strategy=None` drift (Kubernetes adds this after SSA apply)
+- **PR #630:** Added strimzi-system → kafka ingress on 9091/9092 (NetworkPolicy was blocking Strimzi AdminClient)
+- **PR #631:** Added port 9090 (KRaft CONTROLPLANE) to kafka NP and strimzi-system NP. Root cause: Strimzi's `describeMetadataQuorum` AdminClient connects to bootstrap (9092), discovers controller at `CONTROLPLANE-9090://...` from metadata, then tries port 9090
+- **PR #632:** Attempted startup probe for user-operator via `spec.entityOperator.template.userOperatorContainer.startupProbe` — rejected by ArgoCD SSA: "field not declared in schema". Only `env`, `securityContext`, `volumeMounts` are available in that template.
+- **PR #633:** Removed `spec.entityOperator.userOperator` — Strimzi 1.0.0's user-operator liveness probe (`initialDelaySeconds=10`, `failureThreshold=3`) kills the container at ~30s before ARM64 JVM + AdminClient init completes (~35s). No KafkaUser CRDs needed for demo, so omitting it is clean.
+- **PR #634:** Added `istio.io/dataplane-mode: ambient` to all 4 new namespace manifests (kafka, strimzi-system, flink-operator, flink-demo)
+
+**Key Gotchas Discovered:**
+- Strimzi 1.0.0 entity-operator bootstrap uses port 9091 (REPLICATION/internal TLS), not 9092. NetworkPolicy intra-kafka rules must include 9091.
+- Strimzi `describeMetadataQuorum` AdminClient connects to bootstrap (9092) then follows controller endpoint to CONTROLPLANE-9090. Both ports need NetworkPolicy egress from strimzi-system.
+- Strimzi 1.0.0 Kafka CRD only exposes `env`, `securityContext`, `volumeMounts` in `spec.entityOperator.template.userOperatorContainer` — no probe fields. Cannot configure startupProbe via CR.
+- User-operator tini `-e 143` maps SIGTERM (exit 143) to exit 0, so CrashLoopBackOff shows `exitCode: 0, reason: Completed` — looks like clean exit but is actually liveness probe kill.
+- Flink CRD drift: `spec.conversion.strategy=None` added by Kubernetes after SSA apply; not in chart. Add `apiextensions.k8s.io/CustomResourceDefinition` ignoreDifferences with `.spec.conversion` jqPathExpression.
+
+**Current Cluster State (end of 2026-05-31 continued session):**
+- kafka-cluster-combined-0: Running 1/1 ✅ (Kafka 4.1.2, KRaft mode)
+- kafka-cluster-entity-operator: 1/1 Running ✅ (topic-operator only, user-operator removed)
+- kafka CRD: `READY: True` ✅
+- strimzi-operator: Synced+Healthy ✅
+- flink-operator: Synced+Healthy ✅
+- network-policies: Synced+Healthy ✅ (with all 4 new namespaces, bare HBONE rules)
+- kafka: Synced+Healthy ✅
+- flink-demo: OutOfSync (FlinkDeployments Missing — Docker image `registry.k8s.n37.ca/flink-demo:1.0.0` build in progress via colima)
+
+**Pending (next session):**
+- Verify flink-demo FlinkDeployments deploy once image is pushed
+- Check `kubectl get flinkdeployment -n flink-demo` shows READY
+- Verify file-to-kafka and kafka-to-s3 pipelines are running
+- Stop colima when done: `colima stop`
+
+**Pull Requests (all sessions):**
+- **PR #617:** [Merged by user] feat: Strimzi + Flink operator infrastructure
+- **PR #618:** [Merged] feat: Kafka cluster + Flink demo pipeline (file→Kafka→S3)
+- **PR #629:** [Merged] fix: Kafka 4.1.2 for Strimzi 1.0.0 + Flink CRD conversion drift
+- **PR #630:** [Merged] fix: allow strimzi-system ingress to kafka on 9091/9092
+- **PR #631:** [Merged] fix: add KRaft CONTROLPLANE port 9090 to kafka and strimzi-system NPs
+- **PR #632:** [Merged] fix: attempted startup probe (field not in schema — superseded by #633)
+- **PR #633:** [Merged] fix: remove user-operator from entity operator
+- **PR #634:** [Merged] fix: add Istio ambient mesh labels to all 4 new namespaces
+- **PR #635:** [Merged] fix: use bare egress rule for ztunnel HBONE port 15008 in all 4 new namespaces
+
+---
+
+### 2026-05-31: Bare HBONE Egress Fix — Kafka READY, Flink Image Build
+
+**Completed Work (continuation of 2026-05-30 session):**
+
+**Root Cause: ztunnel HBONE NetworkPolicy (PR #635):**
+- After PR #634 enrolled 4 new namespaces in Istio Ambient, kafka topic-operator started crashing with "Connection to kafka-bootstrap:9091 terminated during authentication"
+- Kafka broker logs showed NO incoming connections — traffic dropped before reaching the broker
+- ztunnel access log revealed: `error="connection timed out, maybe a NetworkPolicy is blocking HBONE port 15008"` from entity-operator pod IP to broker pod IP:15008
+- Root cause: ztunnel sends HBONE **from within the pod's network namespace** (using the pod's source IP), so pod NetworkPolicies DO apply. But the HBONE destination is the broker pod's IP on port 15008 — NOT an `istio-system` pod IP. The old namespace-scoped rule `to: istio-system, port: 15008` never matched.
+- Fix: Split Istio egress into two rules in all 4 namespace NetworkPolicies:
+  - Port 15008: bare rule (no `to` selector) — allows ztunnel HBONE to any destination
+  - Ports 15012/15017: namespace-scoped to istio-system — istiod xDS/webhook
+- Also fixed for strimzi-system, flink-operator, flink-demo (same pattern)
+- Pushed via HTTPS (gh auth setup-git + remote URL change). PR #635 created and merged.
+
+**ArgoCD selfHeal revert issue:**
+- First `kubectl apply` was reverted by ArgoCD within ~30s (selfHeal: true). Had to push the fix to git and trigger ArgoCD refresh with `kubectl annotate app network-policies argocd.argoproj.io/refresh=hard`.
+
+**Kafka is fully healthy:**
+- `kubectl get kafka -n kafka` → `READY: True` ✅
+- `kafka-cluster-entity-operator-dcf64c79-dhq2z`: 1/1 Running, 0 restarts ✅
+- Kafka ArgoCD app: Synced+Healthy ✅
+
+**localstack-flink-setup job also fixed:**
+- The same HBONE issue was blocking the flink-demo PreSync job from reaching LocalStack (cross-node traffic on port 15008 blocked)
+- After PR #635, job completed successfully: `s3://flink-output` bucket created ✅
+
+**Flink Docker image build:**
+- Docker Desktop not running; started colima (`colima start --arch aarch64`)
+- Build in progress: `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock bash build-and-push.sh`
+- Building `registry.k8s.n37.ca/flink-demo:1.0.0` for linux/arm64
+
+**Key Gotchas Discovered:**
+- **ztunnel HBONE uses pod network namespace**: ztunnel sends HBONE connections with the SOURCE POD'S IP (not ztunnel's hostNetwork IP). Therefore Calico NetworkPolicies DO apply to HBONE traffic. Bare egress rule for port 15008 is needed because the DESTINATION is the target pod's IP on port 15008, not an istio-system pod.
+- **ArgoCD selfHeal reverts kubectl apply in ~30s**: For NetworkPolicy fixes in ambient mesh clusters, `kubectl apply` is only useful for testing. Must commit and push to git for permanent effect. Use `kubectl annotate app <name> -n argocd argocd.argoproj.io/refresh=hard` to force immediate re-poll.
+- **HTTPS push workaround**: `gh auth setup-git` + `git remote set-url origin https://github.com/...` allows push when SSH key isn't loaded.
+
+**Pull Requests:**
+- **PR #635:** [Merged] fix: use bare egress rule for ztunnel HBONE port 15008 in all 4 new namespaces
+
+---
 
 ### 2026-05-02/03: ArgoCD SSO Fix, chaos-mesh Recovery, Argo Workflows v4, oauth2-proxy Login Fix
 
