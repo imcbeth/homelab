@@ -9,7 +9,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from pyflink.common import SimpleStringSchema
+from pyflink.common import SimpleStringSchema, Types
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.datastream.connectors.kafka import (
     DeliveryGuarantee,
@@ -90,7 +90,7 @@ def main() -> None:
     env.set_parallelism(1)
 
     logger.info("Creating in-memory data stream from %d records", len(records))
-    stream = env.from_collection(records)
+    stream = env.from_collection(records, type_info=Types.STRING())
 
     logger.info("Configuring Kafka sink → topic=%s (AT_LEAST_ONCE delivery)", KAFKA_TOPIC)
     sink = (
