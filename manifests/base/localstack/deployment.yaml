@@ -32,3 +32,5 @@ spec:
               value: iam,s3,sns,sqs,lambda,dynamodb,ec2,elb # Enabled Services
             - name: DEBUG
               value: "1"
+            - name: EXTRA_CORS_ALLOWED_ORIGINS
+              value: "https://localstack.k8s.n37.ca"
