@@ -79,7 +79,7 @@ Sealed files must be named `*-sealed.yaml` — this excludes them from yamllint 
 | Nodes | control-plane=10.0.10.214, node01=.235, node02=.211, node03=.244, node04=.220 |
 | CNI | Calico via Tigera operator + Calico APIServer |
 | Mesh | Istio Ambient mode (mTLS) |
-| Registry | Zot pull-through cache at `registry.k8s.n37.ca` |
+| Registry | Zot OCI registry at `registry.k8s.n37.ca` (pull-through cache + local image push target) |
 | Backups | Velero → Backblaze B2 |
 | Secrets | SealedSecrets (30d key rotation) |
 | Policies | OPA Gatekeeper (deny mode, 5 policies, max memory limit 2Gi) |
@@ -100,7 +100,7 @@ Sealed files must be named `*-sealed.yaml` — this excludes them from yamllint 
  -12  loki
  -11  alloy
  -10  cert-manager, external-dns, metrics-server
-  -8  argo-workflows
+  -8  argo-workflows, argo-events
   -7  localstack
   -6  gatekeeper + ConstraintTemplates
   -5  gatekeeper-policies, velero, falco
