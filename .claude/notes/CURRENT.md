@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-05-31 (evening, late)
+**Last Updated:** 2026-05-31 (night)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -33,7 +33,9 @@
 - Monthly DR validation CronWorkflow (1st of month 6am MT) — full backup/restore cycle, ✅ validated 2026-03-25
 - **✅ Velero v1.18.0 running** — Upgraded to v1.18.0 binary + chart v12.0.0 (PRs #531/#532/#552). "Queued" phase now in CRD enum. Validated end-to-end: Queued → InProgress → Completed 2026-04-18.
 
-**Monitoring:** Operational
+**Monitoring:** Operational — Retention bumped to 30 days (PR #661, 2026-05-31)
+- Prometheus: 30d retention (was 10d), AlertManager: 720h (was 120h)
+- Loki: 720h retention (was 168h), Tempo: 720h (was 168h)
 - AlertManager email: 121 sent, 0 failed
 - Trivy scanning: 58+ VulnerabilityReports, metrics in Prometheus (Critical: 44, High: 479, Medium: 1058)
 - Trivy dashboard enhanced with vulnerability panels, alerts, and trends
@@ -81,7 +83,19 @@
 - Grafana datasource auto-discovered; trace↔logs (Loki uid: loki) + trace↔metrics (Prometheus) correlation
 - Loki datasource given fixed `uid: loki` so cross-datasource links resolve
 
-**Network Policies:** Complete (22 namespaces, oauth2-proxy added)
+**Argo Events:** ✅ Deployed 2026-05-31 (PR #662)
+- v1.9.10 (Helm chart 2.4.21), JetStream EventBus (NATS 2.10.10, 1 replica), sync-wave -8
+- Controller metrics port 7777 (ServiceMonitor → kube-prometheus-stack in `default` namespace)
+- Webhook server enabled (port 12000), Istio Ambient enrolled
+- NetworkPolicy: HBONE bare port 15008, Prometheus scrape from `default`, ingress from ingress-nginx:12000, egress to argo-workflows:2746 and kafka:9092
+- **Next step:** Create GitHub webhook → EventSource → Sensor → Argo Workflow for lifeonabike CI builds
+
+**LocalStack:** ✅ Fixed 2026-05-31 (PRs #659, #660)
+- CORS: `EXTRA_CORS_ALLOWED_ORIGINS=https://localstack.k8s.n37.ca`
+- Persistence: `PERSISTENCE=1` + 2Gi iSCSI PVC (`synology-iscsi-retain`) at `/var/lib/localstack`
+- S3 state survives pod restarts; `aws login` no longer triggers NoSuchBucket on startup
+
+**Network Policies:** Complete (23 namespaces — argo-events added 2026-05-31)
 - Covered: localstack, unipoller, loki, trivy-system, velero, argo-workflows, cert-manager, external-dns, metallb-system, ingress-nginx, istio-system, gatekeeper-system, falco, default, argocd, synology-csi, kube-system, tigera-operator
 - Remaining uncovered: calico-system (Gatekeeper-exempted), kube-node-lease, kube-public, secrets-source, velero-test (all empty or system-managed)
 - DNS egress rules fixed across all policies (AND semantics, not OR)
@@ -97,7 +111,7 @@
 - NetworkPolicy enabled (PR #291 fixed K8s API egress)
 - UI accessible at https://workflows.k8s.n37.ca (PR #293)
 
-**ArgoCD:** 39 apps — all Synced+Healthy ✅ (as of 2026-05-31 evening). Exception: flink-operator CRD drift (pre-existing, not blocking).
+**ArgoCD:** 40 apps — all Synced+Healthy ✅ (as of 2026-05-31 night). Exception: flink-operator CRD drift (pre-existing, not blocking).
 - flink-demo: both FlinkDeployments running. file-to-kafka FINISHED/STABLE (batch), kafka-to-s3 RUNNING/STABLE (streaming).
 - **Renovate batch 1 (10 PRs, 2026-05-31):** argo-cd 9.5.11, kube-prometheus-stack 86.1.0, istio 1.29.3, sealed-secrets, velero 12.0.1, busybox all upgraded. ArgoCD self-upgraded during batch (repo-server cycled briefly, auto-recovered).
 - **Renovate batch 2 (8+3 PRs, 2026-05-31):** Istio 1.30.0, Alloy 1.8.2, oauth2-proxy chart 10.6.0, Prometheus 3.12.0, synology-csi 1.3.0, csi-attacher 4.12.0, csi-node-driver-registrar 2.17.0, external-snapshotter 8.6.0. Plus flink-operator 1.15.0 (image + chart URL together, PR #656), Flink Dockerfile 2.2 base image.
@@ -172,6 +186,41 @@
 ---
 
 ## Recent Sessions
+
+### 2026-05-31 (Night): LocalStack Fix, Retention 30d, Flink Verify, Argo Events
+
+**Completed Work:**
+
+**LocalStack CORS + Persistence (PRs #659, #660):**
+- Added `EXTRA_CORS_ALLOWED_ORIGINS` env var to fix CORS errors from `https://localstack.k8s.n37.ca`
+- Added `PERSISTENCE=1` + 2Gi iSCSI PVC (`synology-iscsi-retain`) → S3 state survives pod restarts
+- Root cause of NoSuchBucket on `aws login`: internal auth service uses S3 as state backend; ephemeral LocalStack wiped it on every restart
+
+**Retention bumped to 30 days (PR #661):**
+- Prometheus: `10d → 30d`, AlertManager: `120h → 720h`, Loki: `168h → 720h`, Tempo: `168h → 720h`
+
+**Flink job re-verified after retention PR:**
+- Deleted file-to-kafka JobManager pod → replayed 15 records
+- Confirmed: `s3://flink-output/events/2026/05/31/18/*.json` — 15 files in LocalStack S3 ✅
+
+**Argo Events deployment (PR #662):**
+- Deployed v1.9.10 (Helm chart 2.4.21) with JetStream EventBus (NATS 2.10.10)
+- NetworkPolicies for argo-events namespace + complementary rules in default, ingress-nginx, argo-workflows NPs
+- Fixed all 5 Copilot review comments: wrong Prometheus namespace, missing port 7777 egress, ingress-nginx→argo-events:12000 egress, argo-workflows ingress from argo-events, kustomization.yaml to exclude values.yaml from directory source
+- Applied: `kubectl apply -f manifests/applications/argo-events.yaml`
+- Pods healthy: controller-manager 1/1, eventbus-default-js-0 3/3, events-webhook 1/1, sensor 1/1, eventsource starting
+
+**Key Gotchas:**
+- **ArgoCD directory source applies ALL YAML**: Any directory source will try to apply `values.yaml` as a K8s manifest. Add `kustomization.yaml` to switch to Kustomize mode and enumerate only real resources.
+- **kube-prometheus-stack namespace is `default`**: ServiceMonitor `namespace:` field and NetworkPolicy scrape rules must use `default`, not `monitoring`.
+
+**Pull Requests:**
+- **PR #659:** [Merged] fix(localstack): add CORS allowed origin for localstack.k8s.n37.ca
+- **PR #660:** [Merged] fix(localstack): add persistence PVC and PERSISTENCE env var
+- **PR #661:** [Merged] chore: increase log and metric retention to 30 days
+- **PR #662:** [Merged] feat(argo-events): deploy Argo Events v1.9.10 with JetStream EventBus
+
+---
 
 ### 2026-05-31 (Evening): Renovate Batch, Zot StatefulSet Fix, MetalLB frr-k8s Disable
 
@@ -359,45 +408,11 @@
 
 ---
 
-### 2026-05-02/03: ArgoCD SSO Fix, chaos-mesh Recovery, Argo Workflows v4, oauth2-proxy Login Fix
-
-**Completed Work:**
-
-**ArgoCD GitHub SSO — users saw no apps after login (PR #609, merged):**
-- Root cause: default `scopes: '[groups]'` + empty GitHub `groups` claim = `g, imcbeth, role:admin` never fired
-- Fix: added `scopes: '[preferred_username]'` to `manifests/base/argocd/argocd-config.yaml`
-
-**chaos-mesh — all pods on node04 crashing (node04 image corruption):**
-- Root cause: containerd content store corruption on node04; chaos-mesh images resolved to `pause:latest`
-- Fix: tainted node04 → deleted Deployment pods → `crictl rmi` all chaos-mesh images via debug pod → untainted → fresh pull
-
-**Argo Workflows v4 CronWorkflow fix (PR #610, open):**
-- Root cause: v4.0 renamed `schedule:` (string) → `schedules:` (array); both CronWorkflows used old format → silently never fired
-- Fix: updated both `cluster-healthcheck-workflow.yaml` and `backup-validation-workflow.yaml`
-- Also fixed: removed `path:` from ref-only source in `manifests/applications/argo-workflows.yaml` to stop duplicate resource warnings
-- **Pending merge + `kubectl apply -f manifests/applications/argo-workflows.yaml`**
-
-**oauth2-proxy login redirect — all 3 protected ingresses returned blank 401 (PR #611, merged):**
-- Root cause: `$escaped_request_uri` not in ingress-nginx v1.14.3 nginx variable allowlist → auth-signin annotation silently rejected → no `error_page 401` redirect generated in nginx.conf
-- Fix: changed `$scheme%3A%2F%2F$host$escaped_request_uri` → `$scheme://$host$uri` in all 3 ingresses
-- Used `$uri` (not `$request_uri`) to avoid `&` in query strings breaking the `rd=` parameter
-- Affected: `argo-workflows/argo-workflows-ingress`, `falco/falco-ui-ingress`, `uptime-kuma/values.yaml`
-
-**Key Gotchas:**
-- ingress-nginx v1.14.x has a strict nginx variable allowlist for `auth-signin`; `$escaped_request_uri` is NOT on it → annotation silently rejected, no redirect generated
-- Use `$scheme://$host$uri` (not `$request_uri`) in `auth-signin` `rd=` param to avoid `&` in query strings breaking redirect
-
-**Pull Requests:**
-- **PR #609:** [Merged] fix: set argocd rbac scopes to preferred_username for GitHub SSO
-- **PR #610:** [Open] fix: update CronWorkflows to v4 schedules array, fix duplicate resources — needs merge + kubectl apply
-- **PR #611:** [Merged] fix: replace $escaped_request_uri with $uri in oauth2-proxy auth-signin
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-05-02 | [ArgoCD SSO Fix, chaos-mesh Recovery, Argo Workflows v4, oauth2-proxy Login Fix](sessions/2026-05-02-argocd-sso-chaos-mesh-argo-workflows-v4.md) | preferred_username scopes, containerd corruption fix, schedules array, $uri allowlist |
 | 2026-04-23 | [oauth2-proxy GitHub Authentication](sessions/2026-04-23-oauth2-proxy-github-auth.md) | GitHub OAuth, static://202 validate-only, auth-url ClusterIP, $uri not $escaped_request_uri |
 | 2026-04-23 | [Uptime Kuma, Grafana Tempo, Zot Docs](sessions/2026-04-23-uptime-kuma-tempo-zot-docs.md) | WebSocket via timeout annotations, tracesToLogs, cross-datasource uid, three-source ArgoCD pattern |
 | 2026-04-23 | [Zot OCI Registry Deployment + Pull-Through Fix](sessions/2026-04-23-zot-registry-deployment.md) | ARM64 platform filter, ingress-nginx egress per-backend, *-sealed.yaml naming |
