@@ -29,7 +29,7 @@ loki:
           period: 24h      # Required for retention
 
   limits_config:
-    retention_period: 168h  # 7 days
+    retention_period: 720h  # 30 days
     max_query_series: 500
     max_query_parallelism: 32
     # Memory limits for ingester (aligned with 768Mi pod limit)

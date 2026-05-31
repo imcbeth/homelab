@@ -24,8 +24,8 @@ tempo:
       wal:
         path: /var/tempo/wal
 
-  # Retain traces for 7 days
-  retention: 168h
+  # Retain traces for 30 days
+  retention: 720h
 
 # Persistent storage (10Gi iSCSI LUN on Synology NAS)
 persistence:
