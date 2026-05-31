@@ -1,0 +1,36 @@
+# Argo Events Configuration for Raspberry Pi 5 Kubernetes Homelab
+# Chart: argo/argo-events v2.4.21 (app v1.9.10)
+
+controller:
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  metrics:
+    enabled: true
+    port: 7777
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
+      namespace: argo-events
+      interval: 60s
+      scrapeTimeout: 10s
+
+webhook:
+  enabled: true
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi

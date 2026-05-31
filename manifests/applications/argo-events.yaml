@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-events
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-8"
+spec:
+  project: infrastructure
+  sources:
+    # Helm chart from Argo project
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-events
+      targetRevision: 2.4.21
+      helm:
+        releaseName: argo-events
+        valueFiles:
+          - $values/manifests/base/argo-events/values.yaml
+    # Values file reference (ref only — no path, to avoid duplicate manifest rendering)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      targetRevision: HEAD
+      ref: values
+    # Additional resources (EventBus, namespace)
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/argo-events
+      targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-events
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

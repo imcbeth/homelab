@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argo-events
+  labels:
+    # Enrol in Istio Ambient mesh (mTLS via ztunnel)
+    istio.io/dataplane-mode: ambient
+    kubernetes.io/metadata.name: argo-events
