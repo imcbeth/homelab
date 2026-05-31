@@ -13,7 +13,7 @@ spec:
     # oauth2-proxy Helm chart
     - repoURL: https://oauth2-proxy.github.io/manifests
       chart: oauth2-proxy
-      targetRevision: 10.4.3
+      targetRevision: 10.6.0
       helm:
         valueFiles:
           - $values/manifests/base/oauth2-proxy/values.yaml
