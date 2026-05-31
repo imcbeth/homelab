@@ -167,6 +167,8 @@ spec:
           port: 8765   # Falco metrics
         - protocol: TCP
           port: 2801   # Falcosidekick metrics
+        - protocol: TCP
+          port: 7777   # Argo Events controller + NATS exporter metrics
 
     # Intra-namespace communication (alertmanager, grafana, prometheus, etc.)
     - to:

@@ -19,7 +19,7 @@ controller:
       enabled: true
       additionalLabels:
         release: kube-prometheus-stack
-      namespace: argo-events
+      namespace: default
       interval: 60s
       scrapeTimeout: 10s
 

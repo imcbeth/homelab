@@ -149,3 +149,12 @@ spec:
       ports:
         - protocol: TCP
           port: 8081
+
+    # Backend: argo-events webhook event source
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-events
+      ports:
+        - protocol: TCP
+          port: 12000
