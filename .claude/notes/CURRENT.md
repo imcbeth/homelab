@@ -97,7 +97,8 @@
 - NetworkPolicy enabled (PR #291 fixed K8s API egress)
 - UI accessible at https://workflows.k8s.n37.ca (PR #293)
 
-**ArgoCD:** 35 apps — strimzi-operator, flink-operator, kafka, flink-demo added 2026-05-30. kafka Synced+Healthy ✅ (as of 2026-05-31). flink-demo OutOfSync (FlinkDeployments Missing — waiting for Docker image). Others Synced+Healthy.
+**ArgoCD:** 39 apps — all Synced+Healthy ✅ including strimzi-operator, flink-operator, kafka, flink-demo (as of 2026-05-31).
+- flink-demo: both FlinkDeployments running. file-to-kafka FINISHED/STABLE (batch), kafka-to-s3 RUNNING/STABLE (streaming).
 - argo-cd chart 9.5.3, kube-prometheus-stack 83.7.0, external-dns v0.21.0, unipoller v2.39.0 (all updated 2026-04-21)
 - ingress-nginx migrated from Kustomize to Helm chart (v4.14.3) via ArgoCD
 - ServerSideApply drift fully resolved for istio-ztunnel and tigera-operator
@@ -170,6 +171,50 @@
 ---
 
 ## Recent Sessions
+
+### 2026-05-31: Flink Demo Pipeline — End-to-End Working (file→Kafka→S3)
+
+**Completed Work:**
+
+**Three bugs fixed across three PRs to get the pipeline end-to-end:**
+
+**PR #637: flink-webhook OOMKill (128Mi → 256Mi)**
+- The flink-webhook JVM was OOMKilling at 128Mi during TLS crypto ops, causing EOF on every API server webhook call → FlinkDeployments couldn't be created.
+- Fix: `webhook.resources.limits.memory: 256Mi` in `manifests/base/flink-operator/values.yaml`
+
+**PR #638: FlinkDeployment memory 512m → 1Gi**
+- With `resource.memory: "512m"`, JVM overhead (192mb) + JVM Metaspace (256mb) = 448mb, leaving only 64mb for Total Flink Memory vs 128mb off-heap default.
+- Error: `Total Flink Memory (64mb) < Off-heap Memory (128mb)`
+- Fix: Changed jobManager and taskManager memory to `"1Gi"` in both FlinkDeployment YAMLs.
+
+**PR #639: `env.from_collection()` type_info=Types.STRING()**
+- Without explicit type info, PyFlink uses Kryo to serialize elements. Kryo serializes Python strings as Java byte arrays (`[B`). KafkaSink's `SimpleStringSchema.serialize()` then fails casting `[B` → `String`.
+- Error: `ClassCastException: class [B cannot be cast to class java.lang.String`
+- Fix: `env.from_collection(records, type_info=Types.STRING())` in `pipeline-file-to-kafka-configmap.yaml`
+
+**Also fixed: Dockerfile pemja build issue (previous session, image build)**
+- `pemja==0.4.1` requires JDK headers, GCC, Python headers to compile C extension.
+- Added `openjdk-17-jdk-headless`, `build-essential`, `python3-dev` + header symlink.
+
+**Final verified state:**
+- `flink-events:0:15` — 15 JSON records in Kafka ✅
+- `s3://flink-output/events/2026/05/31/14/*.json` — 15 individual JSON files in LocalStack S3 ✅
+- `file-to-kafka` FlinkDeployment: FINISHED/STABLE ✅ (batch job, replays on restart)
+- `kafka-to-s3` FlinkDeployment: RUNNING/STABLE ✅ (streaming, consuming new messages)
+- colima stopped ✅
+
+**Key Gotchas Discovered:**
+- **flink-webhook JVM needs ≥256Mi**: TLS crypto is memory-intensive. 128Mi causes OOMKill → EOF on all webhook calls.
+- **Flink memory model minimum**: With 1Gi, breakdown is: JVM Overhead 192mb + JVM Metaspace 256mb + JVM Heap 448mb + Off-heap 128mb = 1024mb. 512mb leaves only 64mb for Flink which is below the 128mb off-heap default.
+- **PyFlink from_collection() type safety**: Always pass `type_info=Types.STRING()` (or appropriate type) to `env.from_collection()`. Without it, Kryo serialization converts Python strings to `[B` byte arrays, breaking any Java-side String sink.
+- **FAILED FlinkDeployment restart**: The operator doesn't restart a FAILED job on ConfigMap change — it requires a spec change. Delete the old JobManager pod to force the Deployment controller to recreate it; the new pod picks up the updated ConfigMap.
+
+**Pull Requests:**
+- **PR #637:** [Merged] fix: increase flink-webhook memory limit to 256Mi (OOMKill)
+- **PR #638:** [Merged] fix: bump FlinkDeployment memory from 512m to 1Gi
+- **PR #639:** [Merged] fix: add type_info=Types.STRING() to from_collection in file-to-kafka
+
+---
 
 ### 2026-05-30: Kafka + Flink Demo Infrastructure — PR Reviews, Deployment, Post-Merge Fixes
 
@@ -331,179 +376,15 @@ Note: `$escaped_request_uri` is NOT in ingress-nginx v1.14.x's allowlist — use
 
 ---
 
-### 2026-04-23 (Session 2): Uptime Kuma, Grafana Tempo, Zot Docs
-
-**Completed Work:**
-
-**Zot k8s-docs-n37 Guide (PR #76 — k8s-docs-n37 repo, merged):**
-- Full Zot tutorial: purpose, pull-through cache usage, quick start, Web UI, CVE scanning, configuration, troubleshooting
-- Fixed Copilot review: sidebars.ts entries, broken relative links (.md extensions), label selectors, StorageClass wording, imagePullSecret example, docs URL
-- Resolved merge conflict via `git rebase origin/main --force-with-lease`
-
-**Uptime Kuma (PR #573, merged):**
-- `manifests/applications/uptime-kuma.yaml` — ArgoCD Application (sync-wave 0, multi-source Helm)
-- `manifests/base/uptime-kuma/values.yaml` — image docker.io/louislam/uptime-kuma:1.23.17-debian, Recreate strategy, 5Gi iSCSI PVC (synology-iscsi-delete), ingress status.k8s.n37.ca
-- `manifests/base/network-policies/uptime-kuma/network-policy.yaml` — ingress from ingress-nginx + Prometheus; egress DNS + external HTTP/HTTPS
-- Updated ingress-nginx NetworkPolicy with egress to uptime-kuma :3001
-- **Copilot fix:** replaced `server-snippets` (creates duplicate `location /` block, requires disabled `allow-snippet-annotations`) with native ingress-nginx WebSocket support via timeout annotations only
-
-**Grafana Tempo (PR #574, merged):**
-- `manifests/applications/tempo.yaml` — ArgoCD Application (sync-wave -11, three-source: Helm + values ref + manifest path)
-- `manifests/base/tempo/values.yaml` — OTLP receivers (4317/4318), 10Gi iSCSI PVC, 7-day retention, GOMEMLIMIT=900MiB
-- `manifests/base/tempo/tempo-datasource.yaml` — Grafana datasource ConfigMap with `tracesToLogs` (not `derivedFields`), `tracesToMetrics`, `serviceMap`, `lokiSearch`
-- `manifests/base/network-policies/tempo/namespace.yaml` + `network-policy.yaml` — Istio ambient mesh rules, OTLP ingress from loki, HTTP API from default, istio-system egress
-- Updated loki NetworkPolicy: bare OTLP ingress (4317/4318), egress to tempo :4317
-- Updated Alloy values: `otelcol.receiver.otlp` + `otelcol.exporter.otlp` for Tempo; `extraPorts` for Service exposure
-- Added `uid: loki` to loki-datasource ConfigMap for cross-datasource correlation
-
-**Key Gotchas:**
-- `server-snippets` creates duplicate `location /` block AND requires `allow-snippet-annotations: true` (disabled by default since ingress-nginx v1.9, CVE-2021-25742). Use timeout annotations for WebSocket instead.
-- `derivedFields` is a Loki datasource key (log→trace). Tempo datasource uses `tracesToLogs` for trace→log direction.
-- Cross-datasource `datasourceUid` references require a fixed `uid:` in the target datasource ConfigMap — Grafana auto-generated UIDs won't match.
-- Three-source ArgoCD pattern for Tempo: source 1 = Helm chart, source 2 = `ref: values` only (no path), source 3 = `path:` only (no ref) for extra manifests. Combining ref+path is ambiguous.
-- Tempo NetworkPolicy needs Istio ambient mesh rules (bare 15008 ingress, ztunnel link-local, istio-system egress) like all other namespaced policies.
-
-**Pull Requests:**
-- **PR #76 (k8s-docs-n37):** [Merged] docs: add Zot OCI registry guide with pull-through tutorial
-- **PR #573:** [Merged] feat: deploy Uptime Kuma status page
-- **PR #574:** [Merged] feat: add Grafana Tempo distributed tracing
-
----
-
-### 2026-04-23: Zot OCI Registry — Deployment + Pull-Through Fix
-
-**Completed Work:**
-
-**Zot v2.1.16 Deployed (PR #571):**
-- `manifests/applications/zot.yaml` — multi-source ArgoCD app (Helm 0.1.106 + values + SealedSecret)
-- `manifests/base/zot/values.yaml` — StatefulSet (persistence: true), 50Gi iSCSI PVC, sync extension for 4 upstreams, search/CVE/metrics/scrub extensions, ingress via nginx+cert-manager
-- `manifests/base/zot/zot-htpasswd-sealed.yaml` — SealedSecret for htpasswd auth
-- `manifests/base/network-policies/zot/network-policy.yaml` — NetworkPolicy for zot namespace
-- `manifests/base/gatekeeper/constraints/allowed-repos.yaml` — added `registry.k8s.n37.ca`
-- Synced+Healthy on first try. CVE DB (850MB) downloaded. Ingress at registry.k8s.n37.ca.
-
-**504 Fix — ingress-nginx egress (PR #572):**
-- Root cause: ingress-nginx NetworkPolicy had no egress rule to `zot` namespace on port 5000
-- Fix: added egress rule to `manifests/base/network-policies/ingress-nginx/network-policy.yaml`
-
-**Pull Timeout Fix — ARM64 platform filter (PR #572):**
-- Root cause: on-demand sync downloaded ALL platform variants for multi-arch images (e.g. nginx:latest = 12+ platforms, ~41s). Docker client timed out waiting for manifest HEAD response.
-- Fix: added `"platforms": [{"os": "linux", "arch": "arm64"}]` to all 4 upstream sync configs
-- Result: first-pull now takes seconds (single platform only)
-
-**Key Gotchas:**
-1. ingress-nginx NetworkPolicy needs an explicit egress rule for EACH backend namespace+port — not just the backend's ingress rule
-2. Zot on-demand sync blocks the manifest HTTP response until the entire image is synced. Without platform filter on a pure ARM64 cluster, all AMD64/arm/v7/s390x variants are also downloaded.
-3. SealedSecret files must match `*-sealed.yaml` pattern (not `sealed-secret-*.yaml`) to be excluded from yamllint line-length check in pre-commit hooks.
-
-**Pull Requests:**
-- **PR #571:** [Merged] feat: deploy Zot OCI registry v2.1.16
-- **PR #572:** [Open] fix: ingress-nginx egress to zot + arm64-only sync filter
-
----
-
-### 2026-04-22: Chaos Mesh 2.8.2 — Final Sync Drift Resolution
-
-**Completed Work:**
-
-**Chaos Mesh ArgoCD Sync Drift — 6 PRs to reach Synced+Healthy (64 resources, 0 OutOfSync):**
-
-All drift sources resolved across PRs #562–#570:
-- **PR #563:** Initial chaos-mesh deployment (Helm 2.8.2, 4 scheduled experiments, NetworkPolicy, Gatekeeper exclusions)
-- **PR #564:** NetworkPolicy webhook fix — bare port rule (no `from`) for port 10250. Calico IPIP rewrites source IP on cross-node traffic, making `ipBlock` rules ineffective for API server → webhook calls
-- **PR #565:** `ignoreDifferences` for 4 TLS cert Secrets (`/data`) auto-populated by chaos-mesh controller
-- **PR #566:** `startingDeadlineSeconds: null` in all 4 Schedule YAMLs (mutation webhook adds this field); DaemonSet/Deployment switched from `jsonPointers` to `jqPathExpressions`
-- **PR #567:** Webhook configs — switch from `jsonPointers: [/webhooks]` to `jqPathExpressions: [.webhooks[].clientConfig.caBundle]` (jsonPointers not honored with SSA)
-- **PR #568:** Add `group: admissionregistration.k8s.io` to webhook ignoreDifferences — **cluster-scoped resources require `group` field** for ArgoCD to match them
-- **PR #569:** Remove `gracePeriod: 0` from pod-kill experiment (mutation webhook strips it); rollme `jqPathExpressions` added but didn't work (ArgoCD bug/limitation with annotation map traversal)
-- **PR #570:** Pin `podAnnotations.rollme: "pinned"` in values.yaml for controllerManager + chaosDaemon — chart uses `randAlphaNum 5` per render, causing perpetual drift + rolling restarts on every commit
-
-**Final state:** 64 resources Synced+Healthy. chaos-mesh stable.
-
-**Key Gotchas Learned:**
-1. `jsonPointers: [/webhooks]` silently ignored with `ServerSideApply=true` — must use `jqPathExpressions`
-2. Cluster-scoped resources (MutatingWebhookConfiguration, ValidatingWebhookConfiguration) require `group: admissionregistration.k8s.io` in `ignoreDifferences` or entries are silently skipped
-3. Namespace-scoped resources (DaemonSet, Deployment) match WITHOUT `group` field — but jq annotation map traversal (`.spec.template.metadata.annotations.rollme`) didn't work with ArgoCD v3.3.8
-4. chaos-mesh uses `randAlphaNum` for `rollme` annotation — pin it in values.yaml to prevent perpetual drift
-5. Mutation webhook strips `gracePeriod: 0` from pod-kill Schedules (0 is the K8s default)
-
-**PRs:** #562 (renovate), #563-570 (chaos-mesh)
-
----
-
-### 2026-04-21 (Evening, Session 2): Housekeeping + Healthcheck Verification
-
-**Completed Work:**
-
-**Renovate kube-webhook-certgen Warning (PR #562):**
-- Added `registry.k8s.io/ingress-nginx/kube-webhook-certgen` to `ignoreDeps` in `renovate.json`
-- Pinned in `manifests/base/kube-prometheus-stack/values.yaml` but registry.k8s.io lookup returns `no-result`
-- Version managed by kube-prometheus-stack chart upgrades — no separate tracking needed
-
-**TODO.md Cleanup:**
-- Marked VPN/Remote Access section done (UniFi gateway VPN server handles it — applied from session stash)
-- Marked k8s-docs-n37 guides done (cert-manager, metallb, ingress-nginx, localstack all exist from earlier sessions)
-
-**Cluster Healthcheck Verification:**
-- ArgoCD `argo-workflows` Synced+Healthy at commit `44b2926` (PR #559 fix) — synced 2026-04-20 19:35 UTC (before April 21 06:00 MDT run)
-- CronWorkflow `failed: 3, succeeded: 0` — 3 pre-fix failures (Apr 18-20). `succeeded: 0` likely due to TTL GC decrementing counter after today's successful run (2h TTL)
-- Fix confirmed deployed: CronWorkflow spec shows `velero-daily-*` prefix names
-- Pre-existing `RepeatedResourceWarning`: argo-workflows source 2 has both `ref: values` AND `path:` — non-fatal
-
-**Branch Sync:**
-- Local `main` was 29 commits behind origin/main (PRs #553-#561 not pulled). Updated via `git reset --hard origin/main`
-- Rebased `chore/renovate-ignore-kube-webhook-certgen` onto origin/main
-
-**Pull Requests:**
-- **PR #562:** [Open] chore: ignore kube-webhook-certgen in Renovate, update TODO
-
-**Key Learnings:**
-- CronWorkflow `succeeded` counter may decrement when completed workflows are cleaned up by TTL. Don't rely on it as a strict cumulative counter.
-
----
-
-### 2026-04-21 (Evening): Renovate Batch, Loki btrfs Fix, Rollout Monitoring
-
-**Completed Work:**
-
-**Renovate Dashboard Review:**
-- Identified 2 open PRs + 2 awaiting-schedule patches
-- PR #558 (unipoller v2.39.0): Previously pinned due to crash bug. Re-reviewed — API key (`api-key`) was already in `unipoller-secret` and wired via `UP_UNIFI_CONTROLLER_0_API_KEY`. The crash was caused by the UDR being hardware-degraded during the outage, not a missing key. Safe to merge with healthy UDR.
-- PR #554 (external-dns image v0.20.0→v0.21.0): Clean image-tag-only diff, no conflict with lifeonabike.ca args added in #553.
-- Triggered awaiting-schedule PRs #560 (argo-cd 9.5.3) and #561 (kube-prometheus-stack 83.7.0) via Renovate dashboard checkbox edit.
-
-**All 4 PRs merged and deployed:**
-- **PR #554:** external-dns image v0.20.0→v0.21.0 — both cloudflare + unifi pods rolled, 0 restarts ✅
-- **PR #558:** unipoller v2.38.0→v2.39.0 — clean startup, `Save Anomalies true`, exporting 1783 metrics/20s, 0 errors ✅
-- **PR #560:** argo-cd chart 9.5.2→9.5.3 — Synced+Healthy ✅
-- **PR #561:** kube-prometheus-stack 83.6.0→83.7.0 — 175 PreSync hooks completed, Synced+Healthy ✅
-
-**loki-0 btrfs CrashLoopBackOff (280 restarts) — discovered during rollout monitoring:**
-- Same root cause as Grafana/Prometheus (UDR factory reset, 2026-04-19): btrfs remounted PVC read-only.
-- Error: `unlinkat /var/loki/tsdb-shipper-active/scratch: read-only file system`
-- Fix: `kubectl delete pod loki-0 -n loki` → fresh remount → 2/2 Running, 0 restarts ✅
-- All 3 UDR-affected PVCs now confirmed RW: Grafana (5Gi/node02), Prometheus (50Gi/node01), Loki (20Gi/node03)
-
-**Application manifests applied manually (required pattern):**
-- `kubectl apply` on `manifests/applications/argocd.yaml` and `manifests/applications/kube-prometheus-stack.yaml` after PR merges — ArgoCD self-management does NOT auto-deploy Application spec changes.
-
-**Pull Requests:**
-- **PR #554:** [Merged] chore: external-dns image v0.21.0
-- **PR #558:** [Merged] chore: unipoller v2.39.0
-- **PR #560:** [Merged] chore: argo-cd chart 9.5.3
-- **PR #561:** [Merged] chore: kube-prometheus-stack 83.7.0
-
-**Key Learnings:**
-- unipoller v2.39.0 crash was UDR-induced, not a config issue. API key was already in place. Re-upgrade safe once UDR is healthy.
-- Loki btrfs read-only from same UDR event — wasn't caught in initial PVC audit because `loki-0` showed 0 restarts at that time (280 restarts accumulated over 2 days). Always check ArgoCD app health status, not just pod restarts.
-- `kube-prometheus-stack` auto-sync picks up the Helm chart version change after `kubectl apply` on the Application manifest — no manual `argocd app sync` needed once the Application is updated.
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-04-23 | [Uptime Kuma, Grafana Tempo, Zot Docs](sessions/2026-04-23-uptime-kuma-tempo-zot-docs.md) | WebSocket via timeout annotations, tracesToLogs, cross-datasource uid, three-source ArgoCD pattern |
+| 2026-04-23 | [Zot OCI Registry Deployment + Pull-Through Fix](sessions/2026-04-23-zot-registry-deployment.md) | ARM64 platform filter, ingress-nginx egress per-backend, *-sealed.yaml naming |
+| 2026-04-22 | [Chaos Mesh 2.8.2 Sync Drift Resolution](sessions/2026-04-22-chaos-mesh-sync-drift.md) | jqPathExpressions vs jsonPointers+SSA, cluster-scoped group field, randAlphaNum pin |
+| 2026-04-21 | [Housekeeping + Healthcheck Verification](sessions/2026-04-21-housekeeping-healthcheck.md) | CronWorkflow TTL counter decrement, Renovate ignoreDeps, branch sync |
+| 2026-04-21 | [Renovate Batch, Loki btrfs Fix](sessions/2026-04-21-renovate-batch-loki-btrfs-fix.md) | unipoller v2.39.0 safe after UDR recovery, loki btrfs RO, Application manifest apply pattern |
 | 2026-04-19 | [Alert False Positives, UDR Recovery, Healthcheck Fix](sessions/2026-04-19-alert-false-positives-udr-recovery.md) | Loki ruler self-scan, LocalStack Trivy false positive, btrfs RO recovery, velero schedule name fix |
 | 2026-04-18 | [lifeonabike.ca DNS + TLS, Velero Validation, cert-manager Fix](sessions/2026-04-18-lifeonabike-velero-cert-manager.md) | DNS-01 split-horizon fix, lifeonabike.ca cert issued, velero v1.18.0 validated |
 | 2026-04-17 | [tigera-operator, iSCSI PVC Protection, Always-On Monitoring](sessions/2026-04-17-tigera-iscsI-pvc-protection-monitoring.md) | Prune+SSA PVC orphan bug fixed, cluster-healthcheck CronWorkflow, Mac LaunchAgent |
