@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: lifeonabike
+  labels:
+    app: lifeonabike-web
+    app.kubernetes.io/name: lifeonabike-web
+    app.kubernetes.io/component: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: lifeonabike-web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: lifeonabike-web
+        app.kubernetes.io/name: lifeonabike-web
+    spec:
+      imagePullSecrets:
+        - name: lifeonabike-registry-creds
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101          # nginx user in the alpine image
+        fsGroup: 101
+      containers:
+        - name: web
+          # Tag is updated by the Argo build workflow after each successful build.
+          image: registry.k8s.n37.ca/lifeonabike/lifeonabike.ca:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              cpu: 200m
+              memory: 96Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # nginx needs /var/cache, /var/run
+            capabilities:
+              drop: ["ALL"]

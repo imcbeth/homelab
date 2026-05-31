@@ -1,0 +1,47 @@
+# GitHub EventSource for lifeonabike.ca build pipeline.
+#
+# Listens for push events on the imcbeth/lifeonabike.ca repo (main branch only)
+# and fires an event that the lifeonabike-build Sensor picks up.
+#
+# Prerequisites (one-time cluster setup):
+#   # GitHub PAT with repo scope + admin:repo_hook for auto-registration
+#   kubectl create secret generic github-access-token \
+#     --from-literal=token=<your-pat> -n argo-events
+#
+#   # Shared HMAC secret — paste the same value into the GitHub webhook form
+#   kubectl create secret generic github-lifeonabike-webhook-secret \
+#     --from-literal=secret=$(openssl rand -hex 32) -n argo-events
+#
+# Exposes port 12000 via the lifeonabike-github-eventsource-svc Service,
+# routed publicly at https://build-webhook.k8s.n37.ca/push (see webhook-ingress.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: lifeonabike-github
+  namespace: argo-events
+spec:
+  service:
+    ports:
+      - port: 12000
+        targetPort: 12000
+  github:
+    lifeonabike-push:
+      repositories:
+        - owner: imcbeth
+          names:
+            - lifeonabike.ca
+      webhook:
+        endpoint: /push
+        port: "12000"
+        method: POST
+        url: https://build-webhook.k8s.n37.ca
+      events:
+        - push
+      apiToken:
+        name: github-access-token
+        key: token
+      webhookSecret:
+        name: github-lifeonabike-webhook-secret
+        key: secret
+      filter:
+        expression: "ref == 'refs/heads/main'"

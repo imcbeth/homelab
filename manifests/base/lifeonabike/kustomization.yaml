@@ -6,3 +6,6 @@ namespace: lifeonabike
 resources:
   - namespace.yaml
   - certificate.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml

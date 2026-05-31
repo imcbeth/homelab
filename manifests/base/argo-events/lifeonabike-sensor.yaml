@@ -1,0 +1,51 @@
+---
+# ServiceAccount for the Sensor pod
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lifeonabike-sensor-sa
+  namespace: argo-events
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: lifeonabike-build
+  namespace: argo-events
+spec:
+  template:
+    serviceAccountName: lifeonabike-sensor-sa
+    container:
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+  dependencies:
+    - name: push-event
+      eventSourceName: lifeonabike-github
+      eventName: lifeonabike-push
+  triggers:
+    - template:
+        name: build-trigger
+        argoWorkflow:
+          operation: submit
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: lifeonabike-build-
+                namespace: argo-workflows
+              spec:
+                workflowTemplateRef:
+                  name: lifeonabike-build
+                arguments:
+                  parameters:
+                    - name: revision
+                      value: main
+      retryStrategy:
+        steps: 3
+        duration: 10s
+        factor: 2
