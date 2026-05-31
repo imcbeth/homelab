@@ -93,7 +93,7 @@ spec:
           securityContext:
             privileged: true
           imagePullPolicy: IfNotPresent
-          image: synology/synology-csi:v1.2.1
+          image: synology/synology-csi:v1.3.0
           resources:
             requests:
               cpu: 10m
