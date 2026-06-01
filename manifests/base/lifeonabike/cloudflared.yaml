@@ -1,0 +1,61 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: lifeonabike
+data:
+  config.yaml: |
+    tunnel: c8c74986-4238-4558-9387-905cd91b409b
+    credentials-file: /etc/cloudflared/creds/credentials.json
+    no-autoupdate: true
+    ingress:
+      - hostname: lifeonabike.ca
+        service: http://web.lifeonabike.svc.cluster.local:80
+      - hostname: www.lifeonabike.ca
+        service: http://web.lifeonabike.svc.cluster.local:80
+      - hostname: build-webhook.n37.ca
+        service: http://lifeonabike-github-eventsource-svc.argo-events.svc.cluster.local:12000
+      - service: http_status:404
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: lifeonabike
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+        app.kubernetes.io/name: cloudflared
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2024.10.0
+          args: ["tunnel", "--config", "/etc/cloudflared/config/config.yaml", "run"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cloudflared/config
+              readOnly: true
+            - name: creds
+              mountPath: /etc/cloudflared/creds
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: cloudflared-config
+        - name: creds
+          secret:
+            secretName: tunnel-credentials
