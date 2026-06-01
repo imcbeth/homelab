@@ -27,6 +27,25 @@ tempo:
   # Retain traces for 30 days
   retention: 720h
 
+  # Resource limits (ARM64 Raspberry Pi 5 nodes)
+  # Must be under tempo: — top-level resources: is ignored by this chart
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Prevent Tempo from consuming its entire memory limit
+  extraEnv:
+    - name: GOMEMLIMIT
+      value: "900MiB"
+
+  # Pod labels for Gatekeeper compliance
+  podLabels:
+    app.kubernetes.io/name: tempo
+
 # Persistent storage (10Gi iSCSI LUN on Synology NAS)
 persistence:
   enabled: true
@@ -34,24 +53,6 @@ persistence:
   size: 10Gi
   accessModes:
     - ReadWriteOnce
-
-# Resource limits (ARM64 Raspberry Pi 5 nodes)
-resources:
-  requests:
-    cpu: 100m
-    memory: 256Mi
-  limits:
-    cpu: 500m
-    memory: 1Gi
-
-# Prevent Tempo from consuming its entire memory limit
-extraEnv:
-  - name: GOMEMLIMIT
-    value: "900MiB"
-
-# Pod labels for Gatekeeper compliance
-podLabels:
-  app.kubernetes.io/name: tempo
 
 # ServiceMonitor for Prometheus metrics collection
 serviceMonitor:
