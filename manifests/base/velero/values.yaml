@@ -55,6 +55,8 @@ configuration:
         # Backblaze B2 configuration
         region: us-west-004
         s3Url: https://s3.us-west-004.backblazeb2.com
+        # Disable object tagging — B2 rejects x-amz-tagging header (plugin ≥v1.14.1)
+        tagging: ""
 
         # Alternative providers (commented for reference):
         #
