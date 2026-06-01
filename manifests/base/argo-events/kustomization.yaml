@@ -4,6 +4,5 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - eventbus.yaml
-  - webhook-ingress.yaml
   - lifeonabike-event-source.yaml
   - lifeonabike-sensor.yaml
