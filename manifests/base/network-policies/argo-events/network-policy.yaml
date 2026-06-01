@@ -39,11 +39,14 @@ spec:
           port: 6222   # NATS cluster
         - protocol: TCP
           port: 8222   # NATS monitoring HTTP
-    # Webhook event source — external events in via ingress-nginx
+    # Webhook event source — external events in via ingress-nginx or Cloudflare Tunnel (lifeonabike ns)
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: lifeonabike
       ports:
         - protocol: TCP
           port: 12000  # Argo Events webhook server

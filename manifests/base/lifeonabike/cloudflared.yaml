@@ -14,7 +14,7 @@ data:
         service: http://web.lifeonabike.svc.cluster.local:80
       - hostname: www.lifeonabike.ca
         service: http://web.lifeonabike.svc.cluster.local:80
-      - hostname: build-webhook.k8s.n37.ca
+      - hostname: build-webhook.n37.ca
         service: http://lifeonabike-github-eventsource-svc.argo-events.svc.cluster.local:12000
       - service: http_status:404
 ---

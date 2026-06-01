@@ -13,7 +13,7 @@
 #     --from-literal=secret=$(openssl rand -hex 32) -n argo-events
 #
 # Exposes port 12000 via the lifeonabike-github-eventsource-svc Service,
-# routed publicly at https://build-webhook.k8s.n37.ca/push (see webhook-ingress.yaml).
+# routed publicly at https://build-webhook.n37.ca/push (via Cloudflare Tunnel homelab-k8s).
 apiVersion: argoproj.io/v1alpha1
 kind: EventSource
 metadata:
@@ -34,7 +34,7 @@ spec:
         endpoint: /push
         port: "12000"
         method: POST
-        url: https://build-webhook.k8s.n37.ca
+        url: https://build-webhook.n37.ca
       events:
         - push
       apiToken:
