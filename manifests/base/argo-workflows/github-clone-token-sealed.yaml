@@ -1,0 +1,14 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: github-clone-token
+  namespace: argo-workflows
+spec:
+  encryptedData:
+    token: AgCB1ypIsa+0clHu+v8xA59YMdbIMx7SUKJgb6/JuorfLubBv+CiDzOz3X685+fN2d8dNE7ffFYO18jztUIlvi2A3aXbaQnFeMbBIr7ZoHG9CHx2PIJWqgq4QFgeMZQkMP26EYXzisE1m5MHD1143qTqPcuODuN6V+8Xe0P7ZTO5bR4sNtukriWpHwtyvhRywIaz0oFMahP3lxs9Heg5j0GsgRvRd7/3fdmLqHmF2ya6jvykgFURr3X1ATGn3XHIjnUsDyUmdagW5N8uuiUnDngIozOomxRnccXCsd/SOPbfk8tP7evF7O+hgD/MeP5jIByg24XIqLfsKClTLq2hza+pv7HcQ53U9ZyBzbUG80Bsq3FahGdPySmGTpcJ+Gn4iwwySugXQGCm7OJu3atjwJmmpZo8y34OuCq/W3kHIWbdrWrD+2iIBOizV5YyKl+bEEUneVQpk/IrCtIrlNPxdNB8lPUN7j8XKmc5g3ZY/NNvGHuRJR9Ksb1CNXczyJD5Dz7WF5ol3xIMomrxrpoh/VZmLlYKZ8GBC8Hk9Y0cAD0qaHDkVystCYv+RnAHucgqd3RDjOicfukDIIKtaAPOqMJ++ZwH2fMBLcSawtKJkIxUTY3Rt+cH0ILKGnT1EbOFr9h+grGbPJoVrxu/NXltcuhJP+hiho8BqU73QydVlL6rTVmGhwlWNDllzga5o2J5klcVWo17ZdFmKqBxputSnxZNFjDFFBIMUKVglHWKRJb3Msw1CZd0Rw/i
+  template:
+    metadata:
+      name: github-clone-token
+      namespace: argo-workflows
+    type: Opaque

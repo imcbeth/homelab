@@ -1,0 +1,14 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: lifeonabike-registry-creds
+  namespace: lifeonabike
+spec:
+  encryptedData:
+    .dockerconfigjson: AgCmUl9kT9IwAlmO2aW63eltqKSipY1vFWOp6FClhVbE7gi0DaEYMsFPTqP7sNhWFY5DykjcTHiWEYlkLFn0e2M5xuOsB/zlLgUysDRu6//OX4osudQoSeg00KKbS7yd1Ppz0OkJGDGUKFRVPhLlauCK4b3VrEV8WKbgCjDVMv5hSu2Jmedh87MnrXlUipyCn659OHKgSRVKeRpIFSpmL3NlOKZoJWEoGQ6otvDxLEppYLoM96RcTeRLUmZiWLb1UHYIvMm9iErIR6k75T9VWX+qm6kDmf6pR0mzfVJEsCYJLl8628ezuwr99mNMd7lFIouOkv3GRYn4xr1p2Iw+RLyfOl2+c4h04jNwkxU2ZHk9LB/2TdIbU7tc8fzxj/ZjxCW9idK0n5L1o/ienS5YhCflbaK+ZN8srvLxa8I3sjarbkOHe/1adCZ+PUh85KwYeQ6j+38bNV42A2yZwR4wvL1GTb/dhzS0bi/R9TA+6Os3pNA/m1fKwsR2BMBLvWPCg7Kp0riLPRLwasVASUmtLPftefmgoB3rBOuo3y5uplOJ5P1bTPGX3YTnouTHQcDI/GTHXM9shK8Xu5zb57hsCp4q6JBCB98P0RfA6/IZyRjJ+XxOUKbgmzIbCYZzWwzZrTRAsLY+CkmqKhoF+Gf8lFCYs5+Dp97peRyMSR8KIEDCs8VgvEQ6Qo7NXfL/H+WrwxjfN9Iz3R8rtbwQ1DRFCqaDYRhZLZr36FJ600N4mFdzHwpmH3xa+MXtAwnCpK9NCQItnVB3ucoyvwTk13KNn+7gRYTyIn/nrS07bRsIbYPFOi/ATFhxNWr6YeJcpgLDm5LYgqv97R7z7uemW0i5HJF8q049VLS4klVCLeiKFHmRPENOzHGMFA==
+  template:
+    metadata:
+      name: lifeonabike-registry-creds
+      namespace: lifeonabike
+    type: kubernetes.io/dockerconfigjson
