@@ -1,0 +1,13 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: github-lifeonabike-webhook-secret
+  namespace: argo-events
+spec:
+  encryptedData:
+    secret: AgDImyLB+h86FPMSID/NcImsn6RLRQDCEWwl4YqO2XYoqELN8dsezB0iSTRrtH70WAc5KEFQ+9FNQ0DTy4iSp00cL5Vax+sydgkz2v5RtsRFNdJsfImhgPALv1rLiRXFpeKmNu/3qIkmMVa1cDQSar3n8O41fYMMIw427phKdzDkkpY4N2DjJ5zqE3h22QhPkyE3ukG4so5SRHsBWweNxBUb0aGWdFvbkduXGebsKISqF17iCjyCx4oGAV1J4aj4BdiDaFHN5x2j+vKqqqzXDjOOs0u6PrXNs7hsPYCUJSpipQ8HBkc3/fn23LkvL7VYm2H99Tx1lVbDZEQkDyybahJEIqeTKHQ5NVaoxplXfLG6hV2E3tDZrkx8PwmshX70ReIGh0OXZLzqiiLJ6qzX0dN5aagHB+JoCf7bwcXdheXFhH9gz8aYzKqN7Lz1DkaxfpQ4MnKGZ37BlXZucO6hilSOhAZJmDp2G8x5guiu6zwfIOh2dLguVeJtpJxVzzg3yr9QPctT6oGY3o9YO3raRbR8ZYCyD1Fc3IgoFXxcIWg4RSyfPw3JFzAsbYR9NQHcyvrHQYtb+TLllL5UedMlZ2K8Ua7+xs87hMD12lOkQ0iUuOpjip014JZhqDvZm+2k803FSBzkZ0GbLVE20yzhS1SshTVLWOn0HCXRwAw84Cfr0059O4Cqu5H3hkndRqC9BQr66VKbVIEpcVwxDgA60ROMDJDu3HWkLSdjzvtbWJvfb6i2pj0VKs/aW6MLvzjhE6RC+qCnC7KPDe+VgJJurXJe
+  template:
+    metadata:
+      name: github-lifeonabike-webhook-secret
+      namespace: argo-events

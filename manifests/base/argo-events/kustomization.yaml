@@ -6,4 +6,4 @@ resources:
   - eventbus.yaml
   - lifeonabike-event-source.yaml
   - lifeonabike-sensor.yaml
-  - github-lifeonabike-webhook-secret-sealed.yaml
+  - lifeonabike-webhook-hmac-sealed.yaml
