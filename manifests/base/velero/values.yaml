@@ -27,10 +27,10 @@ resources:
     memory: 256Mi
 
 # Init containers for backup plugins - ARM64 versions
-# Note: CSI plugin is integrated into Velero v1.14+, no separate plugin needed
+# Pinned to v1.13.2: v1.14.x sends x-amz-tagging on every PutObject; Backblaze B2 rejects that header
 initContainers:
   - name: velero-plugin-for-aws
-    image: velero/velero-plugin-for-aws:v1.14.1
+    image: velero/velero-plugin-for-aws:v1.13.2
     imagePullPolicy: IfNotPresent
     resources:
       requests:
@@ -55,8 +55,6 @@ configuration:
         # Backblaze B2 configuration
         region: us-west-004
         s3Url: https://s3.us-west-004.backblazeb2.com
-        # Disable object tagging — B2 rejects x-amz-tagging header (plugin ≥v1.14.1)
-        tagging: ""
 
         # Alternative providers (commented for reference):
         #
