@@ -103,25 +103,24 @@ server:
 # =============================================================================
 # Artifact Repository Configuration
 # =============================================================================
-# Backblaze B2 as primary artifact storage
-# Uses existing SealedSecret for credentials
+# LocalStack S3-compatible storage (in-cluster, no external dependency)
+# Bucket: argo-workflows (pre-created: awslocal s3 mb s3://argo-workflows)
+# Credentials: argo-workflows-localstack-credentials secret (key=test, secret=test)
 useDefaultArtifactRepo: true
 artifactRepository:
   archiveLogs: true
   s3:
-    bucket: homelab-workflows
-    endpoint: s3.us-west-004.backblazeb2.com
-    region: us-west-004
-    # Credentials from SealedSecret
+    bucket: argo-workflows
+    endpoint: localstack.localstack.svc.cluster.local:4566
+    region: us-east-1
     accessKeySecret:
-      name: argo-workflows-b2-credentials
+      name: argo-workflows-localstack-credentials
       key: access-key
     secretKeySecret:
-      name: argo-workflows-b2-credentials
+      name: argo-workflows-localstack-credentials
       key: secret-key
-    # Use virtual-hosted style URLs (required for B2)
+    insecure: true
     useSDKCreds: false
-    insecure: false
 
 # =============================================================================
 # Workflow Configuration
