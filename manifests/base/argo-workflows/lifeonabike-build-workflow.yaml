@@ -126,7 +126,7 @@ spec:
         parameters:
           - name: image-tag
       container:
-        image: gcr.io/kaniko-project/executor:v1.23.2
+        image: gcr.io/kaniko-project/executor:v1.24.0
         # Building a Docker image is memory-intensive — override the templateDefaults.
         resources:
           requests:
