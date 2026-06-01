@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-01 (Late Evening)
+**Last Updated:** 2026-06-01 (Night)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -195,6 +195,34 @@
 
 ## Recent Sessions
 
+### 2026-06-01 (Night): k8s-docs App Audit, Tempo Guide, UniFi tf-generator API Key Auth, Grafana Bridge Support
+
+**Completed Work:**
+
+**k8s-docs-n37 app doc audit + version updates (k8s-docs-n37 PR #85, merged):**
+- Version bumps across 11 docs to match live cluster: ArgoCD (9.5.17/v3.4.3), Falco (chart 9.0.0/app 0.44.0), kube-prometheus-stack (86.1.0, Prometheus v3.12.0, Grafana 13.0.1-security-01), Zot (chart v0.1.116/image v2.1.17), Argo Workflows (1.0.14), Gatekeeper (3.22.2), ingress-nginx (v4.15.1), Istio (1.30.0 + upgrade callout), oauth2-proxy (v10.6.0), Uptime Kuma (v4.1.0), Velero (12.0.1/v1.18.1)
+- **New doc: `docs/applications/tempo.md`** — Tempo v2.9.0 / chart 1.24.4; architecture diagram, OTLP receivers, Grafana datasource wiring, `resources: must be under tempo: key` gotcha, iSCSI PVC troubleshooting
+- **Velero gotcha added:** `velero-plugin-for-aws` pinned to v1.13.2; v1.14.x sends `x-amz-tagging` header rejected by Backblaze B2
+- **Falco gotcha added:** WebUI goes silent after Redis restarts independently (RediSearch index lost; fix: restart WebUI pod)
+- sidebars.ts: Tempo added after Loki
+
+**UniFi tf-generator API key auth (unifi-tf-generator PR #6, merged):**
+- `get_token.sh`: when `-t`/`SECRET_UNIFI_TOKEN` provided, sets `AUTH_TYPE=apikey` and skips login; also accepts `SECRET_UNIFI_USERNAME` alongside existing `SECRET_UNIFI_USER`
+- `json_utils.sh`: `fetch_raw_json` sends `X-API-KEY: <token>` when `AUTH_TYPE=apikey`, `cookie: TOKEN=` otherwise
+- Re-ran `./scripts/all.sh` — live controller had drifted: +1 network (Video, VLAN 20, 10.0.20.1/24), +3 devices (U7 Pro AP, SunRoom Bridge, Garage Bridge), +15 users (33→48). Committed refreshed Terraform.
+
+**Grafana UniFi switches dashboard — bridge device support (homelab PR #688, merged):**
+- New UDBA69F bridges report `type=udb` to unipoller — not captured by any existing dashboard filter
+- Updated `unifi-switches.yaml`: added `udb` to Controller + Site `label_values` filters and `$Devices` custom variable (+ `udm,usw,uap` → `udm,usw,uap,udb` query string)
+- SunRoom and Garage bridges now appear in the Switches dashboard device picker
+
+**Pull Requests:**
+- **k8s-docs-n37 PR #85:** [Merged] docs: update application versions and add Tempo guide (June 2026)
+- **unifi-tf-generator PR #6:** [Merged] feat: add X-API-KEY header auth + refresh Terraform from live controller
+- **homelab PR #688:** [Merged] feat(grafana): add udb (network bridge) type to UniFi switches dashboard
+
+---
+
 ### 2026-06-01 (Late Evening): k8s-docs-n37 Network Diagrams + Cloudflare Tunnel How-To
 
 **Completed Work:**
@@ -376,45 +404,11 @@
 
 ---
 
-### 2026-05-31 (Night): LocalStack Fix, Retention 30d, Flink Verify, Argo Events
-
-**Completed Work:**
-
-**LocalStack CORS + Persistence (PRs #659, #660):**
-- Added `EXTRA_CORS_ALLOWED_ORIGINS` env var to fix CORS errors from `https://localstack.k8s.n37.ca`
-- Added `PERSISTENCE=1` + 2Gi iSCSI PVC (`synology-iscsi-retain`) → S3 state survives pod restarts
-- Root cause of NoSuchBucket on `aws login`: internal auth service uses S3 as state backend; ephemeral LocalStack wiped it on every restart
-
-**Retention bumped to 30 days (PR #661):**
-- Prometheus: `10d → 30d`, AlertManager: `120h → 720h`, Loki: `168h → 720h`, Tempo: `168h → 720h`
-
-**Flink job re-verified after retention PR:**
-- Deleted file-to-kafka JobManager pod → replayed 15 records
-- Confirmed: `s3://flink-output/events/2026/05/31/18/*.json` — 15 files in LocalStack S3 ✅
-
-**Argo Events deployment (PR #662):**
-- Deployed v1.9.10 (Helm chart 2.4.21) with JetStream EventBus (NATS 2.10.10)
-- NetworkPolicies for argo-events namespace + complementary rules in default, ingress-nginx, argo-workflows NPs
-- Fixed all 5 Copilot review comments: wrong Prometheus namespace, missing port 7777 egress, ingress-nginx→argo-events:12000 egress, argo-workflows ingress from argo-events, kustomization.yaml to exclude values.yaml from directory source
-- Applied: `kubectl apply -f manifests/applications/argo-events.yaml`
-- Pods healthy: controller-manager 1/1, eventbus-default-js-0 3/3, events-webhook 1/1, sensor 1/1, eventsource starting
-
-**Key Gotchas:**
-- **ArgoCD directory source applies ALL YAML**: Any directory source will try to apply `values.yaml` as a K8s manifest. Add `kustomization.yaml` to switch to Kustomize mode and enumerate only real resources.
-- **kube-prometheus-stack namespace is `default`**: ServiceMonitor `namespace:` field and NetworkPolicy scrape rules must use `default`, not `monitoring`.
-
-**Pull Requests:**
-- **PR #659:** [Merged] fix(localstack): add CORS allowed origin for localstack.k8s.n37.ca
-- **PR #660:** [Merged] fix(localstack): add persistence PVC and PERSISTENCE env var
-- **PR #661:** [Merged] chore: increase log and metric retention to 30 days
-- **PR #662:** [Merged] feat(argo-events): deploy Argo Events v1.9.10 with JetStream EventBus
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-05-31 | [LocalStack Fix, Retention 30d, Flink Verify, Argo Events](sessions/2026-05-31-localstack-retention-flink-argo-events.md) | CORS+persistence fix, 30d retention, Flink e2e verified, Argo Events v1.9.10 |
 | 2026-05-31 | [Renovate Batch, Zot StatefulSet Fix, MetalLB frr-k8s Disable](sessions/2026-05-31-renovate-batch-zot-metallb.md) | RespectIgnoreDifferences+SSA release, frrk8s.enabled=false, VCT PVCs survive STS delete |
 | 2026-05-31 | [Flink Demo Pipeline — End-to-End Working (file→Kafka→S3)](sessions/2026-05-31-flink-demo-pipeline-e2e.md) | flink-webhook OOMKill 256Mi, Flink memory 1Gi, PyFlink type_info=Types.STRING() |
 | 2026-05-31 | [Bare HBONE Egress Fix — Kafka READY, Flink Image Build](sessions/2026-05-31-bare-hbone-egress-kafka-flink-image.md) | ztunnel HBONE pod network namespace, ArgoCD selfHeal revert, bare port 15008 rule |
