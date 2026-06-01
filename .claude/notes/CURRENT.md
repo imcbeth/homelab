@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-05-31 (night)
+**Last Updated:** 2026-06-01
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -55,7 +55,7 @@
 - Weekend schedule (Sat/Sun 6am-9pm)
 - Grouped updates: ArgoCD, monitoring, networking, security, backup
 
-**Zot OCI Registry:** ✅ Deployed 2026-04-23, extended 2026-04-25 (PR #595)
+**Zot OCI Registry:** ✅ Deployed 2026-04-23, extended 2026-04-25 (PR #595), credentials rotated 2026-06-01 (PR #675)
 - Pull-through cache: Docker Hub, GHCR, quay.io, registry.k8s.io
 - ARM64-only sync (`platforms: [{os: linux, arch: arm64}]`) — fast first-pulls (~seconds vs ~41s for multi-platform)
 - CVE scanning (built-in Trivy, 2h update interval), Prometheus ServiceMonitor, 50Gi iSCSI PVC
@@ -83,12 +83,14 @@
 - Grafana datasource auto-discovered; trace↔logs (Loki uid: loki) + trace↔metrics (Prometheus) correlation
 - Loki datasource given fixed `uid: loki` so cross-datasource links resolve
 
-**Argo Events:** ✅ Deployed 2026-05-31 (PR #662)
-- v1.9.10 (Helm chart 2.4.21), JetStream EventBus (NATS 2.10.10, 1 replica), sync-wave -8
+**Argo Events:** ✅ Deployed + CI pipeline live 2026-05-31 (PRs #662, #664–#678)
+- v1.9.10 (Helm chart 2.4.21), JetStream EventBus (NATS 2.10.10, 1 replica, replicas=1 explicit), sync-wave -8
 - Controller metrics port 7777 (ServiceMonitor → kube-prometheus-stack in `default` namespace)
 - Webhook server enabled (port 12000), Istio Ambient enrolled
-- NetworkPolicy: HBONE bare port 15008, Prometheus scrape from `default`, ingress from ingress-nginx:12000, egress to argo-workflows:2746 and kafka:9092
-- **Next step:** Create GitHub webhook → EventSource → Sensor → Argo Workflow for lifeonabike CI builds
+- NetworkPolicy: HBONE bare port 15008, Prometheus scrape from `default`, ingress from ingress-nginx+lifeonabike:12000, egress to argo-workflows:2746 and kafka:9092
+- **EventSource** `lifeonabike-github`: listens for push to `imcbeth/lifeonabike.ca` main branch, HMAC-verified (SealedSecret), exposed at `https://build-webhook.n37.ca` via Cloudflare Tunnel
+- **Sensor** `lifeonabike-build`: submits `lifeonabike-build` WorkflowTemplate in `argo-workflows` on push event
+- Workflow artifacts stored in LocalStack S3 bucket `argo-workflows`
 
 **LocalStack:** ✅ Fixed 2026-05-31 (PRs #659, #660)
 - CORS: `EXTRA_CORS_ALLOWED_ORIGINS=https://localstack.k8s.n37.ca`
@@ -127,12 +129,16 @@
 - All 4 A records + TXT ownership records now auto-managed
 - Both Cloudflare + UniFi deployments now also manage `lifeonabike.ca` (PR #553)
 
-**lifeonabike.ca:** Deployed 2026-04-18
+**lifeonabike.ca:** ✅ Full CI/CD pipeline live 2026-05-31 (PRs #664–#678)
 - ArgoCD app `lifeonabike` Synced+Healthy (sync-wave 5)
 - TLS cert `lifeonabike-ca-tls` READY=True (LE R12 prod, valid Apr 18 – Jul 17 2026)
 - Covers both `www.lifeonabike.ca` + `lifeonabike.ca` (apex SAN)
-- External-DNS (Cloudflare + UniFi) will manage A records from Ingress annotations
-- **Next step**: Add Ingress to `lifeonabike` namespace when web backend is ready
+- **Cloudflare Tunnel** (2 replicas, `cloudflare/cloudflared:2024.10.0`): routes lifeonabike.ca → web:80, build-webhook.n37.ca → argo-events:12000
+- Tunnel credentials: SealedSecret `tunnel-credentials` in `lifeonabike` namespace
+- Registry creds: SealedSecret `lifeonabike-registry-creds` (in both `lifeonabike` and `argo-workflows` namespaces)
+- **Build pipeline**: GitHub push → Argo Events → Sensor → WorkflowTemplate `lifeonabike-build` (clone → Kaniko → rollout-restart)
+- Kaniko pushes to `zot.zot.svc.cluster.local:5000` (HTTP, in-cluster) — pod-to-MetalLB HTTPS broken in-cluster
+- Workflow pods have `ambient.istio.io/redirection: disabled` (Kaniko + kubectl reach non-mesh endpoints)
 
 **Istio Ambient Mesh:** Updated 2026-05-31 → **1.30.0** (PR #645)
 - Path: 1.28.4 → 1.29.0 → 1.29.3 → 1.30.0
@@ -186,6 +192,77 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-01 (Morning): EventSource Filter Fix, Zot Credential Rotation
+
+**Completed Work:**
+
+**EventSource filter fix (PR included in #676–#678 branch):**
+- Fixed EventSource expression: `body.ref == 'refs/heads/main'` (was `body.ref` referenced incorrectly — Argo Events body accessor requires the full dot-path)
+- Verified push events from GitHub now correctly match main-branch pushes only
+
+**Zot registry credential rotation (PR #675):**
+- Rotated admin credentials for Zot OCI registry
+- Fixed bcrypt hash encoding in `zot-htpasswd` SealedSecret (incorrect encoding was causing auth failures)
+- SealedSecret re-sealed and merged
+
+**HMAC webhook SealedSecret rename (PR #678):**
+- Renamed `github-lifeonabike-webhook-secret` SealedSecret file to `lifeonabike-webhook-hmac-sealed.yaml`
+- Required because git-crypt catches `*secret*` filenames; sealed files must use `*-sealed.yaml` naming convention
+
+**Pull Requests:**
+- **PR #675:** [Merged] chore: rotate Zot registry credentials + fix bcrypt encoding
+- **PR #678:** [Merged] fix: rename webhook HMAC SealedSecret to avoid git-crypt encryption
+
+---
+
+### 2026-05-31 (Late Night): lifeonabike Build Pipeline, Cloudflare Tunnel, Workflow Fixes
+
+**Completed Work:**
+
+**lifeonabike build pipeline — WorkflowTemplate + EventSource + Sensor (PRs #664, #667):**
+- **WorkflowTemplate** `lifeonabike-build` in `argo-workflows` namespace: 3-step pipeline (clone → kaniko → rollout-restart)
+  - Step 1: `alpine/git:2.43.0` shallow-clones `imcbeth/lifeonabike.ca` using github-clone-token PAT, captures git SHA
+  - Step 2: Kaniko builds image, pushes `sha` + `latest` tags to `zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca`
+  - Step 3: `alpine/k8s:1.31.0` runs `kubectl rollout restart deployment/web -n lifeonabike`
+- **EventSource** `lifeonabike-github`: GitHub push events, HMAC-verified, main-branch only (`body.ref == 'refs/heads/main'`), exposed at `https://build-webhook.n37.ca`
+- **Sensor** `lifeonabike-build`: submits WorkflowTemplate with `revision: main` on each push
+- **RBAC**: `lifeonabike-workflow-submitter` Role (sensor SA can submit workflows in argo-workflows), `lifeonabike-deployer` Role (argo-workflow SA can `patch deployment` in lifeonabike)
+
+**Argo Workflows fixes:**
+- **PR #669 (ztunnel bypass):** Added `ambient.istio.io/redirection: disabled` to workflow pod metadata — Kaniko pushes to Zot HTTP endpoint; kubectl in rollout-restart step talks to K8s API; both are outside the mesh
+- **PR #670 (in-cluster Zot push):** Kaniko destination changed to `zot.zot.svc.cluster.local:5000` with `--insecure` flag. Pod-to-MetalLB HTTPS is broken in-cluster (kubelet pulls at node-level are unaffected and still use `registry.k8s.n37.ca`)
+- **PR #671 (ingress-nginx egress):** Added egress from ingress-nginx to lifeonabike:8080 for web traffic routing
+- **PR #672 (EventBus + artifacts):** Set EventBus JetStream stream replicas=1 (single-node NATS); switched Argo Workflows artifact storage from Backblaze B2 to LocalStack S3 bucket `argo-workflows`; added `localstack-argo-workflows-setup` PreSync Job to ensure bucket exists
+- **PR #673 (sealed secrets):** Converted `lifeonabike-registry-creds` and `github-clone-token` to SealedSecrets; also sealed `lifeonabike-registry-creds` in `lifeonabike` namespace
+
+**Cloudflare Tunnel (PRs #676, #677):**
+- Deployed `cloudflare/cloudflared:2024.10.0` Deployment (2 replicas) in `lifeonabike` namespace
+- ConfigMap routes: `lifeonabike.ca` → `web.lifeonabike.svc.cluster.local:80`, `www.lifeonabike.ca` → same, `build-webhook.n37.ca` → `lifeonabike-github-eventsource-svc.argo-events.svc.cluster.local:12000`
+- Removed old webhook Ingress (no longer needed — Cloudflare Tunnel handles external→internal routing)
+- SealedSecret `tunnel-credentials` stores tunnel credentials JSON
+
+**Key Gotchas Discovered:**
+- **Pod-to-MetalLB HTTPS broken in-cluster**: Kaniko and other in-cluster clients cannot reach `registry.k8s.n37.ca` (MetalLB LoadBalancer IP) via HTTPS from inside the cluster. Use `zot.zot.svc.cluster.local:5000` (HTTP) for in-cluster pushes. Kubelet image pulls (node-level, not pod-level) still use the external hostname fine.
+- **ztunnel resets connections to non-mesh destinations**: Workflow pods that push to Zot HTTP or run kubectl need `ambient.istio.io/redirection: disabled` on the pod to bypass ztunnel interception entirely.
+- **EventBus replicas must match NATS cluster size**: With a 1-replica EventBus, set `nats.containerTemplate.resources.replicas: 1` explicitly or NATS will try to form a cluster and hang.
+- **Cloudflare Tunnel replaces ingress for external webhook**: No public IP or ingress-nginx rule needed — tunnel connects outbound from the cluster to Cloudflare's edge and routes `build-webhook.n37.ca` inward.
+- **git-crypt filename rule catches `*secret*`**: Any file with "secret" in the name is git-crypt encrypted. SealedSecret files must use `*-sealed.yaml` suffix to avoid encryption and yamllint failures.
+
+**Pull Requests:**
+- **PR #664:** [Merged] feat(lifeonabike): add in-cluster build pipeline + consolidate k8s manifests
+- **PR #666:** [Merged] docs: update CLAUDE.md — argo-events sync wave + registry description
+- **PR #667:** [Merged] fix(lifeonabike): satisfy Gatekeeper require-labels + private repo auth
+- **PR #668:** [Merged] docs: update CURRENT.md
+- **PR #669:** [Merged] fix(lifeonabike): bypass Istio ambient ztunnel for build workflow pods
+- **PR #670:** [Merged] fix(lifeonabike): push to Zot in-cluster directly, bypass ingress-nginx
+- **PR #671:** [Merged] fix: allow ingress-nginx egress to lifeonabike namespace on port 8080
+- **PR #672:** [Merged] fix: set eventbus stream replicas=1 and switch artifacts to LocalStack
+- **PR #673:** [Merged] chore: seal lifeonabike-registry-creds and github-clone-token secrets
+- **PR #676:** [Merged] chore(argo-events): remove webhook ingress, use Cloudflare Tunnel
+- **PR #677:** [Merged] fix: use build-webhook.n37.ca for Cloudflare Tunnel + add deploy step
+
+---
 
 ### 2026-05-31 (Night): LocalStack Fix, Retention 30d, Flink Verify, Argo Events
 
@@ -312,106 +389,12 @@
 
 ---
 
-### 2026-05-30: Kafka + Flink Demo Infrastructure — PR Reviews, Deployment, Post-Merge Fixes
-
-**Completed Work:**
-
-**PR Reviews + Fixes (#617, #618):**
-- Resolved all 15 Copilot review comments across both PRs with code fixes and reply comments
-- Key fixes: CLAUDE.md sealed-secret filename (`*-sealed.yaml` required to avoid git-crypt and yamllint), ValidatingWebhookConfiguration ignoreDifferences for flink-operator, webhook name corrected to `flink-operator-flink-operator-webhook-configuration`, removed `path:` from ref-only ArgoCD sources, LocalStack hook `exit 1` on failure, Dockerfile script duplication removed
-- PR #617 merged by user; PR #618 rebased onto updated main (CLAUDE.md + kustomization.yaml conflicts resolved)
-- PR #618 merged; all 4 ArgoCD Application manifests applied via `kubectl apply`
-
-**Post-Merge Infrastructure Fixes (PRs #629–#634):**
-- **PR #629:** `kafka version: 3.9.0 → 4.1.2` (Strimzi 1.0.0 only supports Kafka 4.x); added `ignoreDifferences` for Flink CRD `spec.conversion.strategy=None` drift (Kubernetes adds this after SSA apply)
-- **PR #630:** Added strimzi-system → kafka ingress on 9091/9092 (NetworkPolicy was blocking Strimzi AdminClient)
-- **PR #631:** Added port 9090 (KRaft CONTROLPLANE) to kafka NP and strimzi-system NP. Root cause: Strimzi's `describeMetadataQuorum` AdminClient connects to bootstrap (9092), discovers controller at `CONTROLPLANE-9090://...` from metadata, then tries port 9090
-- **PR #632:** Attempted startup probe for user-operator via `spec.entityOperator.template.userOperatorContainer.startupProbe` — rejected by ArgoCD SSA: "field not declared in schema". Only `env`, `securityContext`, `volumeMounts` are available in that template.
-- **PR #633:** Removed `spec.entityOperator.userOperator` — Strimzi 1.0.0's user-operator liveness probe (`initialDelaySeconds=10`, `failureThreshold=3`) kills the container at ~30s before ARM64 JVM + AdminClient init completes (~35s). No KafkaUser CRDs needed for demo, so omitting it is clean.
-- **PR #634:** Added `istio.io/dataplane-mode: ambient` to all 4 new namespace manifests (kafka, strimzi-system, flink-operator, flink-demo)
-
-**Key Gotchas Discovered:**
-- Strimzi 1.0.0 entity-operator bootstrap uses port 9091 (REPLICATION/internal TLS), not 9092. NetworkPolicy intra-kafka rules must include 9091.
-- Strimzi `describeMetadataQuorum` AdminClient connects to bootstrap (9092) then follows controller endpoint to CONTROLPLANE-9090. Both ports need NetworkPolicy egress from strimzi-system.
-- Strimzi 1.0.0 Kafka CRD only exposes `env`, `securityContext`, `volumeMounts` in `spec.entityOperator.template.userOperatorContainer` — no probe fields. Cannot configure startupProbe via CR.
-- User-operator tini `-e 143` maps SIGTERM (exit 143) to exit 0, so CrashLoopBackOff shows `exitCode: 0, reason: Completed` — looks like clean exit but is actually liveness probe kill.
-- Flink CRD drift: `spec.conversion.strategy=None` added by Kubernetes after SSA apply; not in chart. Add `apiextensions.k8s.io/CustomResourceDefinition` ignoreDifferences with `.spec.conversion` jqPathExpression.
-
-**Current Cluster State (end of 2026-05-31 continued session):**
-- kafka-cluster-combined-0: Running 1/1 ✅ (Kafka 4.1.2, KRaft mode)
-- kafka-cluster-entity-operator: 1/1 Running ✅ (topic-operator only, user-operator removed)
-- kafka CRD: `READY: True` ✅
-- strimzi-operator: Synced+Healthy ✅
-- flink-operator: Synced+Healthy ✅
-- network-policies: Synced+Healthy ✅ (with all 4 new namespaces, bare HBONE rules)
-- kafka: Synced+Healthy ✅
-- flink-demo: OutOfSync (FlinkDeployments Missing — Docker image `registry.k8s.n37.ca/flink-demo:1.0.0` build in progress via colima)
-
-**Pending (next session):**
-- Verify flink-demo FlinkDeployments deploy once image is pushed
-- Check `kubectl get flinkdeployment -n flink-demo` shows READY
-- Verify file-to-kafka and kafka-to-s3 pipelines are running
-- Stop colima when done: `colima stop`
-
-**Pull Requests (all sessions):**
-- **PR #617:** [Merged by user] feat: Strimzi + Flink operator infrastructure
-- **PR #618:** [Merged] feat: Kafka cluster + Flink demo pipeline (file→Kafka→S3)
-- **PR #629:** [Merged] fix: Kafka 4.1.2 for Strimzi 1.0.0 + Flink CRD conversion drift
-- **PR #630:** [Merged] fix: allow strimzi-system ingress to kafka on 9091/9092
-- **PR #631:** [Merged] fix: add KRaft CONTROLPLANE port 9090 to kafka and strimzi-system NPs
-- **PR #632:** [Merged] fix: attempted startup probe (field not in schema — superseded by #633)
-- **PR #633:** [Merged] fix: remove user-operator from entity operator
-- **PR #634:** [Merged] fix: add Istio ambient mesh labels to all 4 new namespaces
-- **PR #635:** [Merged] fix: use bare egress rule for ztunnel HBONE port 15008 in all 4 new namespaces
-
----
-
-### 2026-05-31: Bare HBONE Egress Fix — Kafka READY, Flink Image Build
-
-**Completed Work (continuation of 2026-05-30 session):**
-
-**Root Cause: ztunnel HBONE NetworkPolicy (PR #635):**
-- After PR #634 enrolled 4 new namespaces in Istio Ambient, kafka topic-operator started crashing with "Connection to kafka-bootstrap:9091 terminated during authentication"
-- Kafka broker logs showed NO incoming connections — traffic dropped before reaching the broker
-- ztunnel access log revealed: `error="connection timed out, maybe a NetworkPolicy is blocking HBONE port 15008"` from entity-operator pod IP to broker pod IP:15008
-- Root cause: ztunnel sends HBONE **from within the pod's network namespace** (using the pod's source IP), so pod NetworkPolicies DO apply. But the HBONE destination is the broker pod's IP on port 15008 — NOT an `istio-system` pod IP. The old namespace-scoped rule `to: istio-system, port: 15008` never matched.
-- Fix: Split Istio egress into two rules in all 4 namespace NetworkPolicies:
-  - Port 15008: bare rule (no `to` selector) — allows ztunnel HBONE to any destination
-  - Ports 15012/15017: namespace-scoped to istio-system — istiod xDS/webhook
-- Also fixed for strimzi-system, flink-operator, flink-demo (same pattern)
-- Pushed via HTTPS (gh auth setup-git + remote URL change). PR #635 created and merged.
-
-**ArgoCD selfHeal revert issue:**
-- First `kubectl apply` was reverted by ArgoCD within ~30s (selfHeal: true). Had to push the fix to git and trigger ArgoCD refresh with `kubectl annotate app network-policies argocd.argoproj.io/refresh=hard`.
-
-**Kafka is fully healthy:**
-- `kubectl get kafka -n kafka` → `READY: True` ✅
-- `kafka-cluster-entity-operator-dcf64c79-dhq2z`: 1/1 Running, 0 restarts ✅
-- Kafka ArgoCD app: Synced+Healthy ✅
-
-**localstack-flink-setup job also fixed:**
-- The same HBONE issue was blocking the flink-demo PreSync job from reaching LocalStack (cross-node traffic on port 15008 blocked)
-- After PR #635, job completed successfully: `s3://flink-output` bucket created ✅
-
-**Flink Docker image build:**
-- Docker Desktop not running; started colima (`colima start --arch aarch64`)
-- Build in progress: `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock bash build-and-push.sh`
-- Building `registry.k8s.n37.ca/flink-demo:1.0.0` for linux/arm64
-
-**Key Gotchas Discovered:**
-- **ztunnel HBONE uses pod network namespace**: ztunnel sends HBONE connections with the SOURCE POD'S IP (not ztunnel's hostNetwork IP). Therefore Calico NetworkPolicies DO apply to HBONE traffic. Bare egress rule for port 15008 is needed because the DESTINATION is the target pod's IP on port 15008, not an istio-system pod.
-- **ArgoCD selfHeal reverts kubectl apply in ~30s**: For NetworkPolicy fixes in ambient mesh clusters, `kubectl apply` is only useful for testing. Must commit and push to git for permanent effect. Use `kubectl annotate app <name> -n argocd argocd.argoproj.io/refresh=hard` to force immediate re-poll.
-- **HTTPS push workaround**: `gh auth setup-git` + `git remote set-url origin https://github.com/...` allows push when SSH key isn't loaded.
-
-**Pull Requests:**
-- **PR #635:** [Merged] fix: use bare egress rule for ztunnel HBONE port 15008 in all 4 new namespaces
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-05-31 | [Bare HBONE Egress Fix — Kafka READY, Flink Image Build](sessions/2026-05-31-bare-hbone-egress-kafka-flink-image.md) | ztunnel HBONE pod network namespace, ArgoCD selfHeal revert, bare port 15008 rule |
+| 2026-05-30 | [Kafka + Flink Demo Infrastructure](sessions/2026-05-30-kafka-flink-infrastructure.md) | Strimzi 1.0.0 port 9091, KRaft CONTROLPLANE 9090, user-operator ARM64 liveness, Flink CRD drift |
 | 2026-05-02 | [ArgoCD SSO Fix, chaos-mesh Recovery, Argo Workflows v4, oauth2-proxy Login Fix](sessions/2026-05-02-argocd-sso-chaos-mesh-argo-workflows-v4.md) | preferred_username scopes, containerd corruption fix, schedules array, $uri allowlist |
 | 2026-04-23 | [oauth2-proxy GitHub Authentication](sessions/2026-04-23-oauth2-proxy-github-auth.md) | GitHub OAuth, static://202 validate-only, auth-url ClusterIP, $uri not $escaped_request_uri |
 | 2026-04-23 | [Uptime Kuma, Grafana Tempo, Zot Docs](sessions/2026-04-23-uptime-kuma-tempo-zot-docs.md) | WebSocket via timeout annotations, tracesToLogs, cross-datasource uid, three-source ArgoCD pattern |
