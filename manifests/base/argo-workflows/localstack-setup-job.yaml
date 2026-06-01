@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: localstack-argo-workflows-setup
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: argo-workflows
+    app.kubernetes.io/component: localstack-setup
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: argo-workflows
+        app.kubernetes.io/component: localstack-setup
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: default
+      containers:
+        - name: setup
+          image: registry.k8s.n37.ca/bitnami/kubectl:latest
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          env:
+            - name: LOCALSTACK_ENDPOINT
+              value: "http://localstack.localstack.svc.cluster.local:4566"
+            - name: S3_BUCKET
+              value: "argo-workflows"
+          command: [/bin/bash, -c]
+          args:
+            - |
+              set -uo pipefail
+              echo "=== LocalStack S3 Setup ==="
+              echo "Endpoint : ${LOCALSTACK_ENDPOINT}"
+              echo "Bucket   : ${S3_BUCKET}"
+
+              # Allow ztunnel HBONE tunnel to establish for the new pod
+              sleep 5
+
+              echo "Checking LocalStack health..."
+              curl -sf "${LOCALSTACK_ENDPOINT}/_localstack/health" | grep -q '"s3": "running"' \
+                && echo "LocalStack S3 is running" \
+                || echo "Warning: LocalStack health check inconclusive — continuing"
+
+              echo "Creating bucket s3://${S3_BUCKET}..."
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X PUT "${LOCALSTACK_ENDPOINT}/${S3_BUCKET}")
+
+              if [ "${HTTP_STATUS}" = "200" ] || [ "${HTTP_STATUS}" = "409" ]; then
+                echo "Bucket '${S3_BUCKET}' ready (HTTP ${HTTP_STATUS})"
+              else
+                echo "ERROR: bucket creation failed with HTTP ${HTTP_STATUS}" >&2
+                exit 1
+              fi
+
+              echo "=== Setup complete ==="
