@@ -78,6 +78,15 @@ spec:
       ports:
         - protocol: TCP
           port: 6443  # API server port
+    # Allow access to internal Zot OCI registry via MetalLB/nginx ingress
+    # registry.k8s.n37.ca resolves to 10.0.10.10 (MetalLB IP), which falls in the
+    # private range excluded below — this explicit rule is required for local image scans
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.10/32  # nginx ingress MetalLB LoadBalancer IP
+      ports:
+        - protocol: TCP
+          port: 443
     # Allow external HTTPS for vulnerability database updates
     # and container registry access (ghcr.io, docker.io, quay.io, etc.)
     - to:
