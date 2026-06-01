@@ -1,0 +1,14 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: lifeonabike-registry-creds
+  namespace: argo-workflows
+spec:
+  encryptedData:
+    .dockerconfigjson: AgADxAENSmYk4xJneMiUAf8x4A9cG5S4TM+iP5Sv43lN9M3Z4cqiDTSudBgtiZlI7LMZPhwzWAtEAh5a5EGUxUnC3f5JEhpchbv+io/sJ3PEBV4sNHKaPG5+2SZU02tvaWn69amp9Q6oM7fjPaxoJ/kS0qDM+ZcVesjJUD3CefAxqori2h30zjlKMsn+/5rSoHGVs3y7gMIRPM5WdpXfBe+0MYcAHlOJbQydmWZwel901myzwHpbFYwEAkht5BUnrX2CJsDV8+jGhYby2ueMigECl0+D9azNSUDpTQN7xNNti9zfUhtS0UhR2vbsVt7I+54QtpdJd0te6dSI14SnUqzm0MKR5rSzmCOD1JKOH9J/MHNxud4gmz4Mw1hZMlW9RyzGBC+8hpaGLZQLYf4GfCgCBxiXXBPIHduuhrpI9Ma7EhBdojzYh6PXe9HCpKDP3z0iGHTTWIHwygMqY/6+rsfjg3MNZFIbK8PFY2c2cAFpJe6QccVzL8TK+VHamldTmMstud+K/KyLcF+g6b2j2+KT4VLearPXrFTlmFjjKMq/tHS1Uu4GFTRrFRHHKflygsCiIERGqx9tkgpiomZck7gXw+h9YoZtARO7pNDXbni2CHGXT3xDZv5akuGGYwl1qzDq4OQ7QdFTviROh7jBu4Qb0gFbFShq4NASk2jufVdNmE+6ZQOFO/R3bpdW4eNtqsVdV0Jiwu5JhlsM3mK/bpLOF1mLzfeQpQlVeo1Tt4zz5Qd4JBY4L96PTkG0erIyIhP40Tp8Qi4+ymizmX3E1WiyFYnC1ggd38Cz2N16OFuWUIVdEJr3rW/OUJs2+fk/rd/USheX8+yW1+H78iMjLeEs/8ONvH60iaGzIIK3EyqgzgKuDvV1lHPvZ20OuLemasrW
+  template:
+    metadata:
+      name: lifeonabike-registry-creds
+      namespace: argo-workflows
+    type: kubernetes.io/dockerconfigjson
