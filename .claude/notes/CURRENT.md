@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-01
+**Last Updated:** 2026-06-01 (Afternoon)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -31,7 +31,7 @@
 - Weekly full cluster backup (3:00 AM Sunday)
 - Backblaze B2 restore tested and validated
 - Monthly DR validation CronWorkflow (1st of month 6am MT) — full backup/restore cycle, ✅ validated 2026-03-25
-- **✅ Velero v1.18.0 running** — Upgraded to v1.18.0 binary + chart v12.0.0 (PRs #531/#532/#552). "Queued" phase now in CRD enum. Validated end-to-end: Queued → InProgress → Completed 2026-04-18.
+- **✅ Velero v1.18.1 running** — Plugin pinned to v1.13.2 (PR #681, 2026-06-01): v1.14.x sends `x-amz-tagging` on every PutObject; Backblaze B2 rejects it. v1.13.2 predates object tagging. Backup verified working end-to-end ✅.
 
 **Monitoring:** Operational — Retention bumped to 30 days (PR #661, 2026-05-31)
 - Prometheus: 30d retention (was 10d), AlertManager: 720h (was 120h)
@@ -77,11 +77,12 @@
 - Helm chart v2.25.0 (app v1.23.17), 5Gi iSCSI PVC (synology-iscsi-delete), Recreate strategy
 - WebSocket via native ingress-nginx support (proxy-read/send-timeout: 3600)
 
-**Grafana Tempo:** ✅ Deployed 2026-04-23 (PR #574)
-- Distributed tracing (monolithic mode), chart v1.24.4 (app v2.9.0), 10Gi iSCSI PVC, 7-day retention
+**Grafana Tempo:** ✅ Deployed 2026-04-23 (PR #574), restored 2026-06-01
+- Distributed tracing (monolithic mode), chart v1.24.4 (app v2.9.0), 10Gi iSCSI PVC, 30d retention
 - OTLP via Alloy (loki namespace) as single collector → Tempo; apps send to Alloy :4317
 - Grafana datasource auto-discovered; trace↔logs (Loki uid: loki) + trace↔metrics (Prometheus) correlation
 - Loki datasource given fixed `uid: loki` so cross-datasource links resolve
+- **Gotcha:** chart v1.24.4 requires `resources:` under `tempo:` key — top-level `resources:` is silently ignored. Gatekeeper `require-resource-limits` blocked pod until fixed (PR #682).
 
 **Argo Events:** ✅ Deployed + CI pipeline live 2026-05-31 (PRs #662, #664–#678)
 - v1.9.10 (Helm chart 2.4.21), JetStream EventBus (NATS 2.10.10, 1 replica, replicas=1 explicit), sync-wave -8
@@ -192,6 +193,46 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-01 (Afternoon): Cluster Health Check, Tempo Fix, Velero B2 Fix
+
+**Completed Work:**
+
+**Deep cluster health check (fanned-out subagents):**
+- All 5 nodes Ready, all DaemonSets at expected counts, metrics API healthy
+- Discovered: Tempo pod 0 ready replicas (ArgoCD Application CRD not applied + Gatekeeper blocking pod)
+- Discovered: external-dns-unifi 1,598 restarts + unifi-poller 670 restarts — both currently stable; historical accumulation from periodic UniFi controller unavailability. unifi-poller has nil-pointer panic bug in v5.25.0 (`GetPortAnomaliesSite`). No immediate action needed.
+
+**Tempo restored (PR merged inline):**
+- Root cause 1: `tempo` ArgoCD Application CRD existed in repo but was never applied → namespace was empty. Fixed: `kubectl apply -f manifests/applications/tempo.yaml`
+- Root cause 2: Gatekeeper `require-resource-limits` blocked pod because `resources:` in values.yaml was at top-level — chart v1.24.4 requires it under `tempo:` key
+- Fix: moved `resources:`, `extraEnv:`, `podLabels:` under the `tempo:` block in `manifests/base/tempo/values.yaml`
+- Result: `tempo-0 1/1 Running` ✅
+
+**Documentation update (PRs #679, #83):**
+- Updated `homelab/.claude/notes/CURRENT.md` (PR #679, merged)
+- Added `k8s-docs-n37/docs/applications/argo-events.md` — EventBus/EventSource/Sensor architecture, CI pipeline, NetworkPolicy table, Cloudflare Tunnel webhook routing
+- Added `k8s-docs-n37/docs/applications/lifeonabike.md` — Cloudflare Tunnel routing, CI/CD pipeline steps, in-cluster Zot HTTP push gotcha, ztunnel ambient bypass
+- Updated `k8s-docs-n37/docs/applications/argo-workflows.md` — lifeonabike-build WorkflowTemplate + Artifact Storage sections
+- Addressed Copilot review comment: port 80 vs 8080 discrepancy — added callout explaining ingress-nginx connects to pod endpoint (8080) while Cloudflare Tunnel uses Service (80). Components table updated.
+- PR #83 merged (k8s-docs-n37, branch `docs/april-2026-updates`)
+
+**Velero B2 backup fix (PR #680, PR #681):**
+- PR #680 (merged): added `tagging: ""` to BSL config — **INEFFECTIVE**. AWS SDK sends `x-amz-tagging` header regardless of empty string value.
+- PR #681 (merged): pinned `velero-plugin-for-aws` from `v1.14.1` → `v1.13.2`. v1.14.x introduced object tagging and unconditionally sends `x-amz-tagging` on every PutObject. B2 rejects it. v1.13.2 predates tagging entirely.
+- Removed ineffective `tagging: ""` line from BSL config.
+- Verified: `velero backup create test-b2-pin-fix --wait` → `Phase: Completed` ✅
+
+**Pull Requests:**
+- **PR #679:** [Merged] docs: update session notes for lifeonabike CI pipeline + Argo Events
+- **PR #680:** [Merged] fix(velero): attempt tagging="" BSL config for B2 — ineffective, superseded by #681
+- **PR #681:** [Merged] fix: pin velero-plugin-for-aws to v1.13.2 to restore B2 backups
+
+**Key Gotchas Discovered:**
+- **tempo chart v1.24.4: `resources:` must be under `tempo:` key** — top-level is silently ignored by the chart, causing Gatekeeper `require-resource-limits` to block pod creation.
+- **velero-plugin-for-aws v1.14.x incompatible with Backblaze B2**: Sends `x-amz-tagging` header on every PutObject. The `tagging: ""` BSL config does NOT suppress it. Only solution is to pin back to v1.13.x until B2 adds support or plugin adds a `disableTagging` option.
+
+---
 
 ### 2026-06-01 (Morning): EventSource Filter Fix, Zot Credential Rotation
 
@@ -345,54 +386,11 @@
 
 ---
 
-### 2026-05-31: Flink Demo Pipeline — End-to-End Working (file→Kafka→S3)
-
-**Completed Work:**
-
-**Three bugs fixed across three PRs to get the pipeline end-to-end:**
-
-**PR #637: flink-webhook OOMKill (128Mi → 256Mi)**
-- The flink-webhook JVM was OOMKilling at 128Mi during TLS crypto ops, causing EOF on every API server webhook call → FlinkDeployments couldn't be created.
-- Fix: `webhook.resources.limits.memory: 256Mi` in `manifests/base/flink-operator/values.yaml`
-
-**PR #638: FlinkDeployment memory 512m → 1Gi**
-- With `resource.memory: "512m"`, JVM overhead (192mb) + JVM Metaspace (256mb) = 448mb, leaving only 64mb for Total Flink Memory vs 128mb off-heap default.
-- Error: `Total Flink Memory (64mb) < Off-heap Memory (128mb)`
-- Fix: Changed jobManager and taskManager memory to `"1Gi"` in both FlinkDeployment YAMLs.
-
-**PR #639: `env.from_collection()` type_info=Types.STRING()**
-- Without explicit type info, PyFlink uses Kryo to serialize elements. Kryo serializes Python strings as Java byte arrays (`[B`). KafkaSink's `SimpleStringSchema.serialize()` then fails casting `[B` → `String`.
-- Error: `ClassCastException: class [B cannot be cast to class java.lang.String`
-- Fix: `env.from_collection(records, type_info=Types.STRING())` in `pipeline-file-to-kafka-configmap.yaml`
-
-**Also fixed: Dockerfile pemja build issue (previous session, image build)**
-- `pemja==0.4.1` requires JDK headers, GCC, Python headers to compile C extension.
-- Added `openjdk-17-jdk-headless`, `build-essential`, `python3-dev` + header symlink.
-
-**Final verified state:**
-- `flink-events:0:15` — 15 JSON records in Kafka ✅
-- `s3://flink-output/events/2026/05/31/14/*.json` — 15 individual JSON files in LocalStack S3 ✅
-- `file-to-kafka` FlinkDeployment: FINISHED/STABLE ✅ (batch job, replays on restart)
-- `kafka-to-s3` FlinkDeployment: RUNNING/STABLE ✅ (streaming, consuming new messages)
-- colima stopped ✅
-
-**Key Gotchas Discovered:**
-- **flink-webhook JVM needs ≥256Mi**: TLS crypto is memory-intensive. 128Mi causes OOMKill → EOF on all webhook calls.
-- **Flink memory model minimum**: With 1Gi, breakdown is: JVM Overhead 192mb + JVM Metaspace 256mb + JVM Heap 448mb + Off-heap 128mb = 1024mb. 512mb leaves only 64mb for Flink which is below the 128mb off-heap default.
-- **PyFlink from_collection() type safety**: Always pass `type_info=Types.STRING()` (or appropriate type) to `env.from_collection()`. Without it, Kryo serialization converts Python strings to `[B` byte arrays, breaking any Java-side String sink.
-- **FAILED FlinkDeployment restart**: The operator doesn't restart a FAILED job on ConfigMap change — it requires a spec change. Delete the old JobManager pod to force the Deployment controller to recreate it; the new pod picks up the updated ConfigMap.
-
-**Pull Requests:**
-- **PR #637:** [Merged] fix: increase flink-webhook memory limit to 256Mi (OOMKill)
-- **PR #638:** [Merged] fix: bump FlinkDeployment memory from 512m to 1Gi
-- **PR #639:** [Merged] fix: add type_info=Types.STRING() to from_collection in file-to-kafka
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-05-31 | [Flink Demo Pipeline — End-to-End Working (file→Kafka→S3)](sessions/2026-05-31-flink-demo-pipeline-e2e.md) | flink-webhook OOMKill 256Mi, Flink memory 1Gi, PyFlink type_info=Types.STRING() |
 | 2026-05-31 | [Bare HBONE Egress Fix — Kafka READY, Flink Image Build](sessions/2026-05-31-bare-hbone-egress-kafka-flink-image.md) | ztunnel HBONE pod network namespace, ArgoCD selfHeal revert, bare port 15008 rule |
 | 2026-05-30 | [Kafka + Flink Demo Infrastructure](sessions/2026-05-30-kafka-flink-infrastructure.md) | Strimzi 1.0.0 port 9091, KRaft CONTROLPLANE 9090, user-operator ARM64 liveness, Flink CRD drift |
 | 2026-05-02 | [ArgoCD SSO Fix, chaos-mesh Recovery, Argo Workflows v4, oauth2-proxy Login Fix](sessions/2026-05-02-argocd-sso-chaos-mesh-argo-workflows-v4.md) | preferred_username scopes, containerd corruption fix, schedules array, $uri allowlist |
