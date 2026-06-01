@@ -44,4 +44,4 @@ spec:
         name: github-lifeonabike-webhook-secret
         key: secret
       filter:
-        expression: "ref == 'refs/heads/main'"
+        expression: "body.ref == 'refs/heads/main'"
