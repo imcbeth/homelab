@@ -1,6 +1,8 @@
-# RBAC allowing the argo-events Sensor to submit Workflows in this namespace.
+# RBAC for the lifeonabike build pipeline.
 # Managed by the argo-workflows ArgoCD application so it lives alongside
 # the WorkflowTemplate it grants access to.
+
+# Allow the argo-events Sensor to submit Workflows in this namespace.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -24,4 +26,30 @@ subjects:
 roleRef:
   kind: Role
   name: lifeonabike-workflow-submitter
+  apiGroup: rbac.authorization.k8s.io
+
+# Allow the argo-workflow SA to rollout-restart the web deployment after a build.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: lifeonabike-deployer
+  namespace: lifeonabike
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: lifeonabike-deployer
+  namespace: lifeonabike
+subjects:
+  - kind: ServiceAccount
+    name: argo-workflow
+    namespace: argo-workflows
+roleRef:
+  kind: Role
+  name: lifeonabike-deployer
   apiGroup: rbac.authorization.k8s.io

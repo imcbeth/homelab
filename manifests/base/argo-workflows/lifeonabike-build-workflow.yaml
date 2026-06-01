@@ -89,6 +89,8 @@ spec:
               parameters:
                 - name: image-tag
                   value: "{{steps.clone.outputs.parameters.sha}}"
+        - - name: deploy
+            template: rollout-restart
 
     # ── Step 1: shallow-clone the app repo, capture git SHA ──────────────────
     - name: git-clone
@@ -150,3 +152,9 @@ spec:
             mountPath: /workspace
           - name: registry-creds
             mountPath: /kaniko/.docker
+
+    # ── Step 3: trigger rolling restart so pods pull the new :latest image ──────
+    - name: rollout-restart
+      container:
+        image: bitnami/kubectl:1.31
+        command: [kubectl, rollout, restart, deployment/web, -n, lifeonabike]
