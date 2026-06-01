@@ -223,6 +223,11 @@
 - Removed ineffective `tagging: ""` line from BSL config.
 - Verified: `velero backup create test-b2-pin-fix --wait` → `Phase: Completed` ✅
 
+**Makeup backups (post-fix):**
+- `manual-argocd-makeup` → Completed ✅
+- `manual-critical-pvcs-makeup` (CSI snapshots: default, loki, trivy-system, falco) → Completed ✅
+- Deleted 3 failed/test backups: `test-b2-tagging-fix`, `velero-daily-argocd-20260601013011`, `velero-daily-critical-pvcs-20260601020011`
+
 **Pull Requests:**
 - **PR #679:** [Merged] docs: update session notes for lifeonabike CI pipeline + Argo Events
 - **PR #680:** [Merged] fix(velero): attempt tagging="" BSL config for B2 — ineffective, superseded by #681
