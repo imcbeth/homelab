@@ -10,3 +10,5 @@ resources:
   - service.yaml
   - ingress.yaml
   - lifeonabike-registry-creds-sealed.yaml
+  - cloudflared.yaml
+  - tunnel-credentials-sealed.yaml
