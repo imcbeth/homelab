@@ -8,6 +8,10 @@ spec:
     # NATS JetStream — default messaging backbone for EventSources and Sensors
     version: "2.10.10"
     replicas: 1
+    # Override stream replicas: Argo Events defaults to 3, which is rejected by
+    # a non-clustered (single-node) NATS server with "replicas > 1 not supported".
+    streamConfig: |
+      replicas: 1
     containerTemplate:
       resources:
         requests:
