@@ -1609,6 +1609,15 @@ prometheus:
       # Separate from blackbox-https because that uses https_cert_expiry module
       # (success conflates connectivity + cert validity). This job uses
       # https_2xx — success means an actual 2xx response.
+      #
+      # Initial target set: argocd + grafana (open ingresses returning 200).
+      # workflows.k8s.n37.ca, registry.k8s.n37.ca, lifeonabike.ca:
+      #   - workflows: oauth2-proxy redirect (302) breaks https_2xx
+      #   - registry:  Zot /v2/ returns 200 but probe currently sees timeout
+      #                (under investigation — likely L7 routing or path quirk)
+      #   - lifeonabike.ca: public Cloudflare anycast IP, blocked by default
+      #                ns egress NetworkPolicy (only internal 10.0.0.0/8)
+      # Each needs its own follow-up tuning before joining the SLO set.
       - job_name: 'blackbox-availability'
         metrics_path: /probe
         params:
@@ -1617,10 +1626,6 @@ prometheus:
           - targets:
               - https://argocd.k8s.n37.ca
               - https://grafana.k8s.n37.ca
-              - https://workflows.k8s.n37.ca
-              - https://registry.k8s.n37.ca/v2/
-              - https://lifeonabike.ca
-              - https://www.lifeonabike.ca
             labels:
               slo_target: "0.995"
         relabel_configs:
