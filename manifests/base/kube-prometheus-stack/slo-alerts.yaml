@@ -1,0 +1,116 @@
+---
+# SLO recording rules + multi-window multi-burn-rate alerts.
+#
+# Pattern: https://sre.google/workbook/alerting-on-slos/ (Google SRE Workbook)
+#
+# SLO target: 99.5% availability over 30 days (carried as slo_target label
+# from the blackbox-availability probe job, default 0.995).
+#
+# Error budget for 99.5% over 30d = 3h 36m of downtime allowed.
+#
+# Alert windows (Google "ticket alert" + "page alert" variant):
+#   - Fast burn  (page-grade): 14.4x burn rate sustained over BOTH 1h AND 5m
+#                              → consumes 5% of monthly budget in 1h
+#   - Slow burn (ticket-grade): 6x burn rate sustained over BOTH 6h AND 30m
+#                               → consumes 10% of monthly budget in 6h
+#
+# Why two windows per severity? The short window (5m/30m) confirms the burn
+# is still happening NOW; the long window (1h/6h) confirms the burn is real
+# (not a transient spike). Both must be over threshold to alert — this kills
+# false positives from brief blips.
+#
+# Severities are warning for now (not critical email) — promote after a few
+# weeks of observation tunes the thresholds.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: slo-alerts
+  namespace: default
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: slo_recording
+      interval: 30s
+      rules:
+        # SLI: rolling success ratio across multiple windows.
+        # probe_success is a 0/1 gauge from blackbox-exporter; avg_over_time
+        # over the window gives the success ratio for that window.
+        - record: sli:probe_success:ratio_rate_5m
+          expr: avg_over_time(probe_success{job="blackbox-availability"}[5m])
+        - record: sli:probe_success:ratio_rate_30m
+          expr: avg_over_time(probe_success{job="blackbox-availability"}[30m])
+        - record: sli:probe_success:ratio_rate_1h
+          expr: avg_over_time(probe_success{job="blackbox-availability"}[1h])
+        - record: sli:probe_success:ratio_rate_6h
+          expr: avg_over_time(probe_success{job="blackbox-availability"}[6h])
+        - record: sli:probe_success:ratio_rate_30d
+          expr: avg_over_time(probe_success{job="blackbox-availability"}[30d])
+
+        # Error budget consumed so far in the 30d window (0 = none, 1 = exhausted).
+        # SLO target is hard-coded at 99.5% here; if we ever go per-service we'll
+        # switch to using the slo_target label off the probe series.
+        - record: slo:error_budget_consumed:ratio_30d
+          expr: clamp_max((1 - sli:probe_success:ratio_rate_30d) / 0.005, 1)
+
+    - name: slo_burn_rate_alerts
+      interval: 30s
+      rules:
+        # Fast burn: 14.4x burn rate. 1h window + 5m window must BOTH exceed.
+        # Threshold for 99.5% SLO: (1-0.995) * 14.4 = 0.072 (7.2% errors)
+        - alert: SLOFastBurnRate
+          expr: |
+            (1 - sli:probe_success:ratio_rate_1h) > (14.4 * 0.005)
+            and
+            (1 - sli:probe_success:ratio_rate_5m) > (14.4 * 0.005)
+          for: 2m
+          labels:
+            severity: warning
+            slo_burn: fast
+          annotations:
+            summary: "SLO fast burn for {{ $labels.instance }}"
+            description: |
+              {{ $labels.instance }} is burning error budget at 14.4x the
+              sustainable rate over the last hour. At this rate, the 30-day
+              error budget will be exhausted in ~2 days.
+              1h error rate: {{ $value | humanizePercentage }}.
+              SLO target: 99.5%.
+            runbook_url: "https://sre.google/workbook/alerting-on-slos/"
+
+        # Slow burn: 6x burn rate. 6h + 30m windows must BOTH exceed.
+        # Threshold for 99.5% SLO: (1-0.995) * 6 = 0.03 (3% errors)
+        - alert: SLOSlowBurnRate
+          expr: |
+            (1 - sli:probe_success:ratio_rate_6h) > (6 * 0.005)
+            and
+            (1 - sli:probe_success:ratio_rate_30m) > (6 * 0.005)
+          for: 15m
+          labels:
+            severity: warning
+            slo_burn: slow
+          annotations:
+            summary: "SLO slow burn for {{ $labels.instance }}"
+            description: |
+              {{ $labels.instance }} has been burning error budget at 6x the
+              sustainable rate over the last 6 hours. At this rate, the
+              30-day budget will be exhausted in ~5 days.
+              6h error rate: {{ $value | humanizePercentage }}.
+              SLO target: 99.5%.
+            runbook_url: "https://sre.google/workbook/alerting-on-slos/"
+
+        # Budget exhausted: 30d availability is already below SLO target.
+        - alert: SLOErrorBudgetExhausted
+          expr: sli:probe_success:ratio_rate_30d < 0.995
+          for: 30m
+          labels:
+            severity: warning
+            slo_burn: exhausted
+          annotations:
+            summary: "SLO error budget exhausted for {{ $labels.instance }}"
+            description: |
+              {{ $labels.instance }} 30-day availability is
+              {{ $value | humanizePercentage }} — below the 99.5% SLO target.
+              The error budget for this window has been fully consumed; new
+              risk-taking changes should be deferred until the SLI recovers.

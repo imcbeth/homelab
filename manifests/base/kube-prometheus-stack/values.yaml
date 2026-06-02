@@ -1605,6 +1605,34 @@ prometheus:
         scrape_interval: 60s
         scrape_timeout: 10s
 
+      # Blackbox exporter - HTTP 2xx availability probes (SLO inputs)
+      # Separate from blackbox-https because that uses https_cert_expiry module
+      # (success conflates connectivity + cert validity). This job uses
+      # https_2xx — success means an actual 2xx response.
+      - job_name: 'blackbox-availability'
+        metrics_path: /probe
+        params:
+          module: [https_2xx]
+        static_configs:
+          - targets:
+              - https://argocd.k8s.n37.ca
+              - https://grafana.k8s.n37.ca
+              - https://workflows.k8s.n37.ca
+              - https://registry.k8s.n37.ca/v2/
+              - https://lifeonabike.ca
+              - https://www.lifeonabike.ca
+            labels:
+              slo_target: "0.995"
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter:9115
+        scrape_interval: 30s
+        scrape_timeout: 10s
+
       # Blackbox exporter - DNS query monitoring
       - job_name: 'blackbox-dns'
         metrics_path: /probe
