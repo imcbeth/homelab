@@ -13,12 +13,17 @@ echo "Validating Kubernetes manifests with kubeconform..."
 # - *-values.yaml (Helm chart values with prefix, not K8s manifests)
 # - */configs/* (ConfigMap data files)
 # - *-config.yaml (Configuration files, not K8s manifests)
+# - *secret*.yaml, *-sealed.yaml (git-crypt encrypted — binary in CI)
 manifests=$(find manifests -type f \( -name "*.yaml" -o -name "*.yml" \) \
   ! -path "*/secrets/*" \
   ! -name "values.yaml" \
   ! -name "*-values.yaml" \
   ! -path "*/configs/*" \
   ! -name "*-config.yaml" \
+  ! -name "*secret*.yaml" \
+  ! -name "*secret*.yml" \
+  ! -name "*-sealed.yaml" \
+  ! -name "*-sealed.yml" \
   2>/dev/null)
 
 if [ -z "$manifests" ]; then
