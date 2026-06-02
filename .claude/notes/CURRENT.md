@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-02 (After Midnight)
+**Last Updated:** 2026-06-02 (Quick Wins Sprint)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -196,6 +196,54 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-02 (Quick Wins Sprint): Pre-commit CI, Resource Quotas, SLO Framework, CoreDNS Docs
+
+**Completed Work:** Four small/focused PRs landed in sequence to close TODO items #12 / #18 / #21 / #14.
+
+**Pre-commit CI workflow (PR #702, merged):**
+- New `.github/workflows/validate.yml` runs full pre-commit suite on every PR + push to main. Installs kustomize v5.4.3 + kubeconform v0.6.7, then `pre-commit/action@v3.0.1`.
+- New `scripts/validate-kustomizations.sh` runs `kustomize build` on every `kustomization.yaml` under `manifests/` and pipes the rendered output through kubeconform. Catches errors the per-file check misses (missing resources, bad patch targets). Skips kustomizations with remote git refs locally; CI sets `VALIDATE_REMOTE=1` to include them.
+- Required two iterations of fixing exclude regex for git-crypt'd paths: yamllint, kubeconform, trailing-whitespace, end-of-file-fixer, mixed-line-ending, markdownlint all needed `(^secrets/|.*secret.*|.*\.key$|.*-sealed\.ya?ml$)` exclude. In CI those files are binary blobs; without exclude they fail UnicodeDecodeError / yaml parse / get auto-"fixed" producing dirty tree.
+- **Required `gh auth refresh -h github.com -s workflow`** — OAuth token without workflow scope cannot push `.github/workflows/*.yml`.
+
+**ResourceQuotas for 14 namespaces (PR #703, merged):**
+- New ArgoCD app `resource-quotas` at sync-wave -38. One ResourceQuota per namespace: argocd, cert-manager, external-dns, ingress-nginx, lifeonabike, localstack, metallb-system, oauth2-proxy, synology-csi, tempo, unipoller, uptime-kuma, velero, zot.
+- Object counts only (`count/pods`, `count/persistentvolumeclaims`, `count/services`, `count/configmaps`, `count/secrets`). No CPU/memory quotas — admission rejection on count is recoverable; too-low memory quota would block valid scale-up.
+- Sized 3-5x current count. Worst pre-apply utilization is argocd at 11/100 configmaps and 8/40 pods.
+- Excluded (dynamic / system / operator-managed): argo-workflows, argo-events, flink-demo, flink-operator, kafka, strimzi-system, trivy-system, falco, loki, chaos-mesh, istio-system, default, kube-system, calico-system, tigera-operator, gatekeeper-system (already quota'd by Helm chart).
+- Required `kubectl apply -f manifests/applications/resource-quotas.yaml` post-merge (Application manifests not auto-synced).
+
+**SLO framework (PR #704, merged; fix PR #705, merged):**
+- New `blackbox-availability` probe job in kube-prometheus-stack values.yaml using `https_2xx` module (separate from existing `blackbox-https` which uses `https_cert_expiry` — that conflates connectivity + cert validity).
+- New `manifests/base/kube-prometheus-stack/slo-alerts.yaml` PrometheusRule. Multi-window multi-burn-rate pattern (Google SRE Workbook): 5 SLI recording rules (5m/30m/1h/6h/30d), 1 budget-consumed recording rule, fast burn alert (14.4x rate, 1h+5m AND'd), slow burn alert (6x rate, 6h+30m AND'd), budget-exhausted alert. SLO target 99.5%/30d (3h 36m budget). All severities at `warning` for now — promote to `critical` after observation.
+- Validated in-cluster: `kubectl cp` rules to prometheus pod, `promtool check rules` → SUCCESS 9/9.
+- **Post-merge gotcha (fix PR #705):** 4 of 6 probe targets returned HTTP status 0:
+  - `workflows.k8s.n37.ca` — oauth2-proxy 302 redirect, `https_2xx` rejects non-2xx
+  - `registry.k8s.n37.ca/v2/` — timeout (L7 routing under investigation)
+  - `lifeonabike.ca` / `www.lifeonabike.ca` — public Cloudflare anycast IP blocked by default-ns egress NetworkPolicy (only allows `10.0.0.0/8`)
+  - Reduced to argocd + grafana only (both 200) to prevent false-positive burn alerts within 1-6h. Each failing target needs its own follow-up tuning.
+
+**CoreDNS docs (k8s-docs-n37 PR #86, merged):**
+- New `docs/networking/coredns.md` (slotted into sidebar between Cloudflare Tunnel and Terraform).
+- Live Corefile from `kubectl get cm coredns -n kube-system`: kubeadm default + Pi-friendly `disable success/denial cluster.local` cache override (in-cluster Service IPs always refetched).
+- Architecture Mermaid diagram: pod → CoreDNS → node `/etc/resolv.conf` → UniFi gateway → Cloudflare.
+- Plugin-by-plugin reference, resolution walkthrough for `cluster.local` / external / split-horizon `*.k8s.n37.ca`, pod-to-MetalLB VIP hairpin warning callout, Prometheus metrics reference, troubleshooting (NetworkPolicy egress, ndots:5 expansion, stale Service IPs, P99 latency).
+
+**Pull Requests:**
+- **PR #702:** [Merged] chore: add kustomize-build pre-commit hook and CI validation workflow
+- **PR #703:** [Merged] feat(quotas): add object-count ResourceQuotas to 14 stable namespaces
+- **PR #704:** [Merged] feat(slo): add SLO recording rules and multi-window burn alerts
+- **PR #705:** [Merged] fix(slo): reduce blackbox-availability targets to known-working set
+- **k8s-docs-n37 PR #86:** [Merged] docs(networking): add CoreDNS configuration guide
+
+**Key Gotchas Discovered:**
+- **gh OAuth + workflow scope:** Adding `.github/workflows/*.yml` requires `gh auth refresh -h github.com -s workflow`. Default repo scope (`repo`) is insufficient; push gets "refusing to allow an OAuth App to create or update workflow `.github/workflows/...` without `workflow` scope".
+- **git-crypt + CI:** In CI, git-crypt'd files are encrypted binary blobs (no key). Every text-mutating pre-commit hook MUST exclude `(^secrets/|.*secret.*|.*\.key$|.*-sealed\.ya?ml$)` or it'll either fail (yamllint UnicodeDecodeError, kubeconform "control characters not allowed") or auto-"fix" the blob and exit dirty.
+- **blackbox `https_2xx` strictness:** Module accepts 2xx only by default. Endpoints behind oauth2-proxy (302 redirect) and Zot OCI registry (200 but with quirks) need either redirect-following config or `valid_status_codes: [200,302]`. NetworkPolicy can also break public-IP probes — default-ns egress restricts to `10.0.0.0/8`.
+- **Promtool validates rule files, not PrometheusRule CRDs:** `promtool check rules` chokes on `apiVersion/kind/metadata/spec` — extract just `spec.groups` and wrap in `{groups: ...}` before validating.
+
+---
 
 ### 2026-06-02 (After Midnight): ArgoCD Monitor URL Fix + Renovate Batch Apply
 
