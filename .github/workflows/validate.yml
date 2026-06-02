@@ -1,0 +1,55 @@
+name: Validate
+
+on:
+  pull_request:
+    paths:
+      - 'manifests/**'
+      - 'scripts/**'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/validate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'manifests/**'
+      - 'scripts/**'
+      - '.pre-commit-config.yaml'
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    name: pre-commit hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install kubeconform
+        run: |
+          set -euo pipefail
+          version=v0.6.7
+          curl -fsSL -o /tmp/kubeconform.tar.gz \
+            "https://github.com/yannh/kubeconform/releases/download/${version}/kubeconform-linux-amd64.tar.gz"
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/kubeconform /usr/local/bin/kubeconform
+          kubeconform -v
+
+      - name: Install kustomize
+        run: |
+          set -euo pipefail
+          version=v5.4.3
+          curl -fsSL -o /tmp/kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${version}/kustomize_${version}_linux_amd64.tar.gz"
+          tar -xzf /tmp/kustomize.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/kustomize /usr/local/bin/kustomize
+          kustomize version
+
+      - uses: pre-commit/action@v3.0.1
+        env:
+          VALIDATE_REMOTE: '1'
