@@ -157,5 +157,5 @@ spec:
     # ── Step 3: trigger rolling restart so pods pull the new :latest image ──────
     - name: rollout-restart
       container:
-        image: alpine/k8s:1.31.0
+        image: alpine/k8s:1.31.13
         command: [kubectl, rollout, restart, deployment/web, -n, lifeonabike]
