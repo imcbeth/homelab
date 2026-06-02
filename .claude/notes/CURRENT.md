@@ -197,6 +197,43 @@
 
 ## Recent Sessions
 
+### 2026-06-02 (SLO Probe Tuning): Internal Service Probes, NetworkPolicy Fixes
+
+**Completed Work:** Resolved the 4 failing SLO probes from the morning's PR #705 fallback. Now 5 of 5 probe targets green.
+
+**PR #707 (merged): Probe internal Services for non-passthrough ingresses.**
+- Diagnosed: external HTTPS probes for workflows / registry / lifeonabike all timeout because the redirect chain crosses MetalLB VIP 10.0.10.10 from a non-mesh-meshed pod, hitting the kube-proxy `KUBE-EXT` hairpin (`src-type LOCAL` only). argocd works via TLS-passthrough (no L7 redirect); grafana works because nginx returns 200 directly on `/`.
+- New `blackbox-availability-internal` job probes ClusterIP Services directly (HTTP, not HTTPS):
+  - `http://argo-workflows-server.argo-workflows:2746/` — HBONE bypass works (both ns ambient-meshed)
+  - `http://zot.zot:5000/v2/` — needed ingress NetPol rule (zot not meshed)
+  - `http://web.lifeonabike:80/` — no NetPol on lifeonabike, just works
+- SLI recording-rule selector broadened from `job="blackbox-availability"` to `slo_target!=""` so future targets roll in automatically.
+- New `slo_path` label (`ingress` vs `backend`) — dashboards can split end-to-end from backend-only signals.
+
+**PR #708 (merged): Allow default ns egress to zot:5000.**
+- After PR #707 zot probe still timed out. Diagnosed: default ns egress to `10.0.0.0/8` only allowed ports 80/443/8443/161. Port 5000 missing. HBONE bypass on port 15008 didn't apply because zot ns is not ambient-meshed.
+- Added focused egress rule: `default → zot` on TCP/5000.
+
+**Final state — all 5 SLO probes green:**
+```
+✅ ingress  https://argocd.k8s.n37.ca
+✅ ingress  https://grafana.k8s.n37.ca
+✅ backend  http://argo-workflows-server.argo-workflows:2746/
+✅ backend  http://zot.zot:5000/v2/
+✅ backend  http://web.lifeonabike:80/
+```
+
+**Pull Requests:**
+- **PR #707:** [Merged] fix(slo): probe internal Services for non-passthrough ingresses
+- **PR #708:** [Merged] fix(slo): allow default ns egress to zot:5000 for blackbox SLO probe
+
+**Key Gotchas Discovered:**
+- **HBONE bypass requires BOTH ends ambient-meshed:** Traffic from a meshed pod to a non-meshed pod is direct TCP (no HBONE), so a port-15008 bare ingress rule on the destination doesn't help — the destination must allow the source pod IP explicitly on the actual application port.
+- **NetworkPolicy fixes need both directions:** Adding an ingress allow on the destination namespace's NetPol is half the work — the source namespace's egress NetPol must also permit the destination port. PR #707 only fixed ingress on zot; PR #708 was the egress half on default. Both required for a 2-policy path.
+- **Hard refresh sometimes needed for Helm-sourced ArgoCD apps:** After updating `values.yaml`, a normal `kubectl annotate ... argocd.argoproj.io/refresh=normal` didn't pick up the new probe job in the additionalScrapeConfigs Secret. Forcing `refresh=hard` did.
+
+---
+
 ### 2026-06-02 (Quick Wins Sprint): Pre-commit CI, Resource Quotas, SLO Framework, CoreDNS Docs
 
 **Completed Work:** Four small/focused PRs landed in sequence to close TODO items #12 / #18 / #21 / #14.

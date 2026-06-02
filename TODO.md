@@ -350,7 +350,7 @@
 ### 21. **Observability Maturity Enhancements**
 - [ ] **Distributed Tracing** - Evaluate Jaeger or Tempo for trace collection
 - [ ] **Continuous Profiling** - Pyroscope for application performance profiling
-- [x] **Service Level Objectives (SLOs)** (PR #704, 2026-06-02) — multi-window multi-burn-rate alerts (Google SRE Workbook pattern) on argocd + grafana. 99.5%/30d target. Fast burn (14.4x, 1h+5m), slow burn (6x, 6h+30m), budget-exhausted alerts. Follow-up: tune probes for workflows/registry/lifeonabike (PR #705) — auth/redirect/egress issues.
+- [x] **Service Level Objectives (SLOs)** (PRs #704, #705, #707, #708, 2026-06-02) — multi-window multi-burn-rate alerts (Google SRE Workbook pattern) on 5 critical services. 99.5%/30d target. Fast burn (14.4x, 1h+5m), slow burn (6x, 6h+30m), budget-exhausted alerts. Two probe jobs: `blackbox-availability` (HTTPS via ingress, argocd + grafana) and `blackbox-availability-internal` (HTTP via ClusterIP, workflows + registry + lifeonabike). All 5 probes green.
 - [x] **Error Budget Tracking** (PR #704, 2026-06-02) — `slo:error_budget_consumed:ratio_30d` recording rule (0-1 clamped). Future: Grafana dashboard.
 - [ ] **Anomaly Detection** - ML-based anomaly detection for metrics (Prometheus AI/ML)
 - [ ] **Synthetic Monitoring** - Automated user journey testing
