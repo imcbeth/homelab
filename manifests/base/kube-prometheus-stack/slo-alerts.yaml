@@ -38,16 +38,19 @@ spec:
         # SLI: rolling success ratio across multiple windows.
         # probe_success is a 0/1 gauge from blackbox-exporter; avg_over_time
         # over the window gives the success ratio for that window.
+        # Selector slo_target!="" matches both blackbox-availability (HTTPS
+        # via ingress) and blackbox-availability-internal (HTTP via ClusterIP)
+        # without coupling the rule to job names.
         - record: sli:probe_success:ratio_rate_5m
-          expr: avg_over_time(probe_success{job="blackbox-availability"}[5m])
+          expr: avg_over_time(probe_success{slo_target!=""}[5m])
         - record: sli:probe_success:ratio_rate_30m
-          expr: avg_over_time(probe_success{job="blackbox-availability"}[30m])
+          expr: avg_over_time(probe_success{slo_target!=""}[30m])
         - record: sli:probe_success:ratio_rate_1h
-          expr: avg_over_time(probe_success{job="blackbox-availability"}[1h])
+          expr: avg_over_time(probe_success{slo_target!=""}[1h])
         - record: sli:probe_success:ratio_rate_6h
-          expr: avg_over_time(probe_success{job="blackbox-availability"}[6h])
+          expr: avg_over_time(probe_success{slo_target!=""}[6h])
         - record: sli:probe_success:ratio_rate_30d
-          expr: avg_over_time(probe_success{job="blackbox-availability"}[30d])
+          expr: avg_over_time(probe_success{slo_target!=""}[30d])
 
         # Error budget consumed so far in the 30d window (0 = none, 1 = exhausted).
         # SLO target is hard-coded at 99.5% here; if we ever go per-service we'll

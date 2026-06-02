@@ -56,6 +56,20 @@ spec:
         - protocol: TCP
           port: 5000   # Zot registry API (returns 401, acceptable)
 
+    # Blackbox exporter SLO probes (default namespace, app=blackbox-exporter)
+    # zot ns is not ambient-meshed, so probes don't tunnel through HBONE —
+    # source is the pod IP, must be allowlisted explicitly.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app: blackbox-exporter
+      ports:
+        - protocol: TCP
+          port: 5000
+
     # Istio Ambient HBONE — bare rule required (ztunnel rewrites destination port)
     - ports:
         - protocol: TCP
