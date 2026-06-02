@@ -233,8 +233,8 @@
   - [x] Docker image tag updates in Kubernetes manifests
   - [x] Grouped updates (ArgoCD, monitoring, networking, security, backup)
   - [x] Weekend schedule (Sat/Sun 6am-9pm) to minimize disruption
-- [ ] Pre-commit hooks for Kubernetes manifest validation (kubeval, kustomize)
-- [ ] Automated testing pipeline for infrastructure changes
+- [x] **Pre-commit hooks for Kubernetes manifest validation** (PR #702, 2026-06-02) — kubeconform per-file + kustomize-build with kubeconform on rendered output; git-crypt paths excluded from text-mutating hooks
+- [x] **Automated CI validation pipeline** (PR #702, 2026-06-02) — `.github/workflows/validate.yml` runs the full pre-commit suite on every PR + push to main (installs kustomize v5.4.3 + kubeconform v0.6.7)
 - [ ] Expand GitOps workflow documentation
 - [ ] Consider multi-cluster ArgoCD setup for dev/staging
 
@@ -285,10 +285,10 @@
 ## 🌐 **Network & Access Management**
 
 ### 14. **CoreDNS Customization**
-- [ ] Document current CoreDNS configuration
+- [x] **Document current CoreDNS configuration** (k8s-docs-n37 PR #86, 2026-06-02) — `docs/networking/coredns.md`: live Corefile, plugin-by-plugin reference, split-horizon DNS walkthrough, troubleshooting, Prometheus metrics
 - [ ] Custom DNS records for internal services
 - [ ] DNS-based service discovery patterns
-- [ ] DNS monitoring and troubleshooting tools
+- [ ] DNS monitoring and troubleshooting tools (covered in the new guide)
 - [ ] Consider DNS caching optimizations
 
 ### 15. **VPN & Remote Access** ✅ Solved by UniFi (2026-04-17)
@@ -325,7 +325,7 @@
 - [x] Audit resource requests/limits across all workloads (7 workloads adjusted, 2026-02-11)
 - [x] Identify over-provisioned pods (resource right-sizing audit complete, net +928Mi requests)
 - [x] Implement Vertical Pod Autoscaler (VPA) — fairwinds/vpa v4.11.0, recommender only, 7 VPA objects in Off mode (PR #522, 2026-03-25)
-- [ ] Implement pod resource quotas per namespace
+- [x] **Object-count ResourceQuotas for 14 stable namespaces** (PR #703, 2026-06-02) — count/pods, count/persistentvolumeclaims, count/services, count/configmaps, count/secrets. Object counts only (no CPU/memory quotas yet — too easy to mis-size). Excludes dynamic-workload + system namespaces.
 - [ ] Storage capacity planning and alerting
 - [ ] Network bandwidth monitoring and optimization
 
@@ -350,8 +350,8 @@
 ### 21. **Observability Maturity Enhancements**
 - [ ] **Distributed Tracing** - Evaluate Jaeger or Tempo for trace collection
 - [ ] **Continuous Profiling** - Pyroscope for application performance profiling
-- [ ] **Service Level Objectives (SLOs)** - Define and monitor SLOs for critical services
-- [ ] **Error Budget Tracking** - Automated SLO/error budget reporting
+- [x] **Service Level Objectives (SLOs)** (PR #704, 2026-06-02) — multi-window multi-burn-rate alerts (Google SRE Workbook pattern) on argocd + grafana. 99.5%/30d target. Fast burn (14.4x, 1h+5m), slow burn (6x, 6h+30m), budget-exhausted alerts. Follow-up: tune probes for workflows/registry/lifeonabike (PR #705) — auth/redirect/egress issues.
+- [x] **Error Budget Tracking** (PR #704, 2026-06-02) — `slo:error_budget_consumed:ratio_30d` recording rule (0-1 clamped). Future: Grafana dashboard.
 - [ ] **Anomaly Detection** - ML-based anomaly detection for metrics (Prometheus AI/ML)
 - [ ] **Synthetic Monitoring** - Automated user journey testing
 
