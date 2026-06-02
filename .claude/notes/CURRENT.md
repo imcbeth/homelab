@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-02 (Night)
+**Last Updated:** 2026-06-02 (Late Night)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -197,6 +197,28 @@
 
 ## Recent Sessions
 
+### 2026-06-02 (Late Night): Flink UI 503 Fix + Operator Health Check
+
+**Completed Work:**
+
+**Flink UI 503 fix (PR #692, merged):**
+- User reported 503 on `https://flink.k8s.n37.ca/`
+- Root cause: ingress pointed at `file-to-kafka-rest:8081`, but `file-to-kafka` is a bounded job (reads static CSV → publishes to Kafka → exits). Once it finishes, the Flink operator tears down the jobmanager pod and REST Service. nginx had no backends → 503.
+- Fix: Changed ingress backend to `kafka-to-s3-rest:8081` (long-running streaming job, always available). ArgoCD auto-synced within ~60s of merge.
+
+**Flink operator health check:**
+- Operator pod: 2/2 Running, 32h, 0 restarts — healthy
+- ArgoCD: `OutOfSync` on 4 CRDs (pre-existing drift — `ignoreDifferences` covers `.spec.conversion` but status still oscillates). Not blocking.
+- Logs: `kafka-to-s3` fully reconciled; `file-to-kafka` observes `MISSING` jobmanager (expected — FINISHED + STABLE lifecycle). Repeated INFO warnings about memory fractions (`jvm overhead 102mb < min 192mb`, `network 57mb < min 64mb`) — operator auto-corrects to minimums, non-blocking.
+
+**Pull Requests:**
+- **PR #692:** [Merged] fix(flink-demo): point ingress at kafka-to-s3-rest instead of file-to-kafka-rest
+
+**Key Gotchas Discovered:**
+- **Flink bounded job removes its own REST service**: When a FlinkDeployment reaches FINISHED state, the operator deletes the jobmanager pod AND the `<name>-rest` Service. Any ingress pointing at that service gets 503. Always point ingress at an unbounded streaming job for a stable REST target.
+
+---
+
 ### 2026-06-02 (Night): Uptime Kuma Monitor Fix — MetalLB VIP Hairpin + NetworkPolicy
 
 **Completed Work:**
@@ -369,33 +391,11 @@
 
 ---
 
-### 2026-06-01 (Morning): EventSource Filter Fix, Zot Credential Rotation
-
-**Completed Work:**
-
-**EventSource filter fix (PR included in #676–#678 branch):**
-- Fixed EventSource expression: `body.ref == 'refs/heads/main'` (was `body.ref` referenced incorrectly — Argo Events body accessor requires the full dot-path)
-- Verified push events from GitHub now correctly match main-branch pushes only
-
-**Zot registry credential rotation (PR #675):**
-- Rotated admin credentials for Zot OCI registry
-- Fixed bcrypt hash encoding in `zot-htpasswd` SealedSecret (incorrect encoding was causing auth failures)
-- SealedSecret re-sealed and merged
-
-**HMAC webhook SealedSecret rename (PR #678):**
-- Renamed `github-lifeonabike-webhook-secret` SealedSecret file to `lifeonabike-webhook-hmac-sealed.yaml`
-- Required because git-crypt catches `*secret*` filenames; sealed files must use `*-sealed.yaml` naming convention
-
-**Pull Requests:**
-- **PR #675:** [Merged] chore: rotate Zot registry credentials + fix bcrypt encoding
-- **PR #678:** [Merged] fix: rename webhook HMAC SealedSecret to avoid git-crypt encryption
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-06-01 | [EventSource Filter Fix, Zot Credential Rotation](sessions/2026-06-01-eventsource-filter-zot-credentials.md) | body.ref dot-path fix, bcrypt htpasswd encoding, *-sealed.yaml naming |
 | 2026-05-31 | [lifeonabike Build Pipeline, Cloudflare Tunnel, Workflow Fixes](sessions/2026-05-31-lifeonabike-pipeline-cloudflare-tunnel.md) | 3-step Kaniko pipeline, Cloudflare Tunnel routing, ztunnel bypass, EventBus replicas=1 |
 | 2026-05-31 | [LocalStack Fix, Retention 30d, Flink Verify, Argo Events](sessions/2026-05-31-localstack-retention-flink-argo-events.md) | CORS+persistence fix, 30d retention, Flink e2e verified, Argo Events v1.9.10 |
 | 2026-05-31 | [Renovate Batch, Zot StatefulSet Fix, MetalLB frr-k8s Disable](sessions/2026-05-31-renovate-batch-zot-metallb.md) | RespectIgnoreDifferences+SSA release, frrk8s.enabled=false, VCT PVCs survive STS delete |
