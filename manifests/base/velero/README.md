@@ -593,20 +593,20 @@ Choose one of the following:
    ```
 
 2. Update credentials:
-   
+
    Create a file named `cloud-credentials.txt`:
    ```
    [default]
    aws_access_key_id=YOUR_KEY_ID
    aws_secret_access_key=YOUR_SECRET_KEY
    ```
-   
+
    Then create the secret:
    ```bash
    kubectl create secret generic cloud-credentials \
      -n velero \
      --from-file=cloud=cloud-credentials.txt
-   
+
    # Clean up the credentials file
    rm cloud-credentials.txt
    ```

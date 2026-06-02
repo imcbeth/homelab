@@ -63,6 +63,16 @@ repos:
         verbose: true
         description: 'Validate Kubernetes manifests against schemas (manifests without available schemas are skipped due to -ignore-missing-schemas)'
 
+      - id: kustomize-build
+        name: Validate kustomizations build
+        entry: scripts/validate-kustomizations.sh
+        language: system
+        pass_filenames: false
+        files: '^manifests/.*\.ya?ml$'
+        exclude: '^secrets/.*'
+        verbose: true
+        description: 'Run kustomize build on every kustomization.yaml and validate the rendered output with kubeconform. Skips locally if kustomize is not installed; CI always runs it.'
+
   # Secret scanning to prevent accidental commits
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.1
