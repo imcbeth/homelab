@@ -1,0 +1,207 @@
+---
+# Object-count quotas for stable, predictable namespaces.
+#
+# Purpose: cap blast radius from a runaway controller or resource leak. These
+# are intentionally NOT memory/CPU quotas (too easy to mis-size and block valid
+# scale-up); just object counts that detect "something is creating an unexpected
+# number of pods/PVCs/configmaps".
+#
+# Quotas use the count/* form so they apply uniformly to every resource of
+# that kind (including ones created by jobs/cronjobs/owner refs).
+#
+# Sizing rule of thumb: 3-5x current count, with a floor that accommodates
+# normal day-to-day churn (rolling updates, blackout deploys, ad-hoc debugging).
+#
+# Excluded from this rollout:
+#   - kube-system, calico-system, tigera-operator, gatekeeper-system (system,
+#     gatekeeper-system already has a quota from its Helm chart)
+#   - argo-workflows, argo-events (dynamic workflow pods)
+#   - flink-demo, flink-operator, kafka, strimzi-system (operator-managed scale)
+#   - chaos-mesh (intentionally injects pods)
+#   - trivy-system (creates per-image scan jobs)
+#   - falco (DaemonSet, runtime-security scope)
+#   - loki (singleBinary + sidecars, narrow margin)
+#   - istio-system (operator-managed)
+#   - default (catch-all, mixed workloads)
+#   - secrets-source, velero-test, kube-node-lease, kube-public (empty/test)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: argocd
+spec:
+  hard:
+    count/pods: "40"
+    count/persistentvolumeclaims: "10"
+    count/services: "25"
+    count/configmaps: "100"
+    count/secrets: "50"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: cert-manager
+spec:
+  hard:
+    count/pods: "15"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "30"
+    count/secrets: "30"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: external-dns
+spec:
+  hard:
+    count/pods: "10"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: ingress-nginx
+spec:
+  hard:
+    count/pods: "15"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: lifeonabike
+spec:
+  hard:
+    count/pods: "15"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: localstack
+spec:
+  hard:
+    count/pods: "10"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: metallb-system
+spec:
+  hard:
+    count/pods: "15"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: oauth2-proxy
+spec:
+  hard:
+    count/pods: "10"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: synology-csi
+spec:
+  hard:
+    count/pods: "25"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "30"
+    count/secrets: "30"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: tempo
+spec:
+  hard:
+    count/pods: "10"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: unipoller
+spec:
+  hard:
+    count/pods: "10"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: uptime-kuma
+spec:
+  hard:
+    count/pods: "10"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: velero
+spec:
+  hard:
+    count/pods: "20"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "30"
+    count/secrets: "30"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: zot
+spec:
+  hard:
+    count/pods: "10"
+    count/persistentvolumeclaims: "5"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "20"
