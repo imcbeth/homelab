@@ -26,11 +26,11 @@ spec:
     - host: flink.k8s.n37.ca
       http:
         paths:
-          # file-to-kafka Flink UI (port 8081 on the REST service)
+          # kafka-to-s3 Flink UI (file-to-kafka is a bounded job that finishes)
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: file-to-kafka-rest
+                name: kafka-to-s3-rest
                 port:
                   number: 8081
