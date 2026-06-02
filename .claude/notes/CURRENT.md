@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-02 (Late Night)
+**Last Updated:** 2026-06-02 (After Midnight)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -137,7 +137,7 @@
 - ArgoCD app `lifeonabike` Synced+Healthy (sync-wave 5)
 - TLS cert `lifeonabike-ca-tls` READY=True (LE R12 prod, valid Apr 18 – Jul 17 2026)
 - Covers both `www.lifeonabike.ca` + `lifeonabike.ca` (apex SAN)
-- **Cloudflare Tunnel** (2 replicas, `cloudflare/cloudflared:2024.10.0`): routes lifeonabike.ca → web:80, build-webhook.n37.ca → argo-events:12000
+- **Cloudflare Tunnel** (2 replicas, `cloudflare/cloudflared:2026.5.2`): routes lifeonabike.ca → web:80, build-webhook.n37.ca → argo-events:12000
 - Tunnel credentials: SealedSecret `tunnel-credentials` in `lifeonabike` namespace
 - Registry creds: SealedSecret `lifeonabike-registry-creds` (in both `lifeonabike` and `argo-workflows` namespaces)
 - **Build pipeline**: GitHub push → Argo Events → Sensor → WorkflowTemplate `lifeonabike-build` (clone → Kaniko → rollout-restart)
@@ -196,6 +196,43 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-02 (After Midnight): ArgoCD Monitor URL Fix + Renovate Batch Apply
+
+**Completed Work:**
+
+**ArgoCD Uptime Kuma monitor fix (SQLite, no PR):**
+- Monitor #1 (ArgoCD): ETIMEDOUT on port 8080 even after NetworkPolicy fix — root cause: Uptime Kuma had old in-memory config from before SQLite DB edit; pod must be restarted to reload SQLite.
+- After pod restart with `http://argocd-server.argocd:80/healthz`: got "self-signed certificate" error — argocd-server ALWAYS serves HTTPS on pod port 8080, even when accessed via svc port 80 (DNAT: svc:80 → pod:8080 → TLS handshake). HTTP client received TLS response → cert error.
+- Fix: changed URL to `https://argocd-server.argocd:443/healthz` with `ignore_tls=1` in SQLite, then restarted pod. Monitor green ✅.
+
+**lifeonabike.ca / www.lifeonabike.ca monitor fix (SQLite, no PR):**
+- Both monitors showing ETIMEDOUT to MetalLB VIP — split-horizon DNS resolves `lifeonabike.ca` to 10.0.10.10; pods can't reach MetalLB VIP (kube-proxy hairpin, same issue as cluster monitors).
+- Fix: changed both to `http://web.lifeonabike:80` (internal ClusterIP service). Monitors green ✅.
+
+**Renovate batch apply (PRs #694, #696, #700, via /renovate-apply skill):**
+Reviewed Dependency Dashboard issue #251. Action on all awaiting-schedule items:
+
+Merged (safe patches):
+- **PR #694:** [Merged] chore: bump alpine/k8s 1.31.0 → 1.31.13 in lifeonabike-build-workflow.yaml
+- **PR #696:** [Merged] chore: bump velero chart 12.0.1 → 12.0.2
+- **PR #700:** [Merged] chore: bump cloudflared 2024.10.0 → 2026.5.2
+
+Closed (dangerous / superseded):
+- **PR #699:** Closed — velero-plugin-for-aws v1.14.1: sends `x-amz-tagging`, breaks B2 (pinned to v1.13.2, PR #681)
+- **PR #697:** Closed — alpine/k8s 1.36.1: cluster is k8s 1.31.x; kubectl 1.36.1 could break API compatibility
+- **PR #695, #698:** Closed — cloudflared 2024.10.1 / 2024.12.2: superseded by #700 (2026.5.2)
+
+**Post-apply validation:**
+- `kubectl apply -f manifests/applications/velero.yaml` — required because ArgoCD does not auto-detect Application manifest changes
+- ArgoCD refresh triggered for velero, lifeonabike, argo-workflows
+- All three apps Synced+Healthy: velero (chart 12.0.2, plugin v1.13.2 ✅), lifeonabike (cloudflared 2026.5.2 ✅), argo-workflows (alpine/k8s 1.31.13 in WorkflowTemplate ✅)
+
+**Key Gotchas Discovered:**
+- **ArgoCD server HTTPS on pod port 8080**: argocd-server always serves HTTPS on pod port 8080. HTTP monitor on svc:80 gets DNAT → pod:8080 → TLS response → "self-signed certificate". Must use `https://argocd-server.argocd:443/healthz` with `ignore_tls=1`.
+- **Uptime Kuma SQLite hot-reload**: Uptime Kuma does NOT hot-reload from SQLite while running. After any SQLite edit via `kubectl exec`, the pod must be restarted to pick up the new monitor URLs.
+
+---
 
 ### 2026-06-02 (Late Night): Flink UI 503 Fix + Operator Health Check
 
@@ -346,55 +383,11 @@
 
 ---
 
-### 2026-06-01 (Afternoon): Cluster Health Check, Tempo Fix, Velero B2 Fix
-
-**Completed Work:**
-
-**Deep cluster health check (fanned-out subagents):**
-- All 5 nodes Ready, all DaemonSets at expected counts, metrics API healthy
-- Discovered: Tempo pod 0 ready replicas (ArgoCD Application CRD not applied + Gatekeeper blocking pod)
-- Discovered: external-dns-unifi 1,598 restarts + unifi-poller 670 restarts — both currently stable; historical accumulation from periodic UniFi controller unavailability. unifi-poller has nil-pointer panic bug in v5.25.0 (`GetPortAnomaliesSite`). No immediate action needed.
-
-**Tempo restored (PR merged inline):**
-- Root cause 1: `tempo` ArgoCD Application CRD existed in repo but was never applied → namespace was empty. Fixed: `kubectl apply -f manifests/applications/tempo.yaml`
-- Root cause 2: Gatekeeper `require-resource-limits` blocked pod because `resources:` in values.yaml was at top-level — chart v1.24.4 requires it under `tempo:` key
-- Fix: moved `resources:`, `extraEnv:`, `podLabels:` under the `tempo:` block in `manifests/base/tempo/values.yaml`
-- Result: `tempo-0 1/1 Running` ✅
-
-**Documentation update (PRs #679, #83):**
-- Updated `homelab/.claude/notes/CURRENT.md` (PR #679, merged)
-- Added `k8s-docs-n37/docs/applications/argo-events.md` — EventBus/EventSource/Sensor architecture, CI pipeline, NetworkPolicy table, Cloudflare Tunnel webhook routing
-- Added `k8s-docs-n37/docs/applications/lifeonabike.md` — Cloudflare Tunnel routing, CI/CD pipeline steps, in-cluster Zot HTTP push gotcha, ztunnel ambient bypass
-- Updated `k8s-docs-n37/docs/applications/argo-workflows.md` — lifeonabike-build WorkflowTemplate + Artifact Storage sections
-- Addressed Copilot review comment: port 80 vs 8080 discrepancy — added callout explaining ingress-nginx connects to pod endpoint (8080) while Cloudflare Tunnel uses Service (80). Components table updated.
-- PR #83 merged (k8s-docs-n37, branch `docs/april-2026-updates`)
-
-**Velero B2 backup fix (PR #680, PR #681):**
-- PR #680 (merged): added `tagging: ""` to BSL config — **INEFFECTIVE**. AWS SDK sends `x-amz-tagging` header regardless of empty string value.
-- PR #681 (merged): pinned `velero-plugin-for-aws` from `v1.14.1` → `v1.13.2`. v1.14.x introduced object tagging and unconditionally sends `x-amz-tagging` on every PutObject. B2 rejects it. v1.13.2 predates tagging entirely.
-- Removed ineffective `tagging: ""` line from BSL config.
-- Verified: `velero backup create test-b2-pin-fix --wait` → `Phase: Completed` ✅
-
-**Makeup backups (post-fix):**
-- `manual-argocd-makeup` → Completed ✅
-- `manual-critical-pvcs-makeup` (CSI snapshots: default, loki, trivy-system, falco) → Completed ✅
-- Deleted 3 failed/test backups: `test-b2-tagging-fix`, `velero-daily-argocd-20260601013011`, `velero-daily-critical-pvcs-20260601020011`
-
-**Pull Requests:**
-- **PR #679:** [Merged] docs: update session notes for lifeonabike CI pipeline + Argo Events
-- **PR #680:** [Merged] fix(velero): attempt tagging="" BSL config for B2 — ineffective, superseded by #681
-- **PR #681:** [Merged] fix: pin velero-plugin-for-aws to v1.13.2 to restore B2 backups
-
-**Key Gotchas Discovered:**
-- **tempo chart v1.24.4: `resources:` must be under `tempo:` key** — top-level is silently ignored by the chart, causing Gatekeeper `require-resource-limits` to block pod creation.
-- **velero-plugin-for-aws v1.14.x incompatible with Backblaze B2**: Sends `x-amz-tagging` header on every PutObject. The `tagging: ""` BSL config does NOT suppress it. Only solution is to pin back to v1.13.x until B2 adds support or plugin adds a `disableTagging` option.
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-06-01 | [Cluster Health Check, Tempo Fix, Velero B2 Fix](sessions/2026-06-01-cluster-health-tempo-velero-b2.md) | Tempo resources: under tempo: key, velero-plugin v1.13.2 B2 pin, makeup backups |
 | 2026-06-01 | [EventSource Filter Fix, Zot Credential Rotation](sessions/2026-06-01-eventsource-filter-zot-credentials.md) | body.ref dot-path fix, bcrypt htpasswd encoding, *-sealed.yaml naming |
 | 2026-05-31 | [lifeonabike Build Pipeline, Cloudflare Tunnel, Workflow Fixes](sessions/2026-05-31-lifeonabike-pipeline-cloudflare-tunnel.md) | 3-step Kaniko pipeline, Cloudflare Tunnel routing, ztunnel bypass, EventBus replicas=1 |
 | 2026-05-31 | [LocalStack Fix, Retention 30d, Flink Verify, Argo Events](sessions/2026-05-31-localstack-retention-flink-argo-events.md) | CORS+persistence fix, 30d retention, Flink e2e verified, Argo Events v1.9.10 |
