@@ -240,6 +240,16 @@ spec:
         - protocol: UDP
           port: 161    # SNMP
 
+    # Blackbox SLO probe → Zot registry (HTTP /v2/ on ClusterIP port 5000)
+    # Zot ns is not ambient-meshed; HBONE bypass doesn't apply.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: zot
+      ports:
+        - protocol: TCP
+          port: 5000
+
     # Istio ambient mesh communication (ztunnel, istiod)
     - to:
         - namespaceSelector:
