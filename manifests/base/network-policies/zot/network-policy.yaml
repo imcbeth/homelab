@@ -47,6 +47,15 @@ spec:
         - protocol: TCP
           port: 5000
 
+    # Uptime Kuma health monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 5000   # Zot registry API (returns 401, acceptable)
+
     # Istio Ambient HBONE — bare rule required (ztunnel rewrites destination port)
     - ports:
         - protocol: TCP

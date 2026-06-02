@@ -31,6 +31,15 @@ spec:
         - protocol: TCP
           port: 8081  # Flink REST API / UI
 
+    # Uptime Kuma health monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 8081  # Flink REST API (health check)
+
     # Flink internal: JobManager ↔ TaskManager communication
     - from:
         - namespaceSelector:

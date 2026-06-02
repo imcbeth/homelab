@@ -21,6 +21,15 @@ spec:
         - protocol: TCP
           port: 8080   # argocd-server HTTP
 
+    # Uptime Kuma health monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 8080   # argocd-server HTTP (health check)
+
     # Intra-namespace communication
     # app-controller -> repo-server, redis, dex-server
     # server -> repo-server, redis, dex-server, applicationset-controller

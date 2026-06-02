@@ -28,6 +28,14 @@ spec:
       ports:
         - protocol: TCP
           port: 3001
+    # Self-monitoring (Uptime Kuma checks its own service endpoint)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 3001
   egress:
     # DNS resolution
     - to:
@@ -64,6 +72,20 @@ spec:
         - protocol: TCP
           port: 3001
         - protocol: TCP
+          port: 3100   # loki
+        - protocol: TCP
+          port: 3200   # tempo
+        - protocol: TCP
+          port: 2746   # argo-workflows
+        - protocol: TCP
+          port: 2802   # falco-falcosidekick-ui
+        - protocol: TCP
+          port: 4566   # localstack
+        - protocol: TCP
+          port: 5000   # zot
+        - protocol: TCP
           port: 8080
+        - protocol: TCP
+          port: 8081   # flink
         - protocol: TCP
           port: 9090

@@ -43,7 +43,16 @@ spec:
               kubernetes.io/metadata.name: default
       ports:
         - protocol: TCP
-          port: 3100   # Tempo HTTP API (Grafana datasource + Prometheus metrics)
+          port: 3200   # Tempo HTTP API (Grafana datasource + Prometheus metrics)
+
+    # Uptime Kuma health monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 3200   # Tempo ready endpoint
 
   egress:
     # DNS resolution via kube-dns
