@@ -1605,19 +1605,15 @@ prometheus:
         scrape_interval: 60s
         scrape_timeout: 10s
 
-      # Blackbox exporter - HTTP 2xx availability probes (SLO inputs)
-      # Separate from blackbox-https because that uses https_cert_expiry module
-      # (success conflates connectivity + cert validity). This job uses
-      # https_2xx — success means an actual 2xx response.
+      # Blackbox exporter - HTTPS availability probes via ingress-nginx
+      # (SLO inputs). Uses https_2xx (success = actual 2xx response).
       #
-      # Initial target set: argocd + grafana (open ingresses returning 200).
-      # workflows.k8s.n37.ca, registry.k8s.n37.ca, lifeonabike.ca:
-      #   - workflows: oauth2-proxy redirect (302) breaks https_2xx
-      #   - registry:  Zot /v2/ returns 200 but probe currently sees timeout
-      #                (under investigation — likely L7 routing or path quirk)
-      #   - lifeonabike.ca: public Cloudflare anycast IP, blocked by default
-      #                ns egress NetworkPolicy (only internal 10.0.0.0/8)
-      # Each needs its own follow-up tuning before joining the SLO set.
+      # Restricted to services whose ingresses can be probed end-to-end:
+      #   - argocd: TLS-passthrough, argocd-server serves its own 200
+      #   - grafana: TLS-termination, returns 200 on /
+      #
+      # Other services hit the kube-proxy MetalLB VIP hairpin or auth
+      # redirects — they are probed via blackbox-availability-internal below.
       - job_name: 'blackbox-availability'
         metrics_path: /probe
         params:
@@ -1628,6 +1624,39 @@ prometheus:
               - https://grafana.k8s.n37.ca
             labels:
               slo_target: "0.995"
+              slo_path: "ingress"
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter:9115
+        scrape_interval: 30s
+        scrape_timeout: 10s
+
+      # Blackbox exporter - HTTP availability probes via internal ClusterIP
+      # (SLO inputs). Uses http_2xx against pod-network Service URLs. Bypasses
+      # ingress-nginx — measures backend service health only. Combined with the
+      # external blackbox-availability job, the two together approximate full
+      # end-to-end SLI; alone, this catches backend regressions.
+      #
+      # Internal probes are necessary because the MetalLB VIP (10.0.10.10) is
+      # not reachable from non-meshed pods (kube-proxy KUBE-EXT chain only
+      # DNATs LoadBalancer VIPs for src-type=LOCAL traffic). oauth2-proxy auth
+      # redirects also break end-to-end ingress probes for protected services.
+      - job_name: 'blackbox-availability-internal'
+        metrics_path: /probe
+        params:
+          module: [http_2xx]
+        static_configs:
+          - targets:
+              - http://argo-workflows-server.argo-workflows:2746/
+              - http://zot.zot:5000/v2/
+              - http://web.lifeonabike:80/
+            labels:
+              slo_target: "0.995"
+              slo_path: "backend"
         relabel_configs:
           - source_labels: [__address__]
             target_label: __param_target
