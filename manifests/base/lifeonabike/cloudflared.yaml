@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:2024.10.0
+          image: cloudflare/cloudflared:2024.10.1
           args: ["tunnel", "--config", "/etc/cloudflared/config/config.yaml", "run"]
           resources:
             requests:
