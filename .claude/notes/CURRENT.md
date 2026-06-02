@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-01 (Night)
+**Last Updated:** 2026-06-02 (Night)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -72,10 +72,12 @@
 - Add 3 annotations to any ingress to protect additional services
 - `auth-url` uses internal ClusterIP to avoid hairpin NAT
 
-**Uptime Kuma:** ✅ Deployed 2026-04-23 (PR #573)
-- Status page at https://status.k8s.n37.ca — monitors all cluster services
+**Uptime Kuma:** ✅ Deployed 2026-04-23 (PR #573), monitors seeded + fixed 2026-06-01 (PR #690)
+- Status page at https://status.k8s.n37.ca — 15 monitors across 3 groups
 - Helm chart v2.25.0 (app v1.23.17), 5Gi iSCSI PVC (synology-iscsi-delete), Recreate strategy
 - WebSocket via native ingress-nginx support (proxy-read/send-timeout: 3600)
+- **Monitors use internal cluster DNS** — pod-to-MetalLB VIP (10.0.10.10) is broken for non-meshed pods (kube-proxy KUBE-EXT chain only routes `--src-type LOCAL` traffic). All monitors point to ClusterIP service DNS, not `*.k8s.n37.ca` URLs.
+- **Gotcha:** kube-proxy LoadBalancer VIP handling: KUBE-EXT chain only fires for `--src-type LOCAL` (node-generated traffic). Pod traffic to MetalLB VIP silently drops after the check fails — no DNAT, packet goes to node network and times out. Meshed pods (via ztunnel HBONE) are unaffected. Non-meshed pods must use ClusterIP DNS.
 
 **Grafana Tempo:** ✅ Deployed 2026-04-23 (PR #574), restored 2026-06-01
 - Distributed tracing (monolithic mode), chart v1.24.4 (app v2.9.0), 10Gi iSCSI PVC, 30d retention
@@ -194,6 +196,40 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-02 (Night): Uptime Kuma Monitor Fix — MetalLB VIP Hairpin + NetworkPolicy
+
+**Completed Work:**
+
+**Root cause: pod-to-MetalLB VIP connection failure:**
+- All Uptime Kuma monitors using `*.k8s.n37.ca` URLs showed DOWN (TCP SYN timeout)
+- Root cause: kube-proxy's `KUBE-EXT` chain for LoadBalancer IPs only processes `--src-type LOCAL` traffic (node-originated). Pod traffic fails the LOCAL check → no DNAT → raw packet routed to node network → times out.
+- Confirmed: Direct pod IP (192.168.x.x) → works ✅; ClusterIP (port 443) → works ✅; MetalLB VIP (10.0.10.10) → 100% packet loss ❌
+- Meshed pods (default namespace, ztunnel HBONE) can reach the VIP because ztunnel intercepts and routes via HBONE, bypassing kube-proxy's broken path.
+- Also discovered Tempo NetworkPolicy had wrong port (3100 instead of 3200 for Tempo's HTTP API).
+
+**NetworkPolicy fix (PR #690, merged):**
+- **uptime-kuma egress**: added ports 3100 (Loki), 3200 (Tempo), 2746 (Argo Workflows), 2802 (Falco UI), 4566 (LocalStack), 5000 (Zot), 8081 (Flink) + self-ingress (port 3001)
+- **9 destination namespace ingress policies**: added `from: uptime-kuma` rule in argocd, default, loki, tempo, argo-workflows, zot, localstack, falco, flink-demo
+- **Tempo NetworkPolicy bug fixed**: ingress port 3100 → 3200 (Tempo HTTP API is on 3200, not Loki's 3100)
+- ArgoCD auto-sync restores policies from Git; direct `kubectl apply` is overridden immediately by selfHeal. Must merge PR first, then trigger ArgoCD refresh.
+
+**Monitor URLs updated (SQLite, not Git):**
+- All 11 cluster service monitors switched from `https://service.k8s.n37.ca` to internal ClusterIP DNS
+- ArgoCD: `http://argocd-server.argocd:80/healthz`; Grafana: `http://kube-prometheus-stack-grafana.default:80/api/health`; Tempo: `http://tempo.tempo:3200/ready`; Argo Workflows: `http://argo-workflows-server.argo-workflows:2746`; Uptime Kuma self: `http://uptime-kuma.uptime-kuma:3001`; Zot: `http://zot.zot:5000/v2/`; LocalStack: `http://localstack.localstack:4566/_localstack/health`; Falco UI: `http://falco-falcosidekick-ui.falco:2802`; Flink: `http://kafka-to-s3-rest.flink-demo:8081`
+- Monitors 12-15 (lifeonabike.ca, www.lifeonabike.ca, UniFi 10.0.1.1, UNVR 10.0.20.130) unchanged
+
+**Result:** All 11 internal monitors pass curl tests from the uptime-kuma pod (connect: 0.001-0.036s).
+
+**Pull Requests:**
+- **PR #690:** [Merged] fix(network-policies): allow uptime-kuma to monitor internal cluster services
+
+**Key Gotchas Discovered:**
+- **kube-proxy MetalLB VIP hairpin**: KUBE-EXT chain only routes `--src-type LOCAL`. Pods are NOT local. Packet goes to node network without DNAT and is never delivered. Non-meshed pods must use ClusterIP DNS, not LoadBalancer hostname.
+- **ArgoCD selfHeal reverts direct kubectl apply within seconds**: Always merge PR first, then trigger ArgoCD refresh (`kubectl annotate application ... argocd.argoproj.io/app-refresh=$(date) --overwrite`).
+- **Tempo HTTP API port is 3200, not 3100**: Loki uses 3100. Tempo's HTTP server is on 3200.
+
+---
 
 ### 2026-06-01 (Night): k8s-docs App Audit, Tempo Guide, UniFi tf-generator API Key Auth, Grafana Bridge Support
 
@@ -356,58 +392,11 @@
 
 ---
 
-### 2026-05-31 (Late Night): lifeonabike Build Pipeline, Cloudflare Tunnel, Workflow Fixes
-
-**Completed Work:**
-
-**lifeonabike build pipeline — WorkflowTemplate + EventSource + Sensor (PRs #664, #667):**
-- **WorkflowTemplate** `lifeonabike-build` in `argo-workflows` namespace: 3-step pipeline (clone → kaniko → rollout-restart)
-  - Step 1: `alpine/git:2.43.0` shallow-clones `imcbeth/lifeonabike.ca` using github-clone-token PAT, captures git SHA
-  - Step 2: Kaniko builds image, pushes `sha` + `latest` tags to `zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca`
-  - Step 3: `alpine/k8s:1.31.0` runs `kubectl rollout restart deployment/web -n lifeonabike`
-- **EventSource** `lifeonabike-github`: GitHub push events, HMAC-verified, main-branch only (`body.ref == 'refs/heads/main'`), exposed at `https://build-webhook.n37.ca`
-- **Sensor** `lifeonabike-build`: submits WorkflowTemplate with `revision: main` on each push
-- **RBAC**: `lifeonabike-workflow-submitter` Role (sensor SA can submit workflows in argo-workflows), `lifeonabike-deployer` Role (argo-workflow SA can `patch deployment` in lifeonabike)
-
-**Argo Workflows fixes:**
-- **PR #669 (ztunnel bypass):** Added `ambient.istio.io/redirection: disabled` to workflow pod metadata — Kaniko pushes to Zot HTTP endpoint; kubectl in rollout-restart step talks to K8s API; both are outside the mesh
-- **PR #670 (in-cluster Zot push):** Kaniko destination changed to `zot.zot.svc.cluster.local:5000` with `--insecure` flag. Pod-to-MetalLB HTTPS is broken in-cluster (kubelet pulls at node-level are unaffected and still use `registry.k8s.n37.ca`)
-- **PR #671 (ingress-nginx egress):** Added egress from ingress-nginx to lifeonabike:8080 for web traffic routing
-- **PR #672 (EventBus + artifacts):** Set EventBus JetStream stream replicas=1 (single-node NATS); switched Argo Workflows artifact storage from Backblaze B2 to LocalStack S3 bucket `argo-workflows`; added `localstack-argo-workflows-setup` PreSync Job to ensure bucket exists
-- **PR #673 (sealed secrets):** Converted `lifeonabike-registry-creds` and `github-clone-token` to SealedSecrets; also sealed `lifeonabike-registry-creds` in `lifeonabike` namespace
-
-**Cloudflare Tunnel (PRs #676, #677):**
-- Deployed `cloudflare/cloudflared:2024.10.0` Deployment (2 replicas) in `lifeonabike` namespace
-- ConfigMap routes: `lifeonabike.ca` → `web.lifeonabike.svc.cluster.local:80`, `www.lifeonabike.ca` → same, `build-webhook.n37.ca` → `lifeonabike-github-eventsource-svc.argo-events.svc.cluster.local:12000`
-- Removed old webhook Ingress (no longer needed — Cloudflare Tunnel handles external→internal routing)
-- SealedSecret `tunnel-credentials` stores tunnel credentials JSON
-
-**Key Gotchas Discovered:**
-- **Pod-to-MetalLB HTTPS broken in-cluster**: Kaniko and other in-cluster clients cannot reach `registry.k8s.n37.ca` (MetalLB LoadBalancer IP) via HTTPS from inside the cluster. Use `zot.zot.svc.cluster.local:5000` (HTTP) for in-cluster pushes. Kubelet image pulls (node-level, not pod-level) still use the external hostname fine.
-- **ztunnel resets connections to non-mesh destinations**: Workflow pods that push to Zot HTTP or run kubectl need `ambient.istio.io/redirection: disabled` on the pod to bypass ztunnel interception entirely.
-- **EventBus replicas must match NATS cluster size**: With a 1-replica EventBus, set `nats.containerTemplate.resources.replicas: 1` explicitly or NATS will try to form a cluster and hang.
-- **Cloudflare Tunnel replaces ingress for external webhook**: No public IP or ingress-nginx rule needed — tunnel connects outbound from the cluster to Cloudflare's edge and routes `build-webhook.n37.ca` inward.
-- **git-crypt filename rule catches `*secret*`**: Any file with "secret" in the name is git-crypt encrypted. SealedSecret files must use `*-sealed.yaml` suffix to avoid encryption and yamllint failures.
-
-**Pull Requests:**
-- **PR #664:** [Merged] feat(lifeonabike): add in-cluster build pipeline + consolidate k8s manifests
-- **PR #666:** [Merged] docs: update CLAUDE.md — argo-events sync wave + registry description
-- **PR #667:** [Merged] fix(lifeonabike): satisfy Gatekeeper require-labels + private repo auth
-- **PR #668:** [Merged] docs: update CURRENT.md
-- **PR #669:** [Merged] fix(lifeonabike): bypass Istio ambient ztunnel for build workflow pods
-- **PR #670:** [Merged] fix(lifeonabike): push to Zot in-cluster directly, bypass ingress-nginx
-- **PR #671:** [Merged] fix: allow ingress-nginx egress to lifeonabike namespace on port 8080
-- **PR #672:** [Merged] fix: set eventbus stream replicas=1 and switch artifacts to LocalStack
-- **PR #673:** [Merged] chore: seal lifeonabike-registry-creds and github-clone-token secrets
-- **PR #676:** [Merged] chore(argo-events): remove webhook ingress, use Cloudflare Tunnel
-- **PR #677:** [Merged] fix: use build-webhook.n37.ca for Cloudflare Tunnel + add deploy step
-
----
-
 ## Session Archive Index
 
 | Date | Title | Key Topics |
 |------|-------|------------|
+| 2026-05-31 | [lifeonabike Build Pipeline, Cloudflare Tunnel, Workflow Fixes](sessions/2026-05-31-lifeonabike-pipeline-cloudflare-tunnel.md) | 3-step Kaniko pipeline, Cloudflare Tunnel routing, ztunnel bypass, EventBus replicas=1 |
 | 2026-05-31 | [LocalStack Fix, Retention 30d, Flink Verify, Argo Events](sessions/2026-05-31-localstack-retention-flink-argo-events.md) | CORS+persistence fix, 30d retention, Flink e2e verified, Argo Events v1.9.10 |
 | 2026-05-31 | [Renovate Batch, Zot StatefulSet Fix, MetalLB frr-k8s Disable](sessions/2026-05-31-renovate-batch-zot-metallb.md) | RespectIgnoreDifferences+SSA release, frrk8s.enabled=false, VCT PVCs survive STS delete |
 | 2026-05-31 | [Flink Demo Pipeline — End-to-End Working (file→Kafka→S3)](sessions/2026-05-31-flink-demo-pipeline-e2e.md) | flink-webhook OOMKill 256Mi, Flink memory 1Gi, PyFlink type_info=Types.STRING() |
