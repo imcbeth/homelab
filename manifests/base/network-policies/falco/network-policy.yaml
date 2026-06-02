@@ -54,6 +54,15 @@ spec:
         - protocol: TCP
           port: 2802  # Sidekick WebUI
 
+    # Uptime Kuma health monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 2802  # Falco Sidekick WebUI (health check)
+
   egress:
     # Allow DNS resolution
     - to:

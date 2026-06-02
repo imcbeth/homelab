@@ -58,6 +58,17 @@ spec:
         - protocol: TCP
           port: 3000   # grafana
 
+    # Uptime Kuma health monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 3000   # grafana
+        - protocol: TCP
+          port: 9090   # prometheus
+
     # Admission webhooks from API server (bare port rule for IPIP compat)
     - ports:
         - protocol: TCP

@@ -52,6 +52,14 @@ spec:
           port: 2746   # Server port
         - protocol: TCP
           port: 9090   # Controller metrics
+    # Uptime Kuma health monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 2746   # Argo Workflows server (health check)
   egress:
     # Allow HBONE tunnel traffic to any ambient mesh pod (port 15008)
     - ports:

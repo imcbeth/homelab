@@ -49,6 +49,14 @@ spec:
       ports:
         - protocol: TCP
           port: 3100   # Loki push API
+    # Uptime Kuma health monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 3100   # Loki ready endpoint
     # Allow any namespace to send OTLP traces to Alloy (collector for Tempo)
     # Bare rule: future apps in any namespace may need to send traces
     - ports:
