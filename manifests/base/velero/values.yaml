@@ -30,7 +30,7 @@ resources:
 # Pinned to v1.13.2: v1.14.x sends x-amz-tagging on every PutObject; Backblaze B2 rejects that header
 initContainers:
   - name: velero-plugin-for-aws
-    image: velero/velero-plugin-for-aws:v1.13.2
+    image: velero/velero-plugin-for-aws:v1.14.1
     imagePullPolicy: IfNotPresent
     resources:
       requests:
