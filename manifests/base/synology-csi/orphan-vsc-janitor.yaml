@@ -109,7 +109,14 @@ spec:
                 - |
                   set -eu
                   cutoff_seconds=$(( $(date +%s) - 7 * 24 * 3600 ))
-                  echo "VSC orphan janitor — pruning orphans created before $(date -u -d @${cutoff_seconds} 2>/dev/null || date -r ${cutoff_seconds} -u)"
+                  # Format cutoff into a readable timestamp if `date -d @<sec>` is
+                  # available (GNU + recent busybox). Falls back to the raw epoch
+                  # otherwise; either way it's just an informational log line.
+                  # BSD `date -r <sec>` is intentionally avoided here — on Linux
+                  # `date -r` reads a file's mtime instead, which would fail under
+                  # `set -e` if the literal seconds value isn't a real filename.
+                  human_cutoff=$(date -u -d "@${cutoff_seconds}" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "epoch ${cutoff_seconds}")
+                  echo "VSC orphan janitor — pruning orphans created before ${human_cutoff}"
 
                   # Fetch all VSCs once
                   kubectl get volumesnapshotcontents -o json > /tmp/all.json
