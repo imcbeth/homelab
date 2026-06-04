@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-03 (Cleanup Sprint)
+**Last Updated:** 2026-06-04 (Renovate Batch + CI Action Bumps)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -196,6 +196,31 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-04: Renovate Batch — kube-prometheus-stack 86.1.1, trivy-operator 0.33.1, CI action bumps
+
+**PRs Applied:**
+- **PR #715:** [Merged] chore(deps): update monitoring stack to v86.1.1 (kube-prometheus-stack chart 86.1.0 → 86.1.1)
+- **PR #717:** [Merged] chore(deps): update security tools to v0.33.1 (trivy-operator chart 0.32.1 → 0.33.1)
+- **PR #720:** [Merged] chore(deps): bump CI workflow actions and Python — combined supersede of Renovate #716, #718, #719 (all touched `.github/workflows/validate.yml`):
+  - `actions/checkout` v4 → v6
+  - `actions/setup-python` v5 → v6
+  - Python 3.12 → 3.14
+- **PRs #716, #718, #719:** [Closed] superseded by #720
+
+**Applications Updated:**
+
+| App | Old Version | New Version | Status |
+|-----|-------------|-------------|--------|
+| kube-prometheus-stack | 86.1.0 | 86.1.1 | ✅ Synced+Healthy |
+| trivy-operator | 0.32.1 | 0.33.1 | ✅ Synced+Healthy |
+
+**Issues Encountered:**
+- kube-prometheus-stack briefly OutOfSync after `kubectl apply` — operation phase Running while PreSync hook `kube-prometheus-stack-admission-create` (Helm webhook cert job) completed. Standard pattern documented in `/renovate-apply` skill. Resolved on its own in ~90 seconds.
+
+**Final State:** 37/38 apps Synced+Healthy. The remaining `flink-operator` OutOfSync is the pre-existing CRD drift documented in Current State above — not blocking. No new pod restarts in the hour following the apply.
+
+---
 
 ### 2026-06-03 (Cleanup Sprint): Network Alerts, TODO Sweep, 3 Docs PRs
 
