@@ -309,7 +309,7 @@
 - [x] **Disaster recovery procedures** (k8s-docs-n37 PR #92, 2026-06-03) — `docs/operations/disaster-recovery.md`: single node failure, control plane failure + etcd restore, PVC recovery, full cluster rebuild, NAS failure. Includes RTO/RPO targets table.
 - [x] **Capacity planning documentation with growth projections** (k8s-docs-n37 PR #94, 2026-06-03) — `docs/operations/capacity-planning.md`: current baseline (CPU 13-32%, mem requests 24-34%, mem limits up to 80% on node01), per-resource detail, "when to add hardware" threshold table, predict_linear forecasting recipe, quarterly review checklist
 - [x] **Cluster-internal network topology diagrams** (k8s-docs-n37 PR #93, 2026-06-03) — `docs/networking/cluster-topology.md`: Mermaid sequence diagrams for external client → backend, pod-to-pod HBONE, MetalLB VIP hairpin, DNS/egress paths
-- [ ] Performance baseline documentation
+- [x] **Performance baseline documentation** (k8s-docs-n37 PR #95, 2026-06-03) — `docs/operations/performance-baseline.md`: measured P99/P95/avg values for apiserver (49ms read / 462ms write), etcd (24ms), CoreDNS (36ms), ingress (5-9ms), SLO probes (5-38ms), node load1 (0.6-2.2), container restarts (\<1/day), storage I/O, Prometheus self-metrics, Velero, image pulls. Mermaid diagnostic flowchart + quarterly refresh checklist.
 - [ ] Document on-call procedures and escalation paths
 - [x] Create k8s-docs-n37 guides for: cert-manager, metallb, ingress-nginx, localstack (completed in earlier sessions)
 
