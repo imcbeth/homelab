@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-02 (Quick Wins Sprint)
+**Last Updated:** 2026-06-03 (Cleanup Sprint)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -196,6 +196,41 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-03 (Cleanup Sprint): Network Alerts, TODO Sweep, 3 Docs PRs
+
+**Completed Work:** Finished the small open TODO items as 2 homelab PRs + 3 k8s-docs-n37 PRs.
+
+**PR #710 (merged): Network bandwidth/error PrometheusRule.**
+- New `network-alerts.yaml`: 8 rules across two groups
+- `node_network`: NodeNetworkReceiveErrors (>0.1/s 10m), NodeNetworkTransmitErrors, NodeNetworkReceiveDrops (>10/s 15m), NodeNetwork{Receive,Transmit}Saturation (>85% gigabit 15m), NodeNetworkInterfaceDown (critical, 2m)
+- `node_conntrack`: NodeConntrackTableNearFull (>80% 10m), NodeConntrackTableFull (>95% 2m critical)
+- Selector excludes `lo`, `cali*`, `tunl*`, `vxlan*`, `veth*`, `docker*` to focus on physical NICs
+- Validated with in-cluster promtool: 8/8 rules
+
+**PR #711 (merged): TODO sweep marking items completed by deployed work.**
+- Storage capacity planning + alerting → covered by existing storage-alerts.yaml
+- Distributed Tracing → Tempo (PR #574)
+- Synthetic Monitoring → Uptime Kuma + blackbox SLO probes
+- Chaos Engineering / Network Partition Testing / Node Failure Scenarios → Chaos Mesh (PR #563)
+- VPN & Remote Access → UniFi VPN + oauth2-proxy + Cloudflare Tunnel
+
+**k8s-docs-n37 PRs #91, #92, #93 (all merged):**
+- **#91 Operational runbooks** — `docs/operations/runbooks.md`: ArgoCD stuck syncs, pod restarts, rollbacks, PVC Terminating, cert renewal, Falco WebUI silent, Renovate force-rebase, application manifest gotcha
+- **#92 Disaster recovery** — `docs/operations/disaster-recovery.md`: RTO/RPO targets table; single worker node failure, control plane failure (incl. etcd restore), PVC recovery, full cluster rebuild, Synology NAS failure
+- **#93 Cluster topology diagrams** — `docs/networking/cluster-topology.md`: Mermaid sequence diagrams for external client → backend, pod-to-pod HBONE, MetalLB VIP hairpin (with workaround table), DNS/egress paths
+
+**Pull Requests:**
+- **PR #710:** [Merged] feat(monitoring): add network bandwidth + error + saturation alerts
+- **PR #711:** [Merged] chore(todo): mark items completed by recent work + supersede VPN
+- **k8s-docs-n37 PR #91:** [Merged] docs(operations): operational runbooks for common tasks
+- **k8s-docs-n37 PR #92:** [Merged] docs(operations): disaster recovery procedures
+- **k8s-docs-n37 PR #93:** [Merged] docs(networking): cluster-internal topology diagrams
+
+**Key Gotcha Discovered:**
+- **Docusaurus pre-commit blocks on broken cross-doc links:** Forward-references to docs not yet committed cause `pre-commit run docusaurus-build` to fail. Fix is to add docs in dependency order — DR doc shipped after runbooks doc with a follow-up edit to cross-link them.
+
+---
 
 ### 2026-06-02 (SLO Probe Tuning): Internal Service Probes, NetworkPolicy Fixes
 
