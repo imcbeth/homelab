@@ -12,6 +12,7 @@ resources:
   - storage-class.yml
   - snapshotter/snapshotter.yml
   - snapshotter/volume-snapshot-class.yml
+  - orphan-vsc-janitor.yaml
 patches:
   - path: patches/snapshot-controller-resources.yaml
 # secretGenerator:
