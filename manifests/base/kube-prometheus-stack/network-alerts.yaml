@@ -1,0 +1,163 @@
+---
+# Network alerts for the Pi cluster — saturation, errors, drops on physical
+# interfaces. Covers the gap between blackbox endpoint checks and ingress-nginx
+# RPS alerts (which only see what passes through the L7 path).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: network-alerts
+  namespace: default
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # Node-level NIC alerts (node-exporter).
+    # Selector excludes the lo loopback and the dynamic cali*/tunl0/vxlan*
+    # interfaces created by Calico (one per pod) — they generate too much
+    # cardinality and their counters are workload noise, not link issues.
+    - name: node_network
+      interval: 60s
+      rules:
+        # Receive errors. Any sustained rate is bad — physical layer issue
+        # (cable, port, transceiver) or NIC malfunction.
+        - alert: NodeNetworkReceiveErrors
+          expr: |
+            rate(node_network_receive_errs_total{
+              device!~"lo|cali.*|tunl.*|vxlan.*|veth.*|docker.*"
+            }[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            component: network
+          annotations:
+            summary: "Receive errors on {{ $labels.instance }} interface {{ $labels.device }}"
+            description: |
+              {{ $labels.device }} on {{ $labels.instance }} is dropping inbound
+              packets due to errors. Current rate: {{ $value }} errors/sec.
+              Check cable, switch port, and physical link state.
+
+        # Transmit errors. Same pattern as receive but for outbound.
+        - alert: NodeNetworkTransmitErrors
+          expr: |
+            rate(node_network_transmit_errs_total{
+              device!~"lo|cali.*|tunl.*|vxlan.*|veth.*|docker.*"
+            }[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            component: network
+          annotations:
+            summary: "Transmit errors on {{ $labels.instance }} interface {{ $labels.device }}"
+            description: |
+              {{ $labels.device }} on {{ $labels.instance }} failing to transmit
+              packets. Current rate: {{ $value }} errors/sec. Likely the same
+              physical-layer causes as RX errors — cable, port, transceiver.
+
+        # Drops: packets discarded because of buffer pressure, MTU mismatch,
+        # or filter rejection. Tolerate brief bursts.
+        - alert: NodeNetworkReceiveDrops
+          expr: |
+            rate(node_network_receive_drop_total{
+              device!~"lo|cali.*|tunl.*|vxlan.*|veth.*|docker.*"
+            }[5m]) > 10
+          for: 15m
+          labels:
+            severity: warning
+            component: network
+          annotations:
+            summary: "Receive packet drops on {{ $labels.instance }} ({{ $labels.device }})"
+            description: |
+              {{ $labels.device }} is dropping {{ $value }} packets/sec on
+              receive — sustained over 15 minutes. Common causes: receive ring
+              buffer too small, kernel softirq pressure, MTU mismatch with
+              switch port.
+
+        # Saturation: rate of bytes vs the link capacity. The Pi 5 NIC is
+        # gigabit (125 MB/s = 1e9 bits/s). Threshold at 85% of theoretical
+        # max sustained for 15 minutes.
+        - alert: NodeNetworkReceiveSaturation
+          expr: |
+            rate(node_network_receive_bytes_total{
+              device!~"lo|cali.*|tunl.*|vxlan.*|veth.*|docker.*"
+            }[5m]) * 8 > (0.85 * 1e9)
+          for: 15m
+          labels:
+            severity: warning
+            component: network
+          annotations:
+            summary: "Network receive saturation on {{ $labels.instance }} ({{ $labels.device }})"
+            description: |
+              {{ $labels.device }} receiving at {{ $value | humanize }}
+              bits/sec — over 85% of gigabit link capacity for 15 minutes.
+              Likely backup window, large image pull, or unbounded workload.
+
+        - alert: NodeNetworkTransmitSaturation
+          expr: |
+            rate(node_network_transmit_bytes_total{
+              device!~"lo|cali.*|tunl.*|vxlan.*|veth.*|docker.*"
+            }[5m]) * 8 > (0.85 * 1e9)
+          for: 15m
+          labels:
+            severity: warning
+            component: network
+          annotations:
+            summary: "Network transmit saturation on {{ $labels.instance }} ({{ $labels.device }})"
+            description: |
+              {{ $labels.device }} transmitting at {{ $value | humanize }}
+              bits/sec — over 85% of gigabit link capacity for 15 minutes.
+
+        # Link flap: interface oper-state toggled from up. node_network_up
+        # is 1 when interface is operational. Fires immediately on the first
+        # 0 reading (no `for:` window) since link loss is always actionable.
+        - alert: NodeNetworkInterfaceDown
+          expr: |
+            node_network_up{
+              device!~"lo|cali.*|tunl.*|vxlan.*|veth.*|docker.*"
+            } == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: network
+          annotations:
+            summary: "Network interface {{ $labels.device }} on {{ $labels.instance }} is DOWN"
+            description: |
+              Operational state of {{ $labels.device }} on {{ $labels.instance }}
+              has been DOWN for 2+ minutes. Check switch port, cable, and node
+              kernel logs for NIC reset / driver crash.
+
+    # Conntrack table fills are silent until they aren't — after that, new
+    # connections fail and existing ones may stall. Alert before exhaustion.
+    - name: node_conntrack
+      interval: 60s
+      rules:
+        - alert: NodeConntrackTableNearFull
+          expr: |
+            (node_nf_conntrack_entries / node_nf_conntrack_entries_limit) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+            component: network
+          annotations:
+            summary: "Conntrack table >80% full on {{ $labels.instance }}"
+            description: |
+              {{ $labels.instance }} conntrack table at
+              {{ $value | humanizePercentage }} of limit
+              ({{ $labels.instance }}). Likely a connection-burst workload or
+              short-lived flows accumulating. Raise nf_conntrack_max via
+              sysctl if sustained, else investigate the source workload.
+
+        - alert: NodeConntrackTableFull
+          expr: |
+            (node_nf_conntrack_entries / node_nf_conntrack_entries_limit) > 0.95
+          for: 2m
+          labels:
+            severity: critical
+            component: network
+          annotations:
+            summary: "Conntrack table >95% full on {{ $labels.instance }}"
+            description: |
+              {{ $labels.instance }} conntrack table near exhaustion. New
+              connections will start failing imminently. Immediate action:
+              raise sysctl net.netfilter.nf_conntrack_max.

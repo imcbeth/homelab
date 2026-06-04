@@ -23,6 +23,7 @@ resources:
   - istio-alerts.yaml
   - apm-alerts.yaml
   - ingress-nginx-alerts.yaml
+  - network-alerts.yaml
   - slo-alerts.yaml
   - calico-kube-controllers-servicemonitor.yaml
   - uptime-kuma-servicemonitor.yaml
