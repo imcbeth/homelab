@@ -39,11 +39,14 @@ spec:
       name: flink-operator-flink-operator-webhook-configuration
       jqPathExpressions:
         - .webhooks[].clientConfig.caBundle
-    # Kubernetes adds spec.conversion.strategy=None after SSA apply; not in chart
+    # Kubernetes adds spec.conversion.strategy=None after SSA apply; not in chart.
+    # Also defaults priority=0 on every additionalPrinterColumns entry that
+    # the chart leaves unspecified — apiextensions/v1 server-side defaulting.
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
       jqPathExpressions:
         - .spec.conversion
+        - .spec.versions[].additionalPrinterColumns[].priority
   syncPolicy:
     automated:
       prune: true
