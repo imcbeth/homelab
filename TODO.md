@@ -291,12 +291,12 @@
 - [ ] DNS monitoring and troubleshooting tools (covered in the new guide)
 - [ ] Consider DNS caching optimizations
 
-### 15. **VPN & Remote Access** ✅ Solved by UniFi (2026-04-17)
+### 15. **VPN & Remote Access** ✅ Complete (2026-04-17)
 - [x] Remote access to cluster — handled by UniFi gateway VPN server (WireGuard/L2TP built-in)
 - [x] Full home network access (NAS 10.0.1.x, cluster 10.0.10.x, MetalLB 10.0.10.10) via UniFi
-- [ ] ~~Deploy Tailscale/WireGuard on cluster~~ — redundant; UniFi VPN is a superset
-- [ ] **oauth2-proxy** - SSO in front of web UIs (future nice-to-have, independent of VPN)
-- [ ] Port-forwarding for public site hosting (planned separately)
+- [x] ~~Deploy Tailscale/WireGuard on cluster~~ — closed as redundant; UniFi VPN is a superset
+- [x] **oauth2-proxy** — deployed 2026-04-23 (PR #576). GitHub OAuth, restricted to user `imcbeth`, cookie domain `.k8s.n37.ca`. Protects Uptime Kuma, Argo Workflows; add 3 annotations to any ingress to extend coverage.
+- [x] Public site hosting — Cloudflare Tunnel deployed for `lifeonabike.ca` (PRs #664–#678, 2026-05-31). No port-forward needed; outbound-only tunnel from cluster to Cloudflare edge.
 
 **Decision:** UniFi gateway VPN server provides full network access. Cluster-side VPN adds complexity for zero gain. Tailscale Kubernetes Operator remains an option if per-service sharing with others is needed in the future.
 
@@ -326,8 +326,8 @@
 - [x] Identify over-provisioned pods (resource right-sizing audit complete, net +928Mi requests)
 - [x] Implement Vertical Pod Autoscaler (VPA) — fairwinds/vpa v4.11.0, recommender only, 7 VPA objects in Off mode (PR #522, 2026-03-25)
 - [x] **Object-count ResourceQuotas for 14 stable namespaces** (PR #703, 2026-06-02) — count/pods, count/persistentvolumeclaims, count/services, count/configmaps, count/secrets. Object counts only (no CPU/memory quotas yet — too easy to mis-size). Excludes dynamic-workload + system namespaces.
-- [ ] Storage capacity planning and alerting
-- [ ] Network bandwidth monitoring and optimization
+- [x] **Storage capacity planning and alerting** — covered by `manifests/base/kube-prometheus-stack/storage-alerts.yaml`: NodeFilesystemSpaceLow/Critical/Predicted (predict_linear over 4h), NodeFilesystemInodesLow, PersistentVolumeSpaceLow/Critical/Predicted, plus Synology SNMP alerts (disk/RAID/volume/system temperature, bad sectors, power)
+- [x] **Network bandwidth monitoring and alerting** (PR #710, 2026-06-03) — `network-alerts.yaml`: NodeNetworkReceiveErrors / NodeNetworkTransmitErrors, NodeNetworkReceiveDrops, NodeNetwork{Receive,Transmit}Saturation (>85% gigabit), NodeNetworkInterfaceDown, NodeConntrackTableNearFull/Full. Dashboard already deployed (network-utilization-dashboard.yaml, PR ~#383)
 
 ---
 
@@ -348,20 +348,20 @@
 - [ ] Internal chat/collaboration tool
 
 ### 21. **Observability Maturity Enhancements**
-- [ ] **Distributed Tracing** - Evaluate Jaeger or Tempo for trace collection
+- [x] **Distributed Tracing** — Tempo deployed 2026-04-23 (PR #574); OTLP via Alloy, trace↔logs (Loki) + trace↔metrics correlation in Grafana
 - [ ] **Continuous Profiling** - Pyroscope for application performance profiling
 - [x] **Service Level Objectives (SLOs)** (PRs #704, #705, #707, #708, 2026-06-02) — multi-window multi-burn-rate alerts (Google SRE Workbook pattern) on 5 critical services. 99.5%/30d target. Fast burn (14.4x, 1h+5m), slow burn (6x, 6h+30m), budget-exhausted alerts. Two probe jobs: `blackbox-availability` (HTTPS via ingress, argocd + grafana) and `blackbox-availability-internal` (HTTP via ClusterIP, workflows + registry + lifeonabike). All 5 probes green.
 - [x] **Error Budget Tracking** (PR #704, 2026-06-02) — `slo:error_budget_consumed:ratio_30d` recording rule (0-1 clamped). Future: Grafana dashboard.
 - [ ] **Anomaly Detection** - ML-based anomaly detection for metrics (Prometheus AI/ML)
-- [ ] **Synthetic Monitoring** - Automated user journey testing
+- [x] **Synthetic Monitoring** — covered by Uptime Kuma (PR #573, status.k8s.n37.ca, 15 monitors across 3 groups via internal ClusterIP DNS) + blackbox SLO probes. True user-journey testing (form fills, multi-step) deferred until needed.
 
 ### 22. **Disaster Recovery Testing**
 - [x] **Monthly DR Drills** - Automated DR validation CronWorkflow (1st of month 6am MT), 8-step backup/restore cycle, validated 2026-03-25 in 3m45s (PR #522-524)
 - [x] **Velero Restore Testing** - Monthly Argo Workflows CronWorkflow: check-bsl → create-backup → verify-backup → test-restore → verify-restore → cleanup. ✅ 9/9 steps green.
-- [ ] **Chaos Engineering** - Controlled failure injection (Litmus)
-- [ ] **Network Partition Testing** - Simulate network failures
-- [ ] **Node Failure Scenarios** - Test cluster resilience to node loss
-- [ ] **Control Plane Failure** - Test etcd backup/restore procedures
+- [x] **Chaos Engineering** — Chaos Mesh 2.8.2 deployed (PR #563, 2026-04-21). Litmus has no ARM64 images. 4 scheduled experiments: pod-kill, network-delay, CPU-stress, node-failure simulation.
+- [x] **Network Partition Testing** — Chaos Mesh `network-delay-loki` experiment running weekly (validates monitoring stack resilience to network jitter)
+- [x] **Node Failure Scenarios** — Chaos Mesh `pod-failure-node04` experiment monthly + ad-hoc node drain validated during cluster maintenance
+- [ ] **Control Plane Failure** — Test etcd backup/restore procedures (single control-plane node; manual procedure documented in k8s-docs-n37 disaster-recovery guide)
 
 ### 23. **Cost Optimization & Efficiency**
 - [ ] **Resource Right-Sizing** - Analyze actual vs requested resources
