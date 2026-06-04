@@ -1,0 +1,157 @@
+---
+# Daily janitor for orphaned VolumeSnapshotContent objects.
+#
+# Background: ephemeral test namespaces (Velero DR validation, Velero CSI
+# snapshot backups whose target NS gets recreated, manual experiments) often
+# leave cluster-scoped VSCs behind after the namespace + the underlying
+# Synology snapshot are gone. The synology-csi-snapshotter then retries each
+# orphan against the DSM REST API on every reconcile pass — quickly enough
+# to peg the NAS CPU (verified 2026-06-04: 283 orphans → DSM CGI at 80-94%).
+#
+# This CronJob runs daily and removes VSCs that match ALL of:
+#   - status.readyToUse == false
+#   - status.error.message contains "can not find snapshot"
+#     (specific to synology-csi; protects against unrelated transient errors)
+#   - metadata.creationTimestamp older than 7 days
+#
+# Finalizer is patched off before delete because the snapshotter's own
+# finalizer can never clear — the snapshot it would delete on the NAS no
+# longer exists. 7-day grace lets transient API blips heal on their own.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vsc-janitor
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: vsc-janitor
+    app.kubernetes.io/component: janitor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vsc-janitor
+  labels:
+    app.kubernetes.io/name: vsc-janitor
+rules:
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["get", "list", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vsc-janitor
+  labels:
+    app.kubernetes.io/name: vsc-janitor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vsc-janitor
+subjects:
+  - kind: ServiceAccount
+    name: vsc-janitor
+    namespace: synology-csi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vsc-orphan-janitor
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: vsc-janitor
+    app.kubernetes.io/component: janitor
+spec:
+  # Daily at 03:00 America/Edmonton (Velero PVC backup runs at 02:00; give it an hour)
+  schedule: "0 3 * * *"
+  timeZone: "America/Edmonton"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: vsc-janitor
+            app.kubernetes.io/component: janitor
+        spec:
+          serviceAccountName: vsc-janitor
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: janitor
+              image: registry.k8s.n37.ca/alpine/k8s:1.31.13
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+                  cutoff_seconds=$(( $(date +%s) - 7 * 24 * 3600 ))
+                  # Format cutoff into a readable timestamp if `date -d @<sec>` is
+                  # available (GNU + recent busybox). Falls back to the raw epoch
+                  # otherwise; either way it's just an informational log line.
+                  # BSD `date -r <sec>` is intentionally avoided here — on Linux
+                  # `date -r` reads a file's mtime instead, which would fail under
+                  # `set -e` if the literal seconds value isn't a real filename.
+                  human_cutoff=$(date -u -d "@${cutoff_seconds}" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "epoch ${cutoff_seconds}")
+                  echo "VSC orphan janitor — pruning orphans created before ${human_cutoff}"
+
+                  # Fetch all VSCs once
+                  kubectl get volumesnapshotcontents -o json > /tmp/all.json
+
+                  total=$(jq '.items | length' /tmp/all.json)
+                  echo "Total VolumeSnapshotContents: ${total}"
+
+                  # Select orphans: readyToUse=false + error mentions "can not find snapshot" + older than cutoff
+                  jq -r --argjson cutoff "${cutoff_seconds}" '
+                    .items[]
+                    | select(.status.readyToUse == false)
+                    | select(.status.error.message // "" | test("can not find snapshot"))
+                    | select((.metadata.creationTimestamp | fromdateiso8601) < $cutoff)
+                    | .metadata.name
+                  ' /tmp/all.json > /tmp/orphans.txt
+
+                  count=$(wc -l < /tmp/orphans.txt | tr -d ' ')
+                  echo "Orphans matched (>=7d old, snapshot-missing error): ${count}"
+
+                  if [ "${count}" -eq 0 ]; then
+                    echo "Nothing to do."
+                    exit 0
+                  fi
+
+                  # Patch finalizers off in parallel (snapshotter's own finalizer
+                  # cannot clear — the snapshot it would delete on the NAS is
+                  # already gone), then delete.
+                  cat /tmp/orphans.txt | xargs -P 5 -n 20 -r kubectl patch volumesnapshotcontent --type=merge -p '{"metadata":{"finalizers":null}}' > /dev/null
+                  cat /tmp/orphans.txt | xargs -P 5 -n 20 -r kubectl delete volumesnapshotcontent --ignore-not-found --wait=false > /dev/null
+
+                  echo "Deleted ${count} orphan VSC(s)."
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi
