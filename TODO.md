@@ -307,7 +307,7 @@
 ### 16. **Documentation Enhancements**
 - [x] **Operational runbooks** (k8s-docs-n37 PR #91, 2026-06-03) — `docs/operations/runbooks.md`: ArgoCD stuck syncs, pod restarts, rollbacks, PVC Terminating, cert renewal, Falco WebUI silent, Renovate force-rebase
 - [x] **Disaster recovery procedures** (k8s-docs-n37 PR #92, 2026-06-03) — `docs/operations/disaster-recovery.md`: single node failure, control plane failure + etcd restore, PVC recovery, full cluster rebuild, NAS failure. Includes RTO/RPO targets table.
-- [ ] Capacity planning documentation with growth projections
+- [x] **Capacity planning documentation with growth projections** (k8s-docs-n37 PR #94, 2026-06-03) — `docs/operations/capacity-planning.md`: current baseline (CPU 13-32%, mem requests 24-34%, mem limits up to 80% on node01), per-resource detail, "when to add hardware" threshold table, predict_linear forecasting recipe, quarterly review checklist
 - [x] **Cluster-internal network topology diagrams** (k8s-docs-n37 PR #93, 2026-06-03) — `docs/networking/cluster-topology.md`: Mermaid sequence diagrams for external client → backend, pod-to-pod HBONE, MetalLB VIP hairpin, DNS/egress paths
 - [ ] Performance baseline documentation
 - [ ] Document on-call procedures and escalation paths
