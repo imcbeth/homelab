@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-04 (Renovate Batch + CI Action Bumps)
+**Last Updated:** 2026-06-04 (flink-operator CRD drift fixed — 38/38 clean)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -117,7 +117,7 @@
 - UI accessible at https://workflows.k8s.n37.ca (PR #293)
 - **Workspace storage:** `synology-iscsi-delete-ssd` (changed 2026-06-01, PR #685) — Delete policy auto-cleans PVCs on workflow completion; SSD for faster build I/O. Previously defaulted to `synology-iscsi-retain` (HDD) which left orphaned PVs after every build.
 
-**ArgoCD:** 40 apps — all Synced+Healthy ✅ (as of 2026-05-31 night). Exception: flink-operator CRD drift (pre-existing, not blocking).
+**ArgoCD:** 38 apps — all Synced+Healthy ✅ (as of 2026-06-04 — flink-operator CRD drift resolved by PR #722, adding `.spec.versions[].additionalPrinterColumns[].priority` to ignoreDifferences).
 - flink-demo: both FlinkDeployments running. file-to-kafka FINISHED/STABLE (batch), kafka-to-s3 RUNNING/STABLE (streaming).
 - **Renovate batch 1 (10 PRs, 2026-05-31):** argo-cd 9.5.11, kube-prometheus-stack 86.1.0, istio 1.29.3, sealed-secrets, velero 12.0.1, busybox all upgraded. ArgoCD self-upgraded during batch (repo-server cycled briefly, auto-recovered).
 - **Renovate batch 2 (8+3 PRs, 2026-05-31):** Istio 1.30.0, Alloy 1.8.2, oauth2-proxy chart 10.6.0, Prometheus 3.12.0, synology-csi 1.3.0, csi-attacher 4.12.0, csi-node-driver-registrar 2.17.0, external-snapshotter 8.6.0. Plus flink-operator 1.15.0 (image + chart URL together, PR #656), Flink Dockerfile 2.2 base image.
@@ -196,6 +196,19 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-04 (later): Fix flink-operator CRD drift — 38/38 clean
+
+**Completed Work:**
+- **PR #722:** [Merged] fix(flink-operator): ignore priority=0 default on CRD printer columns
+- **Root cause:** apiextensions/v1 API server defaults `priority: 0` on every `additionalPrinterColumns` entry the chart leaves unspecified. ArgoCD's stored-vs-rendered diff showed only the `> priority: 0` line on each of the 4 flink CRDs.
+- **Fix:** Added `.spec.versions[].additionalPrinterColumns[].priority` to the existing CRD `ignoreDifferences` block (which already covered `.spec.conversion` for the same defaulting reason).
+- **Result:** flink-operator → Synced+Healthy. **38/38 ArgoCD apps Synced+Healthy** — first clean state across the entire cluster in months.
+
+**Key Gotcha Captured:**
+- **apiextensions/v1 CRD field defaulting:** server-side defaults `additionalPrinterColumns[].priority=0` and `spec.conversion.strategy=None` on storage. Both need to be in ArgoCD `ignoreDifferences` for any Helm chart that doesn't specify them explicitly. The pattern: any CRD-shipping chart that goes OutOfSync indefinitely is probably hitting one of these.
+
+---
 
 ### 2026-06-04: Renovate Batch — kube-prometheus-stack 86.1.1, trivy-operator 0.33.1, CI action bumps
 
