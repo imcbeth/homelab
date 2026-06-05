@@ -75,5 +75,18 @@ spec:
           port: 5000   # Synology DSM HTTP
         - protocol: TCP
           port: 5001   # Synology DSM HTTPS
+
+    # pvc-ro-remediator CronJob (PR #735) queries Prometheus for active
+    # alerts. Prometheus runs in default ns on port 9090.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
         - protocol: TCP
           port: 3260   # iSCSI target
