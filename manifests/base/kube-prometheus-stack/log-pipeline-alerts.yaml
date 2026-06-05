@@ -1,0 +1,123 @@
+---
+# Log pipeline (Alloy → Loki) health alerts.
+#
+# These run in Prometheus (NOT in Loki's embedded LogQL ruler) so they fire
+# even when Loki itself is broken. The existing LogQL alerts in
+# manifests/base/loki/loki-alerting-rules.yaml are pattern-detection on
+# already-ingested logs — they need Loki working to evaluate, and that's
+# exactly the case we can't detect with them.
+#
+# Triggered by the 2026-06-04 incident: Loki's PVC remounted read-only
+# after iSCSI session interruption following cluster restart. Loki pod
+# stayed 2/2 Running (liveness probe doesn't check write capability),
+# distributor still answered HTTP — but every push returned 500 and Alloy
+# silently dropped 427k entries before anyone noticed.
+#
+# Source metrics:
+#   - loki_write_dropped_entries_total{reason="..."} — Alloy-side
+#   - loki_write_sent_bytes_total                    — Alloy-side success counter
+#   - loki_request_duration_seconds_count{route,status_code} — Loki distributor
+#   - loki_write_failures_logged_total{subsystem}    — Loki ingester
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: log-pipeline-alerts
+  namespace: default
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # Alloy-side detection — catches any cause of pipeline failure (Loki down,
+    # network problem, PVC read-only, ingester rate-limit, etc.)
+    - name: log_pipeline_alloy
+      interval: 30s
+      rules:
+        # Any sustained ingester-error drops means writes aren't completing.
+        # The "ingester_error" reason specifically rules out client-side
+        # issues (line_too_long, queue_is_full, rate_limited, stream_limited).
+        - alert: AlloyLokiWriteFailures
+          expr: |
+            sum by (pod) (
+              rate(loki_write_dropped_entries_total{reason="ingester_error"}[5m])
+            ) > 0
+          for: 5m
+          labels:
+            severity: warning
+            component: logging
+          annotations:
+            summary: "Alloy {{ $labels.pod }} dropping entries on Loki ingester errors"
+            description: |
+              Alloy is dropping log entries with reason="ingester_error" at
+              {{ $value | humanize }}/s sustained over 5 minutes. The Loki
+              ingester is rejecting writes — common causes: Loki PVC remounted
+              read-only (iSCSI), Loki down, or Loki rate limits exceeded.
+              Check `kubectl logs -n loki loki-0 -c loki | grep -i "read-only\|error"`.
+
+        # Critical: pipeline is completely broken (zero successful bytes sent
+        # AND drops happening). The exact pattern we hit in the 2026-06-04
+        # incident — would have caught it in ~10 minutes instead of hours.
+        - alert: AlloyLokiPipelineDown
+          expr: |
+            (sum by (pod) (rate(loki_write_sent_bytes_total[5m])) == 0)
+            and
+            (sum by (pod) (rate(loki_write_dropped_entries_total[5m])) > 0)
+          for: 10m
+          labels:
+            severity: critical
+            component: logging
+          annotations:
+            summary: "Alloy {{ $labels.pod }}: log pipeline is fully broken"
+            description: |
+              Zero successful bytes sent to Loki AND nonzero dropped entries —
+              every push is failing. This is the iSCSI RO-remount or
+              Loki-totally-down signature. Loki pod likely needs
+              `kubectl delete pod -n loki loki-0` to force a fresh iSCSI
+              session and RW remount; verify before/after via
+              `kubectl logs -n loki loki-0 -c loki | tail -30`.
+
+    # Loki-side detection — covers the case where Loki itself is logging
+    # write failures, regardless of source. Catches the same incident from
+    # the destination's perspective; useful for cross-validation.
+    - name: log_pipeline_loki
+      interval: 30s
+      rules:
+        - alert: LokiIngester5xxRate
+          expr: |
+            sum by (route) (
+              rate(loki_request_duration_seconds_count{
+                route=~".*push.*", status_code=~"5..", job="loki/loki"
+              }[5m])
+            ) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            component: logging
+          annotations:
+            summary: "Loki returning 5xx on {{ $labels.route }}"
+            description: |
+              Loki distributor responding 5xx to {{ $labels.route }} at
+              {{ $value | humanize }}/s sustained 5 minutes. Server-side view
+              of the same failure as AlloyLokiWriteFailures. Inspect Loki
+              ingester logs for "read-only", "failed to flush", or OOM.
+
+        # The ingester's own counter of write failures. Increments when chunks
+        # can't be flushed to storage (EROFS, full disk, etc.).
+        - alert: LokiIngesterWriteFailureRate
+          expr: |
+            sum by (subsystem) (
+              rate(loki_write_failures_logged_total[5m])
+            ) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            component: logging
+          annotations:
+            summary: "Loki ingester ({{ $labels.subsystem }}) failing writes"
+            description: |
+              loki_write_failures_logged_total incrementing at
+              {{ $value | humanize }}/s. The ingester can't persist chunks —
+              almost always EROFS on the PVC. Standard fix is
+              `kubectl delete pod -n loki loki-0` to force iSCSI session
+              re-establishment.
