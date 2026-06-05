@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-04 (flink-operator CRD drift fixed — 38/38 clean)
+**Last Updated:** 2026-06-04 (Cluster shutdown/restart + NAS triage + VSC janitor)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -196,6 +196,40 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-04 (afternoon): Cluster Shutdown/Restart + NAS CPU Triage + VSC Janitor
+
+**Cluster shutdown via /cluster-shutdown skill:**
+- All 38 ArgoCD apps auto-sync disabled; NAS-dependent workloads scaled to 0.
+- **Skill gap discovered:** tempo, zot, uptime-kuma, localstack not in the skill's scale-down list (they were deployed after the skill was written). Added them manually before the volume detach gate.
+- All 9 synology-csi VAs cleanly released → workers shut down in parallel → control-plane last.
+
+**Cluster restart recovery:**
+- All 5 nodes still `SchedulingDisabled` from the drain — uncordoned first.
+- Re-enabled auto-sync on all 38 apps.
+- **Skill gap #2:** ArgoCD's `selfHeal` did NOT restore `.spec.replicas` after the manual `kubectl scale`. Field ownership in SSA isn't held by argocd-controller. **Had to manually scale all 10 workloads back up** to mirror the shutdown.
+- Once Zot was back, force re-pulled the ImagePullBackOff pods (external-dns × 3, lifeonabike-web × 2).
+- iSCSI PVCs (Prometheus, Grafana, Loki, Tempo, Zot, Uptime Kuma, Falco-Redis) all mounted RW cleanly. **No btrfs RO-remount this cycle** — the planned scale-down → VA release → drain sequence avoided the April UDR-reset failure mode.
+
+**NAS CPU triage (separate but immediate post-restart issue):**
+- NAS CPU pegged at 80-94% for 30+ min after restart, with `ssCpuUser=79%`. iSCSI itself was idle (`iSCSILUNIopsRead/Write=0`).
+- SSH'd into NAS (sshpass + password from user) → `top` showed `synoscgi_SYNO.Core.ISCSI.LUN_1_get` at 100% CPU. **DSM REST API was being hammered.**
+- 11 active connections to DSM from node04 (10.0.10.220). Traced to `synology-csi-snapshotter-0`.
+- **Root cause: 283 orphan VolumeSnapshotContent objects** dating to 2026-02-20, each pointing at long-gone Synology snapshots. Snapshotter retried each one against DSM REST API on every reconcile pass.
+- Manual fix: patched finalizers off + deleted all 283 orphans → NAS CPU dropped to **95.2% idle, load avg 11.19→6.79 in 5 min**.
+
+**Pull Requests:**
+- **PR #724:** [Merged] feat(synology-csi): add daily orphan VolumeSnapshotContent janitor — CronJob in synology-csi ns at 03:00 MT. Prunes VSCs matching `readyToUse=false` + "can not find snapshot" + >7d old. Patches finalizers off before delete. Hardened pod (non-root, readOnly fs, all caps dropped, RBAC limited to VSC CRUD only).
+- Copilot review caught a BSD-specific `date -r ${epoch}` fallback that would fail on Linux/busybox under `set -e`. Fixed before merge by extracting the human-readable cutoff into its own variable with an `echo`-based fallback that can't fail.
+
+**Key Gotchas Captured:**
+- **ArgoCD selfHeal doesn't restore `.spec.replicas`** after manual scale — field ownership in SSA. Cluster shutdown skill must include re-scale on restart.
+- **Orphan VSCs hammer DSM** — the snapshotter retries every error VSC on every reconcile. The synology-csi-snapshotter has no built-in backoff for orphans. The new janitor catches the accumulation source.
+- **`/cluster-shutdown` skill is 4 months old** and missing tempo, zot, uptime-kuma, localstack scale-downs + the post-restart recovery procedure. Follow-up needed.
+- **DSM REST API is the bottleneck**, not iSCSI. Heavy NAS CPU with idle `iSCSILUNIops*` means the CSI driver (or snapshotter) is calling the management API.
+- **NAS SSH key is separate from cluster nodes** — `~/.ssh/id_ed25519_k8s` is cluster-only. NAS uses password auth (user provided via /tmp/nas_pass).
+
+---
 
 ### 2026-06-04 (later): Fix flink-operator CRD drift — 38/38 clean
 
