@@ -13,6 +13,7 @@ resources:
   - snapshotter/snapshotter.yml
   - snapshotter/volume-snapshot-class.yml
   - orphan-vsc-janitor.yaml
+  - pvc-mount-monitor.yaml
 patches:
   - path: patches/snapshot-controller-resources.yaml
 # secretGenerator:
