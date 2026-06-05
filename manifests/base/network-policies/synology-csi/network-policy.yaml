@@ -28,6 +28,15 @@ spec:
         - protocol: TCP
           port: 9443   # snapshot-controller webhook
 
+    # Prometheus scrape of pvc-mount-monitor DaemonSet (PR #734).
+    # Default ns hosts kube-prometheus-stack; prometheus scrapes via
+    # PodMonitor. Bare port rule matches the existing 9443 pattern —
+    # Calico IPIP rewrites source IPs for cross-node traffic, so ipBlock
+    # rules are unreliable.
+    - ports:
+        - protocol: TCP
+          port: 9300   # pvc-mount-monitor /metrics
+
   egress:
     # DNS resolution via kube-dns
     - to:
