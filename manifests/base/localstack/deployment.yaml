@@ -36,6 +36,30 @@ spec:
               value: "https://localstack.k8s.n37.ca"
             - name: PERSISTENCE
               value: "1"
+          # Liveness probe — combined health-check + write-test on the PVC.
+          # Catches the iSCSI RO-remount failure mode (cluster restart on
+          # 2026-06-04 hit Loki + Falco-Redis). When a write fails, kubelet
+          # kills the container and the deployment controller schedules a
+          # fresh pod → fresh CSI mount → RW restored, no manual action.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'curl -fsS http://localhost:4566/_localstack/health > /dev/null && touch /var/lib/localstack/.healthz && rm -f /var/lib/localstack/.healthz'
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /_localstack/health
+              port: 4566
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           volumeMounts:
             - name: localstack-data
               mountPath: /var/lib/localstack
