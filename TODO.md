@@ -327,7 +327,18 @@ Tracked here because the failure mode keeps recurring after cluster restarts: bt
 
 PR #728 (2026-06-04) adds **detection** for Loki specifically via `AlloyLokiPipelineDown` (catches the symptom in ~10 min from the upstream-side). The follow-ups below address **prevention** (catch it inside the pod's own probes) and **broader detection** (one mechanism that works across all stateful workloads, not just Loki).
 
-- [ ] **(Primary automation) Write-capability livenessProbe for stateful workloads** — add a `livenessProbe` that does a tiny test write (`touch /data/.healthz && rm /data/.healthz`) on the PVC. When the probe fails, kubelet kills the container; the deployment controller schedules a fresh pod, which gets a fresh iSCSI session and an RW remount. **This IS the auto-remediation** — no custom controller needed; uses standard K8s primitives. Per-app `values.yaml` change for Loki, Tempo, Zot, Uptime Kuma, Falco-Redis, LocalStack. ~6 small PRs. Caveat: charts vary in how customizable the probe spec is — some require an `extraVolumeMounts` + sidecar trick.
+- [~] **(Primary automation) Write-capability livenessProbe for stateful workloads** — survey 2026-06-04 results:
+
+  | App | Status | Why |
+  |---|---|---|
+  | Uptime Kuma | ✅ Done (PR #731) | Shell available + chart exposes `livenessProbe` block |
+  | LocalStack | ✅ Done (PR #732) | Shell available + plain manifests (no chart) |
+  | Falco-Redis | ⏭️ Defer to controller | Shell available BUT falcosidekick chart hardcodes `tcpSocket` probe; no values override |
+  | Loki | ⏭️ Defer to controller | Distroless container — no shell for `exec` probe |
+  | Tempo | ⏭️ Defer to controller | Distroless container |
+  | Zot | ⏭️ Defer to controller | Distroless container |
+
+  Net result: 2 of 6 apps covered by per-app probes. The other 4 need the controller approach below.
 
 - [ ] **(Observability complement) Cluster-wide PVC writability monitor** — DaemonSet or CronJob that mounts each stateful PVC (or a sample of them) and attempts a write every ~60s, exporting a Prometheus gauge `pvc_writable{namespace,claim} = 0|1`. Gives a dashboard view of "which PVC is broken right now" and catches the case where a workload doesn't have / can't accept the livenessProbe approach. Alternative: extend the existing `cluster-healthcheck` CronWorkflow with a writability check step.
 
