@@ -1,0 +1,285 @@
+---
+# pvc-mount-monitor — DaemonSet that detects PVC read-only remount.
+#
+# Background: btrfs/ext4 occasionally remount iSCSI-backed PVCs read-only
+# after session interruption (UDR factory reset, planned cluster restart).
+# The 2026-06-04 incident hit Loki + Falco-Redis silently — pods stayed
+# Ready, but no writes were completing. Existing detection only covers
+# Loki specifically (PR #728); Tempo / Zot / Falco-Redis expose no
+# Prometheus metrics we can use to alert on.
+#
+# This DaemonSet reads `/host/proc/mounts` on every node and emits a
+# Prometheus gauge `pvc_mount_readonly{...}` for every CSI-managed mount.
+# Works regardless of the workload's container shell / chart customization
+# / metric exposure — purely an L0 kernel-state read.
+#
+# The companion alert PVCMountReadOnly fires when any mount goes RO for
+# 2+ minutes; the controller in TODO #17a step 3 will consume it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pvc-mount-monitor-script
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: pvc-mount-monitor
+data:
+  monitor.py: |
+    #!/usr/bin/env python3
+    """Expose pvc_mount_readonly gauge from /host/proc/mounts."""
+    import os
+    import re
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    NODE_NAME = os.environ.get("NODE_NAME", "unknown")
+    MOUNTS_PATH = os.environ.get("MOUNTS_PATH", "/host/proc/mounts")
+
+    # Match the per-pod CSI bind mount layout:
+    #   /var/lib/kubelet/pods/<UID>/volumes/kubernetes.io~csi/<PVC>/mount
+    # globalmount entries are filtered out (they exist regardless of
+    # whether any pod has the volume attached, so they're noise).
+    PVC_RE = re.compile(
+        r"/var/lib/kubelet/pods/[^/]+/volumes/kubernetes\.io~csi/(?P<pvc>[^/]+)/mount"
+    )
+
+    def parse_mounts():
+        rows = []
+        try:
+            with open(MOUNTS_PATH) as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) < 4:
+                        continue
+                    device, mountpoint, fstype, options = parts[:4]
+                    m = PVC_RE.match(mountpoint)
+                    if not m:
+                        continue
+                    pvc = m.group("pvc")
+                    opts = set(options.split(","))
+                    readonly = 1 if "ro" in opts else 0
+                    rows.append((device, mountpoint, fstype, pvc, readonly))
+        except Exception as e:
+            print(f"parse error: {e}", flush=True)
+        return rows
+
+    def render():
+        lines = [
+            "# HELP pvc_mount_readonly 1 if the CSI-backed PVC mount is read-only",
+            "# TYPE pvc_mount_readonly gauge",
+        ]
+        rows = parse_mounts()
+        for device, mountpoint, fstype, pvc, ro in rows:
+            # Escape per Prometheus text format: backslash and quote.
+            def esc(s: str) -> str:
+                return s.replace("\\", "\\\\").replace('"', '\\"')
+            labels = (
+                f'node="{esc(NODE_NAME)}",'
+                f'device="{esc(device)}",'
+                f'mountpoint="{esc(mountpoint)}",'
+                f'fstype="{esc(fstype)}",'
+                f'pvc="{esc(pvc)}"'
+            )
+            lines.append(f"pvc_mount_readonly{{{labels}}} {ro}")
+        # Also emit a count so the alert can verify the exporter is running.
+        lines.append("# HELP pvc_mount_monitor_scrapes_total total parse cycles")
+        lines.append("# TYPE pvc_mount_monitor_scrapes_total counter")
+        lines.append(f'pvc_mount_monitor_scrapes_total{{node="{NODE_NAME}"}} {SCRAPE_COUNT[0]}')
+        return "\n".join(lines) + "\n"
+
+    SCRAPE_COUNT = [0]
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path != "/metrics":
+                self.send_response(404)
+                self.end_headers()
+                return
+            SCRAPE_COUNT[0] += 1
+            body = render().encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, fmt, *args):
+            # Quiet down stdlib server access logging
+            pass
+
+    if __name__ == "__main__":
+        addr = ("0.0.0.0", 9300)
+        print(f"pvc-mount-monitor listening on {addr[0]}:{addr[1]} node={NODE_NAME}", flush=True)
+        HTTPServer(addr, Handler).serve_forever()
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: pvc-mount-monitor
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: pvc-mount-monitor
+    app.kubernetes.io/component: monitor
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pvc-mount-monitor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pvc-mount-monitor
+        app.kubernetes.io/component: monitor
+    spec:
+      hostPID: false
+      hostNetwork: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+        # Run on control-plane too
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: monitor
+          # synology-csi sync-wave (-30) runs before Zot (-2), so pull
+          # directly from docker.io to avoid the bootstrap chicken-and-egg.
+          # Matches the pattern of csi-node-driver-registrar pulling
+          # from registry.k8s.io directly.
+          image: docker.io/library/python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "/scripts/monitor.py"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: metrics
+              containerPort: 9300
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            periodSeconds: 30
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            periodSeconds: 60
+            failureThreshold: 3
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: pvc-mount-monitor-script
+            defaultMode: 0755
+        - name: proc
+          hostPath:
+            path: /proc
+            type: Directory
+---
+# Headless service for the PodMonitor to discover endpoints.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pvc-mount-monitor
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: pvc-mount-monitor
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: pvc-mount-monitor
+  ports:
+    - name: metrics
+      port: 9300
+      targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: pvc-mount-monitor
+  namespace: synology-csi
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pvc-mount-monitor
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+---
+# Detection alert. The companion auto-remount controller (TODO #17a step 3)
+# will watch this alert and force-delete the affected pod(s).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pvc-mount-monitor-alerts
+  namespace: synology-csi
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: pvc_mount_monitor
+      interval: 30s
+      rules:
+        - alert: PVCMountReadOnly
+          expr: pvc_mount_readonly == 1
+          for: 2m
+          labels:
+            severity: critical
+            component: storage
+          annotations:
+            summary: "PVC mount {{ $labels.pvc }} on {{ $labels.node }} is read-only"
+            description: |
+              The CSI-attached PVC {{ $labels.pvc }} on node {{ $labels.node }}
+              has been mounted read-only for 2+ minutes (device={{ $labels.device }},
+              mountpoint={{ $labels.mountpoint }}, fstype={{ $labels.fstype }}).
+              This is the iSCSI btrfs RO-remount failure mode. The owning pod
+              is silently failing every write. Fix: `kubectl delete pod <owning-pod>`
+              to force a fresh iSCSI session + RW remount. The auto-remount
+              controller (when deployed) will do this automatically.
+
+        - alert: PVCMountMonitorDown
+          expr: |
+            absent(pvc_mount_monitor_scrapes_total) == 1
+            or count(up{job=~".*pvc-mount-monitor.*"}) < 5
+          for: 10m
+          labels:
+            severity: warning
+            component: storage
+          annotations:
+            summary: "pvc-mount-monitor DaemonSet has missing or unhealthy pods"
+            description: |
+              Expected 5 instances (one per node), but the monitor is reporting
+              from fewer. Detection coverage is degraded — RO-remounts on the
+              missing nodes will go unnoticed by PVCMountReadOnly. Check
+              `kubectl get pod -n synology-csi -l app.kubernetes.io/name=pvc-mount-monitor`.
