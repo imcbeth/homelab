@@ -321,6 +321,18 @@
 - [ ] Performance regression testing
 - [x] Test node drain and pod eviction scenarios (pod-failure-node04 experiment via Chaos Mesh, monthly)
 
+### 17a. **Storage Resilience — PVC Read-Only Remount Detection**
+
+Tracked here because the failure mode keeps recurring after cluster restarts: btrfs / ext4 occasionally remount iSCSI-backed PVCs read-only after session interruption (UDR factory reset 2026-04-19, planned cluster restart 2026-06-04 hit Loki + Falco-Redis simultaneously). Pods stay `2/2 Running` because liveness probes don't exercise the write path, so the breakage is invisible until someone notices.
+
+PR #728 (2026-06-04) adds **detection** for Loki specifically via `AlloyLokiPipelineDown` (catches the symptom in ~10 min from the upstream-side). The follow-ups below address **prevention** (catch it inside the pod's own probes) and **broader detection** (one mechanism that works across all stateful workloads, not just Loki).
+
+- [ ] **Write-capability probe for stateful workloads** — add a `livenessProbe`/`readinessProbe` that does a tiny test write (`touch /data/.healthz && rm /data/.healthz`) on the PVC. Per-app `values.yaml` change for Loki, Tempo, Zot, Uptime Kuma, Falco-Redis, LocalStack. Restart policy will then auto-recover the pod when RO is detected, without manual intervention. Estimated 6 small PRs, one per app. Caveat: charts vary in how customizable the probe spec is — some require an `extraVolumeMounts` + sidecar trick.
+
+- [ ] **Cluster-wide PVC writability monitor** — DaemonSet or CronJob that mounts each stateful PVC (or a sample of them) and attempts a write every ~60s, exporting a Prometheus gauge `pvc_writable{namespace,claim} = 0|1`. Single mechanism covers all workloads, including future ones. More work than per-app probes, but no chart-level customization needed. Alternative: extend the existing `cluster-healthcheck` CronWorkflow with a writability check step.
+
+- [ ] **Auto-remount on detection** — once a workable detection signal exists, evaluate auto-remediation: a controller that watches the writability metric and triggers `kubectl delete pod` automatically. Probably overkill at homelab scale (alerts are fine), but worth deciding rather than leaving open.
+
 ### 18. **Resource Optimization**
 - [x] Audit resource requests/limits across all workloads (7 workloads adjusted, 2026-02-11)
 - [x] Identify over-provisioned pods (resource right-sizing audit complete, net +928Mi requests)
