@@ -24,6 +24,7 @@ resources:
   - apm-alerts.yaml
   - ingress-nginx-alerts.yaml
   - network-alerts.yaml
+  - pi-cluster-alerts.yaml
   - slo-alerts.yaml
   - calico-kube-controllers-servicemonitor.yaml
   - uptime-kuma-servicemonitor.yaml

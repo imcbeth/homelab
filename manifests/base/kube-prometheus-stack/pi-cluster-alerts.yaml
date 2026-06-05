@@ -1,0 +1,142 @@
+---
+# Pi 5 cluster hardware alerts — thermal, undervoltage, PoE.
+#
+# Closes the monitoring coverage gap for hardware-specific failure modes:
+#   - SoC throttling kicks in at 80°C (soft) / 85°C (hard) per Pi 5 datasheet
+#   - NVMe drives throttle around 70-80°C (model-dependent)
+#   - PMIC undervoltage detection is the canonical signal for inadequate PSU /
+#     PoE budget exhaustion / cable resistance — silent corruption risk if
+#     ignored
+#   - PoE per-port draw helps catch a node pulling close to the 802.3at budget
+#
+# Source metrics (already exposed by node-exporter + unipoller):
+#   - node_thermal_zone_temp{type="cpu-thermal"}
+#   - node_hwmon_temp_celsius{chip=~"nvme_nvme0|1000120000_pcie_.*"}
+#   - node_hwmon_in_lcrit_alarm_volts{chip="soc:firmware_raspberrypi_hwmon"}
+#   - unpoller_device_port_poe_watts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pi-cluster-alerts
+  namespace: default
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # SoC thermal — Pi 5 throttles at 80°C, hard cap at 85°C.
+    - name: pi_soc_thermal
+      interval: 60s
+      rules:
+        - alert: PiNodeCPUTempHigh
+          expr: node_thermal_zone_temp{type="cpu-thermal"} > 75
+          for: 10m
+          labels:
+            severity: warning
+            component: hardware
+          annotations:
+            summary: "Pi node {{ $labels.instance }} CPU temperature elevated"
+            description: |
+              CPU thermal zone reporting {{ $value }}°C — sustained over 10
+              minutes. Throttle threshold is 80°C. Likely causes: enclosure
+              airflow restricted, fan failure, sustained heavy workload.
+
+        - alert: PiNodeCPUTempCritical
+          expr: node_thermal_zone_temp{type="cpu-thermal"} > 82
+          for: 2m
+          labels:
+            severity: critical
+            component: hardware
+          annotations:
+            summary: "Pi node {{ $labels.instance }} CPU about to throttle"
+            description: |
+              CPU thermal zone {{ $value }}°C — 2+ minutes above 82°C, within
+              3°C of the 85°C hard throttle. Performance is degraded and the
+              node may become unresponsive. Investigate cooling immediately.
+
+        # The RP1 chip + PCIe ADC are exposed as a separate hwmon chip. Useful
+        # for catching cases where the SoC itself runs cool but the I/O
+        # subsystem is hot (e.g. NVMe write storm).
+        - alert: PiNodePCIeTempHigh
+          expr: node_hwmon_temp_celsius{chip=~"1000120000_pcie.*"} > 75
+          for: 15m
+          labels:
+            severity: warning
+            component: hardware
+          annotations:
+            summary: "Pi node {{ $labels.instance }} PCIe / RP1 chip temperature elevated"
+            description: |
+              PCIe / RP1 ADC sensor {{ $labels.sensor }} reporting {{ $value }}°C.
+              Often correlates with sustained NVMe / USB I/O. If this is high
+              while CPU is low, investigate I/O-heavy workloads.
+
+    # NVMe thermal — most M.2 NVMe drives throttle 70-80°C.
+    - name: pi_nvme_thermal
+      interval: 60s
+      rules:
+        - alert: PiNodeNVMeTempHigh
+          expr: node_hwmon_temp_celsius{chip="nvme_nvme0"} > 65
+          for: 15m
+          labels:
+            severity: warning
+            component: hardware
+          annotations:
+            summary: "NVMe temp on {{ $labels.instance }} elevated"
+            description: |
+              NVMe sensor {{ $labels.sensor }} reporting {{ $value }}°C —
+              sustained over 15 minutes. Drives commonly start throttling at
+              70°C. Check NVMe heatsink seating and enclosure airflow.
+
+        - alert: PiNodeNVMeTempCritical
+          expr: node_hwmon_temp_celsius{chip="nvme_nvme0"} > 72
+          for: 5m
+          labels:
+            severity: critical
+            component: hardware
+          annotations:
+            summary: "NVMe on {{ $labels.instance }} likely throttling"
+            description: |
+              NVMe sensor {{ $labels.sensor }} {{ $value }}°C for 5+ minutes —
+              past the typical 70°C throttle threshold for consumer M.2 drives.
+              I/O latency will degrade and writes may slow significantly.
+
+    # PMIC undervoltage — silent corruption risk; fire immediately.
+    - name: pi_undervoltage
+      interval: 30s
+      rules:
+        - alert: PiNodeUndervoltage
+          expr: node_hwmon_in_lcrit_alarm_volts{chip="soc:firmware_raspberrypi_hwmon"} > 0
+          for: 2m
+          labels:
+            severity: critical
+            component: hardware
+          annotations:
+            summary: "Undervoltage detected on Pi node {{ $labels.instance }}"
+            description: |
+              Pi PMIC reports undervoltage (lcrit_alarm = {{ $value }}) for
+              2+ minutes. Likely causes: PoE budget exhausted, cheap PSU,
+              cable resistance too high, or load spike beyond PSU capacity.
+              Sustained undervoltage causes silent data corruption — replace
+              the PSU / re-cable, or move the node to a different PoE port.
+
+    # PoE per-port draw — 802.3at delivers 30W max; Pi 5 typically draws 5-12W.
+    # Alert helps catch a node pulling close to its budget (potential cable
+    # quality / hardware fault) or the switch as a whole nearing total budget.
+    - name: pi_poe_power
+      interval: 60s
+      rules:
+        - alert: PiNodePoEPortHighDraw
+          expr: unpoller_device_port_poe_watts > 15
+          for: 15m
+          labels:
+            severity: warning
+            component: hardware
+          annotations:
+            summary: "PoE port {{ $labels.port_id }} drawing {{ $value }}W"
+            description: |
+              Port {{ $labels.port_id }} on {{ $labels.name }} sustained
+              {{ $value }}W draw — well above Pi 5 nominal (5-8W idle,
+              12W heavy). Likely USB peripheral pulling power, or NVMe
+              under stress. If undervoltage alarms accompany this, the
+              power path is the limit.
