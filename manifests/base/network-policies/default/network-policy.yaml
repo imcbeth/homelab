@@ -180,6 +180,8 @@ spec:
           port: 2801   # Falcosidekick metrics
         - protocol: TCP
           port: 7777   # Argo Events controller + NATS exporter metrics
+        - protocol: TCP
+          port: 9300   # pvc-mount-monitor DaemonSet (synology-csi ns, PR #734)
 
     # Intra-namespace communication (alertmanager, grafana, prometheus, etc.)
     - to:
