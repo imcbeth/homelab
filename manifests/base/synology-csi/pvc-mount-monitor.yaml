@@ -32,7 +32,13 @@ data:
     from http.server import BaseHTTPRequestHandler, HTTPServer
 
     NODE_NAME = os.environ.get("NODE_NAME", "unknown")
-    MOUNTS_PATH = os.environ.get("MOUNTS_PATH", "/host/proc/mounts")
+    # Use the host's init mount namespace explicitly. /host/proc/mounts is
+    # a symlink to /proc/self/mounts which, when read by this container's
+    # Python process, returns the CONTAINER's mount namespace (no CSI mounts
+    # exist there). PID 1 in /host/proc references the HOST's init regardless
+    # of the container's PID namespace, so /host/proc/1/mounts gives us the
+    # actual host mount table.
+    MOUNTS_PATH = os.environ.get("MOUNTS_PATH", "/host/proc/1/mounts")
 
     # Match the per-pod CSI bind mount layout:
     #   /var/lib/kubelet/pods/<UID>/volumes/kubernetes.io~csi/<PVC>/mount
