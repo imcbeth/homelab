@@ -334,11 +334,11 @@
 ## 🌟 **Nice to Have**
 
 ### 19. **Pi Cluster Specific Monitoring**
-- [ ] Power consumption tracking (requires PoE monitoring or UPS integration)
-- [ ] Track PoE power draw per node
-- [ ] NVMe thermal throttling detection
-- [ ] Track undervoltage events
-- [ ] ARM64-specific performance optimizations
+- [x] **Power consumption tracking** (PR #726, 2026-06-04) — PoE per-port wattage already exposed via `unpoller_device_port_poe_watts`; per-node aligns to per-port. UPS integration deferred (no UPS deployed).
+- [x] **PoE power draw per node** (PR #726, 2026-06-04) — alert `PiNodePoEPortHighDraw` fires on >15W sustained 15m; dashboard could follow if needed (data exists).
+- [x] **NVMe thermal throttling detection** (PR #726, 2026-06-04) — `node_hwmon_temp_celsius{chip="nvme_nvme0"}` already exposed; alerts `PiNodeNVMeTempHigh` (>65°C 15m warning) + `PiNodeNVMeTempCritical` (>72°C 5m critical, past typical 70°C throttle).
+- [x] **Track undervoltage events** (PR #726, 2026-06-04) — `node_hwmon_in_lcrit_alarm_volts` on `soc:firmware_raspberrypi_hwmon`; alert `PiNodeUndervoltage` fires immediately at 2m for lcrit_alarm > 0 (silent corruption risk if ignored).
+- [ ] ARM64-specific performance optimizations — workload-level tuning concern, not monitoring; address as bottlenecks surface
 
 ### 20. **Application Deployments**
 - [ ] Home Assistant integration
@@ -349,10 +349,10 @@
 
 ### 21. **Observability Maturity Enhancements**
 - [x] **Distributed Tracing** — Tempo deployed 2026-04-23 (PR #574); OTLP via Alloy, trace↔logs (Loki) + trace↔metrics correlation in Grafana
-- [ ] **Continuous Profiling** - Pyroscope for application performance profiling
+- [~] **Continuous Profiling** — deferred 2026-06-04. Pyroscope singleBinary deployment is feasible (chart 2.0.3, ARM64 images verified) but adds non-trivial complexity: ~1Gi RAM, 10Gi PVC, Alloy scrape config, Grafana datasource, NetworkPolicy + ingress + cert. **Value at current scale is low** — most workloads are Helm-chart deployments not actively being optimized; the existing tracing + metrics stack covers the perf-investigation use cases we encounter. Revisit when a real production-perf problem can't be diagnosed with metrics + traces alone.
 - [x] **Service Level Objectives (SLOs)** (PRs #704, #705, #707, #708, 2026-06-02) — multi-window multi-burn-rate alerts (Google SRE Workbook pattern) on 5 critical services. 99.5%/30d target. Fast burn (14.4x, 1h+5m), slow burn (6x, 6h+30m), budget-exhausted alerts. Two probe jobs: `blackbox-availability` (HTTPS via ingress, argocd + grafana) and `blackbox-availability-internal` (HTTP via ClusterIP, workflows + registry + lifeonabike). All 5 probes green.
 - [x] **Error Budget Tracking** (PR #704, 2026-06-02) — `slo:error_budget_consumed:ratio_30d` recording rule (0-1 clamped). Future: Grafana dashboard.
-- [ ] **Anomaly Detection** - ML-based anomaly detection for metrics (Prometheus AI/ML)
+- [~] **Anomaly Detection** — deferred 2026-06-04. ML-based anomaly detection is overkill at homelab scale: existing infrastructure (~70 PrometheusRule alerts across 8 rule files, SLO burn-rate alerts, predict_linear forecasting for storage/network) already covers the practical detection use cases. ML would add an entire pipeline (training data, model lifecycle, label noise) for marginal lift over threshold alerts that are tuned to actual cluster patterns. Revisit if alert fatigue becomes a problem or if a complex regression keeps slipping past the current rules.
 - [x] **Synthetic Monitoring** — covered by Uptime Kuma (PR #573, status.k8s.n37.ca, 15 monitors across 3 groups via internal ClusterIP DNS) + blackbox SLO probes. True user-journey testing (form fills, multi-step) deferred until needed.
 
 ### 22. **Disaster Recovery Testing**
