@@ -31,6 +31,26 @@ volume:
   accessMode: ReadWriteOnce
   size: 5Gi
 
+# Liveness probe — exercises both Uptime Kuma's own healthcheck binary AND
+# write capability on the PVC. Catches the iSCSI RO-remount failure mode
+# (cluster restart on 2026-06-04 hit Loki + Falco-Redis; Uptime Kuma's PVC
+# was unaffected this time but the same risk applies). When a write fails,
+# kubelet kills the container and the deployment controller schedules a
+# fresh pod → fresh iSCSI session → RW remount, no manual intervention.
+# Mount path /app/data per chart default.
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 180
+  periodSeconds: 30
+  failureThreshold: 3
+  timeoutSeconds: 5
+  successThreshold: 1
+  exec:
+    command:
+      - /bin/sh
+      - -c
+      - extra/healthcheck && touch /app/data/.healthz && rm -f /app/data/.healthz
+
 service:
   type: ClusterIP
   port: 3001
