@@ -28,7 +28,7 @@ spec:
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
       chart: istiod
-      targetRevision: 1.30.0
+      targetRevision: 1.30.1
       helm:
         releaseName: istiod
         valueFiles:
@@ -87,7 +87,7 @@ spec:
   sources:
     - repoURL: https://istio-release.storage.googleapis.com/charts
       chart: ztunnel
-      targetRevision: 1.30.0
+      targetRevision: 1.30.1
       helm:
         releaseName: ztunnel
         valueFiles:
