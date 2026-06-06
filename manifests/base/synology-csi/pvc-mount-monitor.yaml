@@ -155,7 +155,7 @@ spec:
           # directly from docker.io to avoid the bootstrap chicken-and-egg.
           # Matches the pattern of csi-node-driver-registrar pulling
           # from registry.k8s.io directly.
-          image: docker.io/library/python:3.12-alpine
+          image: docker.io/library/python:3.14-alpine
           imagePullPolicy: IfNotPresent
           command: ["python3", "/scripts/monitor.py"]
           env:
