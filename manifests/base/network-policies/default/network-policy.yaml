@@ -69,6 +69,16 @@ spec:
         - protocol: TCP
           port: 9090   # prometheus
 
+    # Allow pvc-ro-remediator (synology-csi ns, PR #735) to query
+    # Prometheus alerts API.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: synology-csi
+      ports:
+        - protocol: TCP
+          port: 9090   # prometheus
+
     # Admission webhooks from API server (bare port rule for IPIP compat)
     - ports:
         - protocol: TCP
