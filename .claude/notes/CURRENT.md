@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-04 (Cluster shutdown/restart + NAS triage + VSC janitor)
+**Last Updated:** 2026-06-07 (PVC RO automation end-to-end verified + healthcheck)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -110,6 +110,14 @@
 - **Gotcha:** DNS egress must use AND semantics (namespaceSelector + podSelector in same list item), not OR (separate items)
 - **Gotcha:** Calico IPIP encapsulation rewrites source IP for cross-node traffic; `ipBlock` rules unreliable for matching node IPs. Use bare port rules for API server → webhook traffic.
 
+**PVC Read-Only Mount Auto-Remediation:** ✅ End-to-end live as of 2026-06-07
+- **Detection**: `pvc-mount-monitor` DaemonSet in `synology-csi` ns reads `/host/proc/1/mounts` and exports `pvc_mount_readonly{node,pvc,...}` gauge for every CSI-backed mount (PR #734 + procfs fix #737). 5 pods, 9 series at steady state.
+- **Alerting**: `PVCMountReadOnly` PrometheusRule (critical, 2m sustained `== 1`).
+- **Remediation**: `pvc-ro-remediator` CronJob in `synology-csi` ns (every 2m) queries Prometheus for firing alerts, extracts pod UID from mountpoint path, `kubectl delete pod` (PR #735). Protected namespace allowlist for safety.
+- **Per-app livenessProbe (defense-in-depth)**: Uptime Kuma (PR #731) + LocalStack (PR #732) do a write-test in their existing probe. Other stateful apps couldn't take this approach (distroless or chart-hardcoded).
+- **Total detection-to-recovery**: ~4 min worst case. Beats the hours it took to notice the 2026-06-04 incident manually.
+- **NetworkPolicy network path**: required 4 PRs total to wire end-to-end — #736 (syn-csi ingress 9300 for monitor scrape), #738 (default egress 9300), #739/#746 (syn-csi egress 9090 for remediator), #747 (default ingress 9090). The cross-namespace path needs ingress on dest + egress on src EVERY time.
+
 **Argo Workflows:** Deployed (2026-01-24)
 - Argo Workflows v3.7.8 (Helm chart 0.47.3) at sync-wave -8
 - B2 artifact storage working (PRs #287-289 fixed credentials)
@@ -196,6 +204,75 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-07: Cluster Healthcheck + PVC RO Automation Verified End-to-End
+
+**Full /cluster-healthcheck pass.** All 38 ArgoCD apps Synced+Healthy, 9/9 PVCs Bound + attached, all DaemonSets at expected count, no non-Running pods, all NAS workloads (Prometheus, Grafana, Loki, Trivy, Falco-Redis, Tempo, Zot, Uptime Kuma, LocalStack) showing 1/1.
+
+**During the healthcheck, found two latent bugs in the PVC RO automation pipeline (deployed 2026-06-05/06):**
+
+1. **PR #739 had a YAML editing mistake** — when adding the synology-csi → prometheus:9090 egress rule, port 3260 (iSCSI) got accidentally moved out of the Synology NAS rule into the new Prometheus rule. ArgoCD's SSA field-ownership quirk silently prevented the bad state from applying to the cluster (Synced status, but the new rule didn't actually exist). iSCSI kept working because the live policy was preserved. Net effect: the pvc-ro-remediator's curl to Prometheus kept timing out and the CronJob hit `BackoffLimitExceeded` every cycle.
+   - Fix: **PR #746** restored port 3260 to the NAS rule.
+
+2. **Default ns INGRESS NetworkPolicy didn't allow port 9090 from synology-csi**. Only same-ns + uptime-kuma were on the list. THIRD instance today of "NetworkPolicy fixes need both ingress AND egress sides" (already documented in k8s-docs-n37 PR #90).
+   - Fix: **PR #747** added the missing ingress rule.
+
+**Verification:** Force-applied the corrected manifests with `kubectl apply --force-conflicts --server-side`, then triggered a manual remediator job. Completed in 5 seconds with the expected `no firing PVCMountReadOnly alerts` log line. **The PVC RO automation is now end-to-end functional and verified.**
+
+**Pull Requests:**
+- **PR #746:** [Merged] fix(network-policies): restore iSCSI port 3260 to Synology NAS egress
+- **PR #747:** [Merged] fix(network-policies): allow synology-csi → default:9090 ingress
+
+**Key Gotchas Captured:**
+- **ArgoCD "Synced" doesn't mean "applied":** SSA field-ownership disagreements can leave the cluster in the pre-change state even when ArgoCD reports the app as Synced. When making NetworkPolicy changes, always verify with `kubectl get networkpolicy ... -o yaml` after sync, don't trust the ArgoCD status alone.
+- **Always re-survey egress + ingress on BOTH sides** of a new cross-namespace path. The "both directions" reminder applies to every namespace pair, not just the destination service's NetPol. We hit this three times today between syn→default and the prometheus egress rules.
+
+---
+
+### 2026-06-05/06: PVC RO-Mount Automation — Layered Strategy Shipped
+
+**Strategy (per TODO #17a, principle: automate by default):**
+
+1. **Primary** (per-app livenessProbe with write test) — covers apps where shell + chart customization both work
+2. **Detection** (cluster-wide writability monitor) — covers the rest
+3. **Backstop** (auto-remount controller) — closes the loop on detection
+
+**Coverage matrix:**
+
+| App | Livenessprobe | Reason |
+|---|---|---|
+| Uptime Kuma | ✅ PR #731 | Shell + chart support |
+| LocalStack | ✅ PR #732 | Shell + plain manifests |
+| Falco-Redis | ⏭️ Controller path | Chart hardcodes TCP probe |
+| Loki, Tempo, Zot | ⏭️ Controller path | Distroless containers |
+
+**PRs:**
+- **PR #731:** [Merged] feat(uptime-kuma): write-test livenessProbe
+- **PR #732:** [Merged] feat(localstack): write-test livenessProbe
+- **PR #733:** [Merged] chore(todo): document PVC livenessProbe survey results
+- **PR #734:** [Merged] feat(synology-csi): pvc-mount-monitor DaemonSet for RO detection
+- **PR #735:** [Merged] feat(synology-csi): pvc-ro-remediator CronJob — auto-remount on RO
+- **PR #736:** [Merged] fix(network-policies): allow Prometheus scrape of pvc-mount-monitor :9300
+- **PR #737:** [Merged] fix(pvc-mount-monitor): read /host/proc/1/mounts not /host/proc/mounts
+- **PR #738:** [Merged] fix(network-policies): allow default→pvc-mount-monitor:9300 egress
+- **PR #739:** [Merged] fix(network-policies): allow synology-csi → prometheus:9090 egress (had latent bug, fixed by #746)
+
+**End-to-end pipeline:**
+
+```
+pvc-mount-monitor DaemonSet → pvc_mount_readonly gauge (every node)
+PrometheusRule PVCMountReadOnly → fires after 2m sustained RO
+pvc-ro-remediator CronJob (every 2m) → kubectl delete pod → fresh iSCSI session → RW
+```
+
+**Total detection-to-recovery: ~4 min worst case.** Beats the hours it took to notice manually on 2026-06-04.
+
+**Key Gotchas Captured:**
+- **`/host/proc/mounts` is per-container, not host:** symlinks to `/proc/self/mounts` which the container's Python process resolves to ITS OWN mount namespace (no CSI mounts there). PID 1 in `/host/proc` is the host's init regardless of PID namespace, so `/host/proc/1/mounts` gives the actual host mount table.
+- **NetworkPolicy fixes need both directions, EVERY time.** Caught a fresh instance for every new cross-namespace metric path: ingress on dest, egress on src (#736 + #738 for monitor scrape; #739 + #747 for remediator curl).
+- **Two of six stateful apps support livenessProbe override** — Loki/Tempo/Zot are distroless (no shell), Falco-Redis chart hardcodes TCP probe. Per-app strategy alone wouldn't have closed the loop; needed the controller as backstop.
+
+---
 
 ### 2026-06-04 (afternoon): Cluster Shutdown/Restart + NAS CPU Triage + VSC Janitor
 
