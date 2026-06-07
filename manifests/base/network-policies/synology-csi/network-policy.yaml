@@ -75,6 +75,8 @@ spec:
           port: 5000   # Synology DSM HTTP
         - protocol: TCP
           port: 5001   # Synology DSM HTTPS
+        - protocol: TCP
+          port: 3260   # iSCSI target
 
     # pvc-ro-remediator CronJob (PR #735) queries Prometheus for active
     # alerts. Prometheus runs in default ns on port 9090.
@@ -88,5 +90,3 @@ spec:
       ports:
         - protocol: TCP
           port: 9090
-        - protocol: TCP
-          port: 3260   # iSCSI target
