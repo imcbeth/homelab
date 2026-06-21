@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-07 (PVC RO automation end-to-end verified + healthcheck)
+**Last Updated:** 2026-06-21 (PVC RO automation architectural gap closed)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,41 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-21: Cluster Healthcheck — 16-day silent outage discovered + remediator architectural fix
+
+**Healthcheck found 5 pods crashlooping for 16 days straight** — Loki (144 restarts), Uptime Kuma (144), Grafana, Falco-Redis, **and Prometheus itself**. All EROFS on iSCSI PVCs. The auto-remediation pipeline that was verified working on 2026-06-07 had been silently no-op'ing the whole time.
+
+**Root cause:** the remediator's hot path was:
+
+```
+curl http://prometheus:9090/api/v1/alerts → parse firing PVCMountReadOnly → act
+```
+
+When Prometheus's own PVC went RO, Prometheus crashed → curl failed → Job `BackoffLimitExceeded` → silent no-op forever. Textbook "monitor the system from the system" anti-pattern: the remediator depended on the workload it was supposed to remediate.
+
+**Recovery (manual, step-by-step):**
+1. Deleted Prometheus, Loki, Grafana pods on node03 (RW globalmount) → recovered with fresh pod mounts
+2. Discovered 3 of 4 globalmounts on node04 were RO at the **kernel level** (not just pod bind-mount). Pod delete alone insufficient — need to detach + reattach iSCSI device.
+3. Cordoned node04, deleted the 3 affected pods (Grafana, Falco-Redis, Uptime Kuma) — they rescheduled to other nodes with fresh CSI attaches
+4. Uncordoned node04 — its RO globalmounts will clean up when the next pod requests a volume there
+
+**Fix shipped:**
+- **PR #753:** Remediator now queries the `pvc-mount-monitor` DaemonSet pods directly via the headless Service endpoints — no Prometheus dependency. Keeps working even if the entire monitoring stack is broken.
+  - New path: `kubectl get endpoints` → curl each monitor pod's `/metrics` → parse `pvc_mount_readonly{...} 1` lines → kubectl delete pod
+  - RBAC added: `endpoints get/list`
+  - Distinct error log when 0 monitors are reachable (vs "no RO mounts detected") — true detection-coverage gap is now visible
+
+**Pull Requests:**
+- **PR #753:** [Merged] fix(pvc-ro-remediator): query monitor pods directly, drop Prom dependency
+
+**Key Gotchas Captured:**
+- **Don't build an auto-remediation system that depends on the system it's monitoring.** Even when each component "works", a partial failure of the dependency creates silent no-op behavior that's worse than no automation at all (people stop watching).
+- **The auto-remediation can fail in ways that ArgoCD doesn't surface.** ArgoCD reported `Synced + Healthy` for synology-csi the whole 16 days. The CronJob was `Failed` for 16 days but jobs roll out of history quickly (3-job retention). Need a separate alert for "remediator job hasn't completed successfully in N hours".
+- **iSCSI RO can be at globalmount level**, not just per-pod. When pod-delete doesn't fix it, the underlying device itself is RO and requires a cross-node detach+reattach (drain the node).
+- **AlertManager survived (17d uptime) but had no alerts to deliver** — Prometheus crashing means rule evaluation stopped entirely. AlertManager is healthy but useless without upstream alerts. Argues for an external heartbeat / dead-man-switch alert.
+
+---
 
 ### 2026-06-07: Cluster Healthcheck + PVC RO Automation Verified End-to-End
 
