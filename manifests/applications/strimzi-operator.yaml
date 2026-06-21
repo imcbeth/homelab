@@ -14,7 +14,7 @@ spec:
     # Strimzi Kafka Operator Helm chart
     - repoURL: https://strimzi.io/charts/
       chart: strimzi-kafka-operator
-      targetRevision: 1.0.0
+      targetRevision: 1.0.1
       helm:
         valueFiles:
           - $values/manifests/base/strimzi-operator/values.yaml
