@@ -80,6 +80,9 @@ spec:
 
     # pvc-ro-remediator CronJob (PR #735) queries Prometheus for active
     # alerts. Prometheus runs in default ns on port 9090.
+    # NOTE: as of PR #753 the remediator queries the monitor pods directly
+    # (rule below). The Prometheus rule is kept as fallback in case the
+    # MONITOR_SVC override env is set back to Prometheus mode.
     - to:
         - namespaceSelector:
             matchLabels:
@@ -90,3 +93,17 @@ spec:
       ports:
         - protocol: TCP
           port: 9090
+
+    # pvc-ro-remediator → pvc-mount-monitor (PR #753, intra-namespace).
+    # The remediator enumerates monitor pod endpoints and curls each
+    # /metrics directly, bypassing Prometheus + alert evaluation.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: synology-csi
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: pvc-mount-monitor
+      ports:
+        - protocol: TCP
+          port: 9300   # pvc-mount-monitor /metrics
