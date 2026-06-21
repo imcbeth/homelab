@@ -124,7 +124,13 @@ data:
         continue
       }
       n_reached=$((n_reached + 1))
-      ro_lines="${ro_lines}$(echo "$metrics" | grep '^pvc_mount_readonly{' | grep ' 1$')
+      # `set -e` quirk: `grep` exits 1 on no match. The "no RO mounts" case
+      # is the healthy state, so suppress non-zero with `|| true`. Without
+      # this, every healthy run aborts the script before reaching the
+      # success-path log line — exactly the silent-no-op pattern PR #753
+      # was supposed to eliminate.
+      ro=$(echo "$metrics" | grep '^pvc_mount_readonly{' | grep ' 1$' || true)
+      ro_lines="${ro_lines}${ro}
     "
     done
 
