@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-21 (PVC RO automation architectural gap closed)
+**Last Updated:** 2026-06-21 (Renovate batches A-D applied + remediator script bugs)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,46 @@
 ---
 
 ## Recent Sessions
+
+### 2026-06-21 (later): Renovate Batches A-D Applied + Two Remediator Script Bugs
+
+**Batches applied:** A (6 pure patches), B (synology-csi image bumps), C (monitoring minor), D (istio patch). 9 Renovate PRs merged + 1 application manifest fix for argo-events strategy conflict.
+
+**Applications Updated:**
+
+| App | Old | New | Notes |
+|---|---|---|---|
+| argo-events chart | 2.4.21 | 2.4.22 | RollingUpdate→Recreate strategy conflict; fixed via deployment delete |
+| argo-workflows chart | 1.0.14 | 1.0.16 | |
+| argocd chart | 9.5.17 | 9.5.22 | |
+| alertmanager image | v0.32.1 | v0.32.2 | |
+| chaos-mesh chart | 2.8.2 | 2.8.3 | |
+| metrics-server chart | 3.13.0 | 3.13.1 | |
+| oauth2-proxy chart | 10.6.0 | 10.6.2 | |
+| zot chart | 0.1.116 | 0.1.117 | |
+| pvc-mount-monitor image | python:3.12-alpine | 3.14-alpine | DaemonSet rolled |
+| pvc-ro-remediator image | alpine/k8s:1.31.13 | 1.36.2 | CronJob |
+| kube-prometheus-stack chart | 86.1.1 | 86.3.2 | |
+| alloy chart | 1.8.2 | 1.10.0 | |
+| istio (base/cni/istiod/ztunnel) | 1.30.0 | 1.30.1 | istio-base required ServerSideApply manual sync |
+
+**Discovered + fixed during apply (the new remediator was failing):**
+
+1. **PR #763** — synology-csi NetPol egress missing intra-ns 9300 (5th instance of "both-directions" gotcha for this PVC-RO automation series — counting #736, #738, #739, #746, #747)
+2. **PR #764** — `set -e` + `grep ' 1$' | true` bug in the remediator script: zero RO mounts (healthy state) made `grep` exit 1 which aborted the script before reaching the success log. Every healthy run was failing with `BackoffLimitExceeded`. Same silent-no-op pattern PR #753 was supposed to eliminate, just one layer down. Traced via `sh -x` in a debug pod.
+
+After both fixes: remediator runs in 1 second and logs `no RO mounts detected (5/5 monitors reachable)` ✅
+
+**Final State:** 37/38 Synced+Healthy. **sealed-secrets** stuck Unknown — `bitnami-labs.github.io/sealed-secrets` chart repo returning 404, but the runtime controller is healthy. Unrelated to today's batch; investigate separately.
+
+**Renovate spawned 10 NEW PRs** during the apply window (#755-#762, #765, #766) — left for a future session.
+
+**Key Gotchas Captured:**
+- **`set -e` + `grep` no-match** in shell scripts: the cluster-healthy state can look identical to a script failure unless the no-match path explicitly returns success (`|| true`). Same "silent no-op" trap PR #753 was supposed to fix.
+- **Chart minor bumps that touch CRDs need explicit sync** — istio-base went OutOfSync after the 1.30.1 chart bump because the CRDs had label updates (`helm.sh/chart: base-1.30.0 → base-1.30.1`). Auto-sync didn't pick them up; needed manual `kubectl patch operation` with `prune: true` to apply.
+- **Argo-events chart strategy switch** — chart switched RollingUpdate→Recreate; existing Deployment retained Kubernetes-defaulted `rollingUpdate` fields that SSA couldn't remove. Standard fix: delete the Deployment (ArgoCD recreates).
+
+---
 
 ### 2026-06-21: Cluster Healthcheck — 16-day silent outage discovered + remediator architectural fix
 
