@@ -27,7 +27,7 @@ metadata:
     app.kubernetes.io/name: pvc-ro-remediator
     app.kubernetes.io/component: remediator
 ---
-# Cluster-wide pod delete permission. Narrow on resource: only pods.
+# Cluster-wide pod delete + monitor-endpoint discovery.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -38,6 +38,12 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "delete"]
+  # Needed to discover pvc-mount-monitor pod IPs without going through
+  # Prometheus. Endpoints are RBAC-checked at namespace scope but the
+  # remediator may query monitors from any node, so keep cluster-scoped.
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -66,7 +72,23 @@ data:
     #!/bin/sh
     set -eu
 
-    PROM_URL="${PROM_URL:-http://kube-prometheus-stack-prometheus.default.svc:9090}"
+    # Query the pvc-mount-monitor DaemonSet pods DIRECTLY via the headless
+    # Service, bypassing Prometheus + alert evaluation entirely.
+    #
+    # Why: discovered 2026-06-21 that the remediator's previous design (query
+    # Prometheus /api/v1/alerts for firing PVCMountReadOnly) silently became
+    # a no-op when Prometheus itself was the workload with a RO PVC. That's
+    # the single-point-of-failure trap of the "monitor the system from the
+    # system" anti-pattern. Loki + Uptime Kuma + Grafana + Falco-Redis +
+    # Prometheus all crashlooped for 16 days because the remediator's curl
+    # to Prom failed silently (BackoffLimitExceeded, no actionable signal).
+    #
+    # The new path: enumerate pvc-mount-monitor endpoints via the K8s API,
+    # scrape each one's /metrics directly, parse `pvc_mount_readonly{...} 1`
+    # lines, act. Dependencies: K8s API + DNS + monitor pods themselves —
+    # none of which depend on Prometheus.
+    MONITOR_SVC="${MONITOR_SVC:-pvc-mount-monitor.synology-csi.svc.cluster.local}"
+    MONITOR_PORT="${MONITOR_PORT:-9300}"
     DRY_RUN="${DRY_RUN:-false}"
 
     # Namespaces we will NEVER act on, even if alerts fire from them.
@@ -75,28 +97,58 @@ data:
     PROTECTED_NS="kube-system|calico-system|tigera-operator|gatekeeper-system|metallb-system|istio-system|cert-manager|argocd"
 
     echo "[$(date -u +%FT%TZ)] pvc-ro-remediator starting"
-    echo "  prometheus: $PROM_URL"
+    echo "  monitor service: $MONITOR_SVC:$MONITOR_PORT"
     echo "  dry-run: $DRY_RUN"
     echo "  protected namespaces: $PROTECTED_NS"
 
-    # Fetch active alerts. The alerts API returns every state (firing/pending),
-    # so filter to firing only.
-    if ! alerts=$(curl -fsS --max-time 10 "${PROM_URL}/api/v1/alerts" 2>&1); then
-      echo "[$(date -u +%FT%TZ)] ERROR: cannot reach Prometheus: $alerts"
+    # Get monitor pod IPs from the Endpoints object — the headless Service
+    # already has them and we have RBAC for endpoints (added by this PR).
+    pod_ips=$(kubectl get endpoints -n synology-csi pvc-mount-monitor -o json 2>/dev/null \
+              | jq -r '.subsets[]?.addresses[]?.ip')
+
+    if [ -z "$pod_ips" ]; then
+      echo "[$(date -u +%FT%TZ)] ERROR: no pvc-mount-monitor endpoints found — monitor DaemonSet down?"
       exit 1
     fi
 
-    firing=$(echo "$alerts" | jq -c '.data.alerts[] | select(.labels.alertname=="PVCMountReadOnly" and .state=="firing")')
+    n_endpoints=$(echo "$pod_ips" | wc -l | tr -d ' ')
+    echo "[$(date -u +%FT%TZ)] discovered $n_endpoints monitor endpoint(s)"
 
-    if [ -z "$firing" ]; then
-      echo "[$(date -u +%FT%TZ)] no firing PVCMountReadOnly alerts"
+    # Scrape each endpoint and collect RO mount lines.
+    # Format from monitor: pvc_mount_readonly{node="..",device="..",mountpoint="..",fstype="..",pvc=".."} 1
+    ro_lines=""
+    n_reached=0
+    for ip in $pod_ips; do
+      metrics=$(curl -fsS --max-time 5 "http://${ip}:${MONITOR_PORT}/metrics" 2>/dev/null) || {
+        echo "[$(date -u +%FT%TZ)] WARN cannot reach monitor at $ip:$MONITOR_PORT"
+        continue
+      }
+      n_reached=$((n_reached + 1))
+      ro_lines="${ro_lines}$(echo "$metrics" | grep '^pvc_mount_readonly{' | grep ' 1$')
+    "
+    done
+
+    if [ "$n_reached" -eq 0 ]; then
+      echo "[$(date -u +%FT%TZ)] ERROR: zero monitors reachable (of $n_endpoints endpoints)"
+      exit 1
+    fi
+
+    # Strip blank lines and dedupe.
+    ro_lines=$(echo "$ro_lines" | awk 'NF' | sort -u)
+
+    if [ -z "$ro_lines" ]; then
+      echo "[$(date -u +%FT%TZ)] no RO mounts detected ($n_reached/$n_endpoints monitors reachable)"
       exit 0
     fi
 
-    echo "$firing" | while IFS= read -r alert; do
-      mountpoint=$(echo "$alert" | jq -r '.labels.mountpoint')
-      node=$(echo "$alert" | jq -r '.labels.node')
-      pvc=$(echo "$alert" | jq -r '.labels.pvc')
+    n_ro=$(echo "$ro_lines" | wc -l | tr -d ' ')
+    echo "[$(date -u +%FT%TZ)] $n_ro RO mount(s) detected"
+
+    echo "$ro_lines" | while IFS= read -r line; do
+      # Parse the label block. Each label is `key="value"`.
+      mountpoint=$(echo "$line" | sed -n 's/.*mountpoint="\([^"]*\)".*/\1/p')
+      node=$(echo "$line" | sed -n 's/.*node="\([^"]*\)".*/\1/p')
+      pvc=$(echo "$line" | sed -n 's/.*pvc="\([^"]*\)".*/\1/p')
 
       # Extract pod UID from the mountpoint path.
       # Format: /var/lib/kubelet/pods/<UID>/volumes/kubernetes.io~csi/<PVC>/mount
@@ -197,13 +249,14 @@ spec:
                   cpu: 200m
                   memory: 128Mi
               env:
-                # Start in dry-run mode so the first few cycles can be
-                # observed before destructive actions are enabled. Flip
-                # to "false" via a values change once happy.
                 - name: DRY_RUN
                   value: "false"
-                - name: PROM_URL
-                  value: "http://kube-prometheus-stack-prometheus.default.svc:9090"
+                # Monitor service overrides — defaults are fine, exposed for
+                # debugging without rebuilding the ConfigMap.
+                # - name: MONITOR_SVC
+                #   value: "pvc-mount-monitor.synology-csi.svc.cluster.local"
+                # - name: MONITOR_PORT
+                #   value: "9300"
               command: ["/bin/sh", "/scripts/remediate.sh"]
               volumeMounts:
                 - name: scripts
