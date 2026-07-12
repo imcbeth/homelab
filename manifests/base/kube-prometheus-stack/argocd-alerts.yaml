@@ -50,3 +50,66 @@ spec:
 
                 kubectl get pods -n {{ $labels.exported_namespace }} \
                   -o wide | grep -v Running
+
+        # App in Degraded health state. Stronger signal than Progressing:
+        # ArgoCD has decided the app isn't healthy anymore (a Deployment has
+        # failed pods past its progressDeadline, a StatefulSet replica won't
+        # come up, etc). Shorter wait than Progressing because Degraded doesn't
+        # occur during normal rollouts.
+        - alert: ArgoCDAppDegraded
+          expr: |
+            max by (name, exported_namespace) (
+              argocd_app_info{health_status="Degraded"}
+            ) == 1
+          for: 15m
+          labels:
+            severity: warning
+            component: argocd
+          annotations:
+            summary: 'ArgoCD app {{ $labels.name }} is Degraded'
+            description: |
+              The ArgoCD application `{{ $labels.name }}` has been in
+              `Degraded` health state for more than 15 minutes. Something
+              ArgoCD tracks has definitively failed (past progressDeadline,
+              replica count wrong, etc).
+
+              Investigate:
+
+                kubectl get application {{ $labels.name }} -n argocd \
+                  -o jsonpath='{.status.health.message}{"\n"}'
+
+                kubectl get application {{ $labels.name }} -n argocd \
+                  -o json | jq '.status.resources[] | select(.health.status!="Healthy")'
+
+        # App in Unknown state — health OR sync. ArgoCD can't determine one
+        # of them, typically because it can't reach the source (chart repo
+        # down, git repo auth broken) or resource comparison is failing.
+        # The 2026-06-21 case: bitnami-labs.github.io/sealed-secrets returned
+        # 404 for the chart. Runtime workload was healthy but ArgoCD couldn't
+        # render manifests to compare against, so sync_status went Unknown
+        # while health_status stayed Healthy. Either side going Unknown means
+        # reconciliation is blind — worth investigating.
+        - alert: ArgoCDAppUnknown
+          expr: |
+            max by (name, exported_namespace) (
+              argocd_app_info{health_status="Unknown"}
+              or
+              argocd_app_info{sync_status="Unknown"}
+            ) == 1
+          for: 30m
+          labels:
+            severity: warning
+            component: argocd
+          annotations:
+            summary: 'ArgoCD app {{ $labels.name }} is in Unknown state'
+            description: |
+              The ArgoCD application `{{ $labels.name }}` has had `Unknown`
+              health or sync status for more than 30 minutes. ArgoCD can't
+              determine the state — usually a chart repo 404, git auth
+              failure, or resource comparison error. The workload itself
+              may still be running, but reconciliation is blind.
+
+              Investigate:
+
+                kubectl get application {{ $labels.name }} -n argocd \
+                  -o jsonpath='{.status.conditions}{"\n"}' | jq .
