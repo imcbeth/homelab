@@ -10,7 +10,7 @@ spec:
   sources:
     - chart: cert-manager
       repoURL: https://charts.jetstack.io
-      targetRevision: v1.20.2 # specify the cert-manager version to install
+      targetRevision: v1.21.0 # specify the cert-manager version to install
       helm:
         releaseName: cert-manager
         valuesObject:
