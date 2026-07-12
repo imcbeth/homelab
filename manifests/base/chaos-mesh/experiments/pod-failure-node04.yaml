@@ -23,11 +23,27 @@ spec:
   type: PodChaos
   historyLimit: 3
   concurrencyPolicy: Forbid
-  startingDeadlineSeconds: null
+  # 60s catch-up window. If the controller was down when this slot was
+  # scheduled, do NOT fire a catch-up run on recovery — wait for the
+  # next scheduled slot. Fixed 2026-07-12 after the controller-recovery
+  # cascade fired backlogged runs immediately.
+  startingDeadlineSeconds: 60
   podChaos:
     action: pod-failure
     mode: all
     selector:
       nodeSelectors:
         kubernetes.io/hostname: node04
+      # SAFETY (2026-07-12): exclude chaos-mesh's own components from
+      # the target set. Previously with `mode: all + nodeSelectors: node04`,
+      # this experiment killed chaos-daemon-s8bwr (chaos-mesh's own
+      # reconciler on node04), which broke chaos-mesh's ability to
+      # restore the pause-swap → 11-day self-lockup discovered on
+      # 2026-07-12. All chaos-mesh pods carry `app.kubernetes.io/name:
+      # chaos-mesh` — excluding that value cleanly excludes them all.
+      expressionSelectors:
+        - key: app.kubernetes.io/name
+          operator: NotIn
+          values:
+            - chaos-mesh
     duration: "5m"
