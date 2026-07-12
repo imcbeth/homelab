@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-12 (Chaos-mesh self-lockup discovered + 4 Schedules suspended)
+**Last Updated:** 2026-07-12 (Chaos-mesh suspended + ArgoCD health alerts + sealed-secrets URL fix)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -246,6 +246,17 @@
 - **PodChaos `mode: all` on a node selector is self-destructive.** If chaos-mesh's own components are on that node, the experiment kills its own reconciler mid-experiment. Always exclude chaos-mesh's namespace from selectors, or use `mode: fixed-percent` / `mode: one` with a limit.
 - **Chaos-mesh Schedules catch up on missed cron slots when the controller recovers.** No `startingDeadlineSeconds` = every missed slot fires when recovered. Explains why fixing chaos-mesh triggered a pod-kill-prometheus AND a network-delay-loki immediately. Set `startingDeadlineSeconds: 0` or a short value on Schedules to prevent this.
 - **`foregroundDeletion` finalizer on chaos-mesh resources** can stick when parent Schedule is already gone. Manual `kubectl patch --type=merge -p '{"metadata":{"finalizers":null}}'` clears it.
+
+**Follow-up (same day) — closed the alerting gaps + sealed-secrets URL fix:**
+
+- **PR #771:** ArgoCDAppProgressing alert (`health_status="Progressing"` for 1h). Directly motivated by today's finding — would have caught the chaos-mesh lockup ~1h after July 1.
+- **PR #772:** ArgoCDAppDegraded (15m) + ArgoCDAppUnknown (30m). Unknown uses `health_status="Unknown" OR sync_status="Unknown"` — the OR is important because today's sealed-secrets case is `health=Healthy, sync=Unknown` (chart fetch fails while runtime is fine). Metric distinguishes health vs sync; obvious in hindsight, worth writing down.
+- **PR #773:** Fix sealed-secrets chart URL `bitnami-labs.github.io/sealed-secrets` → `bitnami.github.io/sealed-secrets` (the `-labs` GitHub org apparently stopped serving chart repos at some point). Confirmed via sealed-secrets README + verified our pinned chart version 2.18.6 exists at the new URL. Runtime was healthy the whole time; this just unblocks the ArgoCD reconcile.
+
+**Result:** 38/38 apps Synced+Healthy — first fully-clean cluster state in ~3 weeks. New ArgoCDApp* alerts loaded in Prometheus.
+
+**Additional gotcha captured today:**
+- **argocd_app_info has separate `health_status` and `sync_status` labels.** Sealed-secrets case shows `health=Healthy` (runtime is fine) but `sync=Unknown` (ArgoCD can't render manifests to compare against because the chart repo returns 404). Alerts should check either label depending on the concern — for "app in a state I should investigate," use `or` across both.
 
 ---
 
