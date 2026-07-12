@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-06-21 (PVC RO automation architectural gap closed)
+**Last Updated:** 2026-07-12 (Chaos-mesh self-lockup discovered + 4 Schedules suspended)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,50 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-12: Cluster Healthcheck — chaos-mesh chaos-tested itself for 11 days
+
+**Healthcheck found chaos-mesh in a self-inflicted lockup.** Three chaos-mesh pods (controller-manager, dashboard, chaos-daemon-s8bwr) had accumulated **3130 restarts each** in `RunContainerError`. All had their container image swapped to `gcr.io/google-containers/pause:latest` (chaos-mesh's marker for pod-failure simulation), while the annotation `chaos-mesh-normal` preserved the original `ghcr.io/chaos-mesh/chaos-mesh:v2.8.3`.
+
+**Root cause — `pod-failure-node04` Schedule fired 2026-07-01 with mode: all**:
+- cron `0 12 1 * *` (noon on 1st of month)
+- selector: `{nodeSelectors: {kubernetes.io/hostname: node04}}`, `mode: all`
+- Targeted EVERY pod on node04 including `chaos-daemon-s8bwr` (chaos-mesh's own reconciler)
+- With its own daemon paused, chaos-mesh couldn't restore the pause-swap when duration expired → deadlock for 11 days
+- ArgoCD showed `chaos-mesh` app `Synced + Progressing` the entire time (not `Healthy`, but not surfaced anywhere obvious)
+
+**Recovery + cascade during recovery:**
+1. Force-deleted 3 stuck pods → Deployment/ReplicaSet recreated with correct images
+2. When controller came back up, it caught up on missed cron slots and immediately fired:
+   - `network-delay-loki` catch-up → PodNetworkChaos records failing with `unable to flush ip sets`. Storm of Warning events. Deleted manually.
+   - `pod-kill-prometheus` catch-up → **actually killed Prometheus 7 min into recovery**. Prometheus recovered cleanly this time, no iSCSI RO cascade. Lucky.
+3. Investigation revealed 4 active Schedules dating back 81 days, unattended.
+
+**Pull Requests:**
+- **PR #769:** [Merged] chore(chaos-mesh): suspend all 4 Schedules pending safety review — removed them from kustomization; ArgoCD pruned. Un-suspending = uncomment.
+
+**The 4 suspended Schedules:**
+
+| Schedule | Cron | Action | Risk |
+|---|---|---|---|
+| `cpu-stress-unipoller` | Wed 11am UTC | 3m CPU stress on unipoller | Low |
+| `network-delay-loki` | Wed 10am UTC | 5m 200ms delay on Loki | Medium (ip-set failures) |
+| `pod-failure-node04` | 1st monthly noon UTC | 5m pause-swap all pods on node04 | **HIGH — caused this lockup** |
+| `pod-kill-prometheus` | Wed 9am UTC | pod-kill Prometheus | **HIGH — Prometheus PVC = iSCSI RO cascade risk** |
+
+**Fixes required before un-suspending:**
+- `pod-failure-node04`: exclude `chaos-mesh` namespace from selector, or switch to `mode: fixed-percent` with small percentage
+- `pod-kill-prometheus`: reconsider whether weekly forced-kill of Prometheus is proportional value vs risk (Prometheus's iSCSI PVC has been the source of multiple silent outages this year)
+- `network-delay-loki` + `cpu-stress-unipoller`: investigate why ip-set application fails on some nodes before re-enabling
+
+**Key Gotchas Captured:**
+- **`Synced + Progressing` is a real state that survives.** ArgoCD's app-level status showed chaos-mesh Progressing for 11 days because 3 pods weren't Ready. No alert rule caught it — the `ArgoCDAppNotHealthy` rules typically only fire on `Degraded` transitions, not sustained `Progressing`. Worth an alert for "app in Progressing state > 1h."
+- **Chaos-mesh Schedule CRDs have no `spec.suspend` field** (unlike batch/CronJob). To suspend, you must delete the Schedule resource or edit the cron. GitOps-safe way: comment out of kustomization + PR + let ArgoCD prune.
+- **PodChaos `mode: all` on a node selector is self-destructive.** If chaos-mesh's own components are on that node, the experiment kills its own reconciler mid-experiment. Always exclude chaos-mesh's namespace from selectors, or use `mode: fixed-percent` / `mode: one` with a limit.
+- **Chaos-mesh Schedules catch up on missed cron slots when the controller recovers.** No `startingDeadlineSeconds` = every missed slot fires when recovered. Explains why fixing chaos-mesh triggered a pod-kill-prometheus AND a network-delay-loki immediately. Set `startingDeadlineSeconds: 0` or a short value on Schedules to prevent this.
+- **`foregroundDeletion` finalizer on chaos-mesh resources** can stick when parent Schedule is already gone. Manual `kubectl patch --type=merge -p '{"metadata":{"finalizers":null}}'` clears it.
+
+---
 
 ### 2026-06-21: Cluster Healthcheck — 16-day silent outage discovered + remediator architectural fix
 
