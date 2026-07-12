@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-12 (Chaos-mesh suspended + ArgoCD health alerts + sealed-secrets URL fix)
+**Last Updated:** 2026-07-12 (Chaos-mesh + alerts + sealed-secrets + Renovate batches A/B/D/C)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -261,6 +261,27 @@
 - Never crossed the 30m `for:` duration → never transitioned to `firing` → no email sent
 - Confirms the 30m threshold is well-tuned: same-day fixes don't page, but sustained Unknown will fire within an actionable window
 - Range query for the record: `count_over_time(ALERTS{alertname="ArgoCDAppUnknown",alertstate="pending"}[2h])` returned 4 samples; `alertstate="firing"` returned 0
+
+**Follow-up (same day) — Renovate batches A/B/D/C applied:**
+
+10 open Renovate PRs reviewed and applied across 4 batches:
+
+| Batch | PRs | Change |
+|---|---|---|
+| **A — patches** | #755, #756, #757, #762, #766 | velero 12.0.3, strimzi 1.0.1, trivy-operator 0.33.2, falco 9.1.0, vpa 4.12.3 |
+| **B — image bumps** | #758, #759, #761 | alpine/git v2.54.0, alpine/k8s 1.36.2, cloudflared 2026.7.1 |
+| **D — oauth2-proxy minor** | #765 | 10.6.2 → 10.7.0 |
+| **C — argocd chart** | #760 | **9.5.22 → 9.7.1 (2-minor jump, appVersion unchanged v3.4.4)** |
+
+**Notable during the apply:**
+- argo-workflows briefly OutOfSync on a `waiting for deletion of hook batch/Job/localstack-argo-workflows-setup` — self-cleared within 45s
+- **argocd chart bump exhibited the same drift pattern as istio 1.30.1 last time** — sync `Succeeded` but 13 resources OutOfSync afterward (chart-label drift on `helm.sh/chart` + `app.kubernetes.io/version`). Manual sync with `prune: true` cleared it in one round. This is now a documented pattern to expect on any chart-minor bump touching labels.
+- **All 3 ArgoCDApp* alerts stayed `inactive` throughout** — transient OutOfSync/Progressing states were well under the `for:` thresholds (15m/30m/1h). No noise, as tuned.
+
+**Final state:** 38/38 apps Synced+Healthy. 4 open Renovate PRs from earlier this session (chaos-mesh, docs) — all closed as merged or superseded.
+
+**Additional gotcha captured:**
+- **Chart-minor bumps drop `Synced` after operation reports `Succeeded`**, on any chart where `helm.sh/chart` or `app.kubernetes.io/version` label churns. Pattern established: istio 1.30.1 (last session), argocd 9.7.1 (today). Fix is always the same: `kubectl patch app <name> -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"manual"},"sync":{"prune":true}}}'`. Consider automation as a follow-up.
 
 **Additional gotcha captured today:**
 - **argocd_app_info has separate `health_status` and `sync_status` labels.** Sealed-secrets case shows `health=Healthy` (runtime is fine) but `sync=Unknown` (ArgoCD can't render manifests to compare against because the chart repo returns 404). Alerts should check either label depending on the concern — for "app in a state I should investigate," use `or` across both.
