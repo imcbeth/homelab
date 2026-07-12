@@ -5,7 +5,27 @@ resources:
   # Monitoring integration
   - servicemonitor.yaml
   # Chaos experiments (Schedule CRDs)
-  - experiments/pod-kill-prometheus.yaml
-  - experiments/network-delay-loki.yaml
-  - experiments/cpu-stress-unipoller.yaml
-  - experiments/pod-failure-node04.yaml
+  #
+  # SUSPENDED 2026-07-12 pending safety review after chaos-mesh
+  # chaos-tested itself into an 11-day lockup:
+  #   - pod-failure-node04 with `mode: all` fired on 2026-07-01,
+  #     targeted every pod on node04 including chaos-daemon-s8bwr
+  #     (chaos-mesh's own reconciler). Once its own daemon was
+  #     pause-swapped, nothing could restore the swap → cascade.
+  #   - When the controller recovered 2026-07-12, catch-up runs
+  #     of pod-kill-prometheus (weekly) and network-delay-loki
+  #     fired immediately. Prometheus survived; ip-set failures
+  #     kept re-firing.
+  #
+  # Un-suspending requires safety fixes to each spec first:
+  #   - pod-failure-node04: exclude chaos-mesh namespace, or
+  #     mode: fixed-percent with small percentage
+  #   - pod-kill-prometheus: reconsider vs iSCSI RO cascade risk
+  #   - network-delay-loki + cpu-stress-unipoller: verify ip-set
+  #     path works reliably on all nodes
+  #
+  # To un-suspend an experiment, uncomment the corresponding line.
+  #- experiments/pod-kill-prometheus.yaml
+  #- experiments/network-delay-loki.yaml
+  #- experiments/cpu-stress-unipoller.yaml
+  #- experiments/pod-failure-node04.yaml
