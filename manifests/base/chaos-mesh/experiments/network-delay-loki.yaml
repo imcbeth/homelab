@@ -19,7 +19,8 @@ spec:
   type: NetworkChaos
   historyLimit: 5
   concurrencyPolicy: Forbid
-  startingDeadlineSeconds: null
+  # 60s catch-up window — don't fire backlogged runs after controller recovery.
+  startingDeadlineSeconds: 60
   networkChaos:
     action: delay
     mode: all
