@@ -11,7 +11,7 @@ spec:
     # Helm chart from Argo project
     - repoURL: https://argoproj.github.io/argo-helm
       chart: argo-workflows
-      targetRevision: 1.0.16
+      targetRevision: 1.0.19
       helm:
         releaseName: argo-workflows
         valueFiles:
