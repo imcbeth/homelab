@@ -275,13 +275,24 @@
 
 **Notable during the apply:**
 - argo-workflows briefly OutOfSync on a `waiting for deletion of hook batch/Job/localstack-argo-workflows-setup` — self-cleared within 45s
-- **argocd chart bump exhibited the same drift pattern as istio 1.30.1 last time** — sync `Succeeded` but 13 resources OutOfSync afterward (chart-label drift on `helm.sh/chart` + `app.kubernetes.io/version`). Manual sync with `prune: true` cleared it in one round. This is now a documented pattern to expect on any chart-minor bump touching labels.
+- **argocd chart bump showed transient chart-label drift** — sync `Succeeded` reported before `selfHeal` picked up `helm.sh/chart: 9.5.22 → 9.7.1` on 13 resources. I ran a manual sync patch out of habit, but a follow-up empirical test (below) shows this was unnecessary — `selfHeal` handles chart-label drift within ~30-60s natively.
 - **All 3 ArgoCDApp* alerts stayed `inactive` throughout** — transient OutOfSync/Progressing states were well under the `for:` thresholds (15m/30m/1h). No noise, as tuned.
 
 **Final state:** 38/38 apps Synced+Healthy. 4 open Renovate PRs from earlier this session (chaos-mesh, docs) — all closed as merged or superseded.
 
-**Additional gotcha captured:**
-- **Chart-minor bumps drop `Synced` after operation reports `Succeeded`**, on any chart where `helm.sh/chart` or `app.kubernetes.io/version` label churns. Pattern established: istio 1.30.1 (last session), argocd 9.7.1 (today). Fix is always the same: `kubectl patch app <name> -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"manual"},"sync":{"prune":true}}}'`. Consider automation as a follow-up.
+**Correction (later same day) — "chart bumps need manual sync" was misdiagnosis.**
+
+When the user asked to automate the manual-sync-after-chart-bump pattern, I ran a controlled test first to check whether ArgoCD's built-in `selfHeal` should already handle it:
+
+1. **Test 1** — added an untracked label to argocd-dex-server: sync stayed `Synced` (correctly ignored — labels I add aren't in git)
+2. **Test 2** — deleted `servicemonitor argocd-server`: recovered by selfHeal in 60s
+3. **Test 3** — corrupted the `helm.sh/chart` label to `argo-cd-STALE` (mimics exactly the chart-bump failure mode): recovered by selfHeal in 30s
+
+The pattern I documented as needing manual intervention was actually just impatience — I was force-syncing during the transient window before selfHeal ran. Both istio 1.30.1 (last session) and argocd 9.7.1 (today) would have selfHealed within ~60s if I'd waited.
+
+**No CronJob built.** The right corrections are docs-only. `syncPolicy.automated.selfHeal: true` (already on every app) plus the existing `ArgoCDAppProgressing` alert (1h threshold — catches the actual failure case where selfHeal gets stuck) is the correct stack.
+
+**Updated gotcha in REFERENCE.md** to reflect the correction: wait 60s before intervening.
 
 **Additional gotcha captured today:**
 - **argocd_app_info has separate `health_status` and `sync_status` labels.** Sealed-secrets case shows `health=Healthy` (runtime is fine) but `sync=Unknown` (ArgoCD can't render manifests to compare against because the chart repo returns 404). Alerts should check either label depending on the concern — for "app in a state I should investigate," use `or` across both.
