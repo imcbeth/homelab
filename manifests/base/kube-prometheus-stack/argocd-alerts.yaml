@@ -1,0 +1,52 @@
+---
+# ArgoCD application health alerts.
+#
+# Motivated by the 2026-07-12 finding: chaos-mesh app sat in
+# `Synced + Progressing` for 11 days because 3 of its pods were in
+# RunContainerError. ArgoCD's default rules only fire on `Degraded`,
+# so a sustained non-Healthy state has no signal path unless we add one.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argocd-app-health-alerts
+  namespace: default
+  labels:
+    app: argocd
+    prometheus: kube-prometheus
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: argocd_app_health
+      interval: 60s
+      rules:
+        # App stuck in Progressing state for > 1h. Progressing is normal during
+        # sync + rollout, but sustained Progressing means something is off:
+        # a pod stuck in RunContainerError, a Job that never completes, an SSA
+        # conflict that keeps re-diffing. The 11-day chaos-mesh incident (see
+        # 2026-07-12 CURRENT.md) is the reference case.
+        - alert: ArgoCDAppProgressing
+          expr: |
+            max by (name, exported_namespace) (
+              argocd_app_info{health_status="Progressing"}
+            ) == 1
+          for: 1h
+          labels:
+            severity: warning
+            component: argocd
+          annotations:
+            summary: 'ArgoCD app {{ $labels.name }} stuck in Progressing state'
+            description: |
+              The ArgoCD application `{{ $labels.name }}` has been in
+              `Progressing` health state for more than 1 hour. This usually
+              means a pod is failing to become Ready (RunContainerError,
+              CrashLoopBackOff), a Job hasn't completed, or a Deployment
+              rollout is stalled.
+
+              Investigate:
+
+                kubectl get application {{ $labels.name }} -n argocd \
+                  -o jsonpath='{.status.operationState.message}{"\n"}'
+
+                kubectl get pods -n {{ $labels.exported_namespace }} \
+                  -o wide | grep -v Running
