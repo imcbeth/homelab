@@ -255,6 +255,13 @@
 
 **Result:** 38/38 apps Synced+Healthy — first fully-clean cluster state in ~3 weeks. New ArgoCDApp* alerts loaded in Prometheus.
 
+**Alert verified end-to-end (no false positive):**
+- `ArgoCDAppUnknown` entered `pending` state for ~1 minute (4 eval samples for `sealed-secrets` at 15s scrape interval) as soon as the rule loaded
+- PR #773 merged + applied ~15 min later → `sync_status` transitioned to `Synced` → alert returned to `inactive`
+- Never crossed the 30m `for:` duration → never transitioned to `firing` → no email sent
+- Confirms the 30m threshold is well-tuned: same-day fixes don't page, but sustained Unknown will fire within an actionable window
+- Range query for the record: `count_over_time(ALERTS{alertname="ArgoCDAppUnknown",alertstate="pending"}[2h])` returned 4 samples; `alertstate="firing"` returned 0
+
 **Additional gotcha captured today:**
 - **argocd_app_info has separate `health_status` and `sync_status` labels.** Sealed-secrets case shows `health=Healthy` (runtime is fine) but `sync=Unknown` (ArgoCD can't render manifests to compare against because the chart repo returns 404). Alerts should check either label depending on the concern — for "app in a state I should investigate," use `or` across both.
 
