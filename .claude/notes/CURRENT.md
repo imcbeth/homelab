@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-13 (Chaos-mesh Schedules un-suspended with safety fixes)
+**Last Updated:** 2026-07-13 (Chaos-mesh un-suspend + verify script + Falco Redis OOM fix)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -231,6 +231,19 @@ Completed the un-suspend of the 4 chaos-mesh Schedules that were disabled 2026-0
 | Aug 1 12:00 | `pod-failure-node04` | Only user workloads pause; all 3 chaos-mesh pods on node04 stay Running |
 
 **Verification tooling shipped (PR #791):** `scripts/verify-chaos-week.sh` runs on-demand any time after Wednesday 11:15 UTC and prints per-fire verdicts (✅/⚠️/❌/⏭️) for the 3 weekly schedules plus 4 global cluster health checks (ArgoCD sync, chaos-mesh pod images, ArgoCDApp* alert state, PVC RO count). Uses `AllInjected` + `AllRecovered` conditions + "Failed" injection events on the most recent child experiment as the verdict inputs. On-demand only — no automation depends on it. Dry-run today confirmed 4 globals ✅ and all 3 schedules ⏭️ pre-Wednesday.
+
+**Follow-up (later same day) — Falco Redis OOM fix (PR #793):**
+
+Healthcheck picked up that Falco Redis had been OOMKilling every ~24 min for 21 days (876 restarts). Not new — a longstanding chronic issue, just first noticed today because I was scanning restart counts.
+
+**Root cause:** the falcosidekick chart's key for Redis config overrides is `webui.redis.customConfig` (a LIST of strings), not `webui.redis.config` (a map). Our values file had used `config:` for months; the chart silently ignored it. Live Redis showed `maxmemory: 0`, `maxmemory-policy: noeviction` → grew unbounded until it hit the 2Gi container limit → OOMKill → repeat.
+
+**Fix:** switch to `customConfig: ["maxmemory 1500mb", "maxmemory-policy allkeys-lru"]`. The chart renders this into a ConfigMap with a `redis-stack.conf` file, mounts it at `/redis-stack.conf`, and the redis-stack image auto-loads it. Verified live: `redis-cli CONFIG GET maxmemory` returns `1572864000` (1500 MiB), policy is `allkeys-lru`, restarts back to 0.
+
+**Also cleaned up:** 5 orphaned `PodNetworkChaos` records in the loki namespace, leftover from yesterday's chaos-mesh recovery. Parent NetworkChaos was gone but the per-pod records persisted, generating "unable to flush ip sets" warning events every ~20s for 25 hours.
+
+**Additional gotcha captured:**
+- **Helm charts silently drop unknown values keys.** No error, no warning — the chart renders whatever it knows about, extra keys go into `.Values` but are never referenced. When a config change appears to have no runtime effect, verify with `helm template <chart> -f values.yaml` and grep for the expected rendered output before assuming the app is misbehaving. The 21-day Falco Redis chronic OOM was invisible because ArgoCD reported Synced + Healthy the whole time (fresh pod after each OOMKill is still Ready).
 
 **Key Gotchas Captured:**
 - **Chaos-mesh selectors don't combine `nodeSelectors + expressionSelectors` cleanly** — silently returns "no pod is selected" instead of an error. Test any complex selector with a short-duration one-shot before scheduling it. Positive allowlists (`namespaces`, `labelSelectors`) are the reliable pattern.
