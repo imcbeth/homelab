@@ -206,10 +206,21 @@ falcosidekick:
         limits:
           cpu: 200m
           memory: 2Gi
-      # Define custom redis configuration
-      config:
-        maxmemory: "1000mb"
-        maxmemory-policy: "allkeys-lru"
+      # Custom Redis config passed as `--<key> <value>` args to redis-server.
+      # The falcosidekick chart's key is `customConfig` (a LIST of strings),
+      # NOT `config` (a map). Discovered 2026-07-13: the old `config:` block
+      # was silently ignored by the chart — live Redis showed maxmemory=0
+      # and maxmemory-policy=noeviction, causing OOMKill every ~24 min
+      # (876 restarts over 21 days).
+      #
+      # 1500mb chosen because:
+      #   - Container limit: 2Gi (2048 MiB); Gatekeeper caps at 2Gi
+      #   - Redis needs headroom for BGSAVE fork copy-on-write
+      #   - Module overhead (RediSearch, TimeSeries) adds ~300 MiB
+      #   - 1500mb key data + 300mb modules + 200mb fork slack ≈ 2000mb
+      customConfig:
+        - "maxmemory 1500mb"
+        - "maxmemory-policy allkeys-lru"
     initContainer:
       resources:
         requests:
