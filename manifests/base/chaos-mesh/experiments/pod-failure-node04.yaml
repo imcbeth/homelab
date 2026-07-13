@@ -34,16 +34,28 @@ spec:
     selector:
       nodeSelectors:
         kubernetes.io/hostname: node04
-      # SAFETY (2026-07-12): exclude chaos-mesh's own components from
-      # the target set. Previously with `mode: all + nodeSelectors: node04`,
-      # this experiment killed chaos-daemon-s8bwr (chaos-mesh's own
-      # reconciler on node04), which broke chaos-mesh's ability to
-      # restore the pause-swap → 11-day self-lockup discovered on
-      # 2026-07-12. All chaos-mesh pods carry `app.kubernetes.io/name:
-      # chaos-mesh` — excluding that value cleanly excludes them all.
-      expressionSelectors:
-        - key: app.kubernetes.io/name
-          operator: NotIn
-          values:
-            - chaos-mesh
+      # SAFETY (2026-07-13): positive namespaces allowlist limiting the
+      # blast radius to user-workload namespaces. Previously with
+      # `mode: all + nodeSelectors: node04`, this experiment killed
+      # chaos-daemon-s8bwr (chaos-mesh's own reconciler on node04),
+      # which broke chaos-mesh's ability to restore the pause-swap →
+      # 11-day self-lockup discovered on 2026-07-12.
+      #
+      # Why not `expressionSelectors NotIn [chaos-mesh]`: chaos-mesh's
+      # selector implementation returned "no pod is selected" when
+      # combining nodeSelectors with expressionSelectors — verified
+      # empirically on 2026-07-13. Namespaces allowlist is the
+      # reliable pattern.
+      #
+      # By omission, this also excludes kube-system, calico-system,
+      # istio-system, argocd, metallb-system, cert-manager,
+      # gatekeeper-system, default (Prometheus + Grafana), and
+      # chaos-mesh itself — all critical infrastructure.
+      namespaces:
+        - falco
+        - loki
+        - lifeonabike
+        - unipoller
+        - argo-workflows
+        - argo-events
     duration: "5m"
