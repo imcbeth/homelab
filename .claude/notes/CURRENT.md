@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-12 (Chaos-mesh + alerts + sealed-secrets + Renovate batches A/B/D/C)
+**Last Updated:** 2026-07-13 (Chaos-mesh Schedules un-suspended with safety fixes)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,38 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-13: Chaos-Mesh Schedules Un-Suspended with Safety Fixes
+
+Completed the un-suspend of the 4 chaos-mesh Schedules that were disabled 2026-07-12 pending safety review. Applied minimal fixes to prevent recurrence of the self-lockup pattern.
+
+**Universal fix (all 4 Schedules):**
+- `startingDeadlineSeconds: 60` — if the cron slot is missed by more than 60s (e.g. controller down), do NOT fire a catch-up run. Prevents the "backlog cascade" that fired network-delay-loki and pod-kill-prometheus immediately when chaos-mesh recovered on 2026-07-12.
+
+**Per-spec fix:**
+- **pod-failure-node04** — added `namespaces:` allowlist limiting the target set to user-workload namespaces (`falco, loki, lifeonabike, unipoller, argo-workflows, argo-events`). Chaos-mesh's own components (in the chaos-mesh namespace) are now excluded by omission from the allowlist. Also excludes all critical infrastructure — kube-system, calico-system, istio-system, argocd, metallb-system, cert-manager, gatekeeper-system, and default (Prometheus + Grafana). No other Schedule needed a target-scope fix.
+
+**Chaos-mesh selector gotcha discovered:** the first attempt used `expressionSelectors: [{key: app.kubernetes.io/name, operator: NotIn, values: [chaos-mesh]}]`. Reproducibly returned `"no pod is selected"` even though the semantics are correct per the K8s label-selector spec. Chaos-mesh's implementation apparently doesn't combine `nodeSelectors` with `expressionSelectors` the way I expected. Verified with both plain `NotIn` and `Exists + NotIn` combined — both broken. Working pattern: **positive `namespaces:` allowlist**. Validated with a 15s dry-run — 11 target pods across 6 allowed namespaces, all 3 chaos-mesh pods on node04 kept their real image.
+
+**Pull Requests:**
+- **PR #788:** [Merged] Un-suspend Schedules with initial safety fixes (used broken expressionSelectors — fix in #789)
+- **PR #789:** [Merged] Fix pod-failure-node04 selector — switch to `namespaces` allowlist
+
+**Next scheduled fires (things to watch):**
+
+| Time (UTC) | Schedule | Expected outcome |
+|---|---|---|
+| Wed 09:00 | `pod-kill-prometheus` | Prometheus StatefulSet recovers within ~1 min; no iSCSI RO cascade |
+| Wed 10:00 | `network-delay-loki` | ip-set application succeeds (chaos-daemon healthy this time) |
+| Wed 11:00 | `cpu-stress-unipoller` | Gatekeeper CPU limit holds; unipoller recovers |
+| Aug 1 12:00 | `pod-failure-node04` | Only user workloads pause; all 3 chaos-mesh pods on node04 stay Running |
+
+**Key Gotchas Captured:**
+- **Chaos-mesh selectors don't combine `nodeSelectors + expressionSelectors` cleanly** — silently returns "no pod is selected" instead of an error. Test any complex selector with a short-duration one-shot before scheduling it. Positive allowlists (`namespaces`, `labelSelectors`) are the reliable pattern.
+- **`startingDeadlineSeconds` on chaos-mesh Schedules** — same concept as batch CronJob's `startingDeadlineSeconds`. Set to 60s (or similar short value) on every Schedule so cron slots missed during downtime don't fire catch-up runs. `null` (default) means "catch up ALL missed slots on recovery" which is almost never what you want.
+- **Falco Redis pod is on node01, not node04** — the original `pod-failure-node04` manifest comment claimed node04 had the Falco Redis PVC. It moved during the 2026-06-21 recovery when we drained node04 for the iSCSI RO cascade. The premise of the experiment changed but the manifest wasn't updated. Reminder: chaos experiment comments/rationale should be reviewed periodically for accuracy against current cluster state.
+
+---
 
 ### 2026-07-12: Cluster Healthcheck — chaos-mesh chaos-tested itself for 11 days
 
