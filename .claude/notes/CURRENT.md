@@ -230,6 +230,8 @@ Completed the un-suspend of the 4 chaos-mesh Schedules that were disabled 2026-0
 | Wed 11:00 | `cpu-stress-unipoller` | Gatekeeper CPU limit holds; unipoller recovers |
 | Aug 1 12:00 | `pod-failure-node04` | Only user workloads pause; all 3 chaos-mesh pods on node04 stay Running |
 
+**Verification tooling shipped (PR #791):** `scripts/verify-chaos-week.sh` runs on-demand any time after Wednesday 11:15 UTC and prints per-fire verdicts (✅/⚠️/❌/⏭️) for the 3 weekly schedules plus 4 global cluster health checks (ArgoCD sync, chaos-mesh pod images, ArgoCDApp* alert state, PVC RO count). Uses `AllInjected` + `AllRecovered` conditions + "Failed" injection events on the most recent child experiment as the verdict inputs. On-demand only — no automation depends on it. Dry-run today confirmed 4 globals ✅ and all 3 schedules ⏭️ pre-Wednesday.
+
 **Key Gotchas Captured:**
 - **Chaos-mesh selectors don't combine `nodeSelectors + expressionSelectors` cleanly** — silently returns "no pod is selected" instead of an error. Test any complex selector with a short-duration one-shot before scheduling it. Positive allowlists (`namespaces`, `labelSelectors`) are the reliable pattern.
 - **`startingDeadlineSeconds` on chaos-mesh Schedules** — same concept as batch CronJob's `startingDeadlineSeconds`. Set to 60s (or similar short value) on every Schedule so cron slots missed during downtime don't fire catch-up runs. `null` (default) means "catch up ALL missed slots on recovery" which is almost never what you want.
