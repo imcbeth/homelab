@@ -209,18 +209,30 @@ falcosidekick:
       # Custom Redis config passed as `--<key> <value>` args to redis-server.
       # The falcosidekick chart's key is `customConfig` (a LIST of strings),
       # NOT `config` (a map). Discovered 2026-07-13: the old `config:` block
-      # was silently ignored by the chart — live Redis showed maxmemory=0
-      # and maxmemory-policy=noeviction, causing OOMKill every ~24 min
-      # (876 restarts over 21 days).
+      # was silently ignored by the chart.
       #
-      # 1500mb chosen because:
-      #   - Container limit: 2Gi (2048 MiB); Gatekeeper caps at 2Gi
-      #   - Redis needs headroom for BGSAVE fork copy-on-write
-      #   - Module overhead (RediSearch, TimeSeries) adds ~300 MiB
-      #   - 1500mb key data + 300mb modules + 200mb fork slack ≈ 2000mb
+      # 2026-07-14 revision — 1500mb was still too aggressive. Redis kept
+      # OOMKilling because BGSAVE fork copy-on-write spikes memory well
+      # above `maxmemory` (which only caps key data). Live observation:
+      # container hit 2047 MiB with maxmemory=1500 → OOM at 2Gi limit.
+      #
+      # Budget breakdown for the 2Gi container limit:
+      #   1000 MiB — Redis key data (maxmemory)
+      #    300 MiB — RediSearch + TimeSeries module overhead
+      #    600 MiB — fork COW headroom (up to ~50% of RSS during BGSAVE)
+      #    148 MiB — process + kernel overhead
+      #   = 2048 MiB
+      #
+      # `save ""` disables RDB snapshots to eliminate the BGSAVE spike
+      # entirely. Trade-off: Redis loses ability to persist to disk on
+      # normal shutdown → recent Falco UI event history is lost across
+      # restarts. Acceptable since falcosidekick-ui is a live-events
+      # viewer, not an incident forensics tool. AOF also disabled by
+      # default in redis-stack, so this is a full "no persistence" mode.
       customConfig:
-        - "maxmemory 1500mb"
+        - "maxmemory 1000mb"
         - "maxmemory-policy allkeys-lru"
+        - 'save ""'
     initContainer:
       resources:
         requests:
