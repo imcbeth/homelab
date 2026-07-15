@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-14 (Renovate batches A+B + Falco Redis OOM part 2 + gatekeeper hard-refresh gotcha)
+**Last Updated:** 2026-07-14 (Renovate batches + Falco Redis OOM part 3: root cause fix)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -248,6 +248,48 @@ Also added `save ""` to disable RDB snapshots entirely. Removes the BGSAVE fork 
 **Key Gotchas Captured:**
 - **ArgoCD `Synced + Healthy` can hide stale-repo-cache renders.** After a chart bump apply, the app-controller may render from a cached older chart version and report Synced against that render. Runtime pod stays on the old image. Fix: `argocd.argoproj.io/refresh=hard` + explicit sync-patch. This is DISTINCT from the "chart-label drift" pattern (which is Synced-but-labels-mismatched); this is Synced-but-image-not-rolled.
 - **Redis `maxmemory` doesn't cap module overhead or fork spikes.** For redis-stack with modules on a tight container limit, budget roughly: `maxmemory + 300MB modules + (0.5 * maxmemory) BGSAVE_fork` should fit in container limit. Disabling RDB (`save ""`) removes the fork spike source when persistence isn't essential.
+
+**Follow-up (later same day) — held Renovate PRs reviewed + merged, plus Falco Redis Part 3 root cause:**
+
+- **PR #784 flink 2.3** — image reference bump only (Dockerfile + values comments). Custom image rebuilds via argo workflow when flink-demo is next manually triggered. Merged with standing caveat: our custom image runs Flink 2.x server + PyFlink 1.20 client + Kafka connector for Flink 1.20 — an already-mismatched combo that currently works via backwards compat. 2.3 might finally expose it.
+- **PR #785 cert-manager v1.21.0** — verified our values don't touch the 3 breaking Helm keys (removed metrics fields) or the removed `serviceaccounts/token` RBAC. **Hit the same stale-repo-cache pattern as gatekeeper yesterday** — ArgoCD reported Synced+Healthy while pods stayed on v1.20.2. Hard refresh + explicit sync rolled them to v1.21.0. 11/11 existing certificates still Ready (no CRD migration).
+
+**Falco Redis Part 3 — root cause fix (PR #797):**
+
+PR #795's `maxmemory=1000mb + save ""` was necessary but not sufficient — 37 restarts in ~5h afterward. Time to actually profile.
+
+**Diagnosis pattern** (worth remembering):
+
+```
+redis-cli INFO memory     → used=1.19 GiB (way above 1000mb cap!)
+redis-cli DBSIZE          → 167,632 keys
+redis-cli MODULE LIST     → ReJSON + RediSearch loaded
+redis-cli --scan | head   → all keys `event:<uuid>` (Falco events)
+redis-cli TTL <sample>    → 24 days remaining out of 30d
+kubectl exec ... ls -lh /data → 994 MB of stale RDB files
+```
+
+**Full failure mechanism:**
+1. Pod starts → loads old `dump.rdb` (322 MB compressed → 1.19 GiB in memory)
+2. `save ""` prevents NEW writes but leaves the old file on disk forever
+3. Falco keeps writing → memory grows past `maxmemory` (LRU evicts)
+4. Module overhead + potential fork spikes → 2 GiB → OOMKilled
+5. Repeat from step 1
+
+**Fix:**
+- **TTL 30d → 7d** in `falcosidekick.webui.ttl`. Should stabilize ~40k events ≈ 280 MiB dataset (well under the 1000mb cap). Falco alerts also go via AlertManager email — sidekick UI is a viewer, not primary trail.
+- **One-time PVC cleanup**: `kubectl exec ... rm /data/*.rdb` + `FLUSHDB` + delete pod
+- **Verified**: fresh pod at **1.56 MiB used_memory, 0 keys, 0 files on PVC, restarts=0**
+
+**Sequence of Falco Redis fixes** — each necessary, each solving a real issue:
+| PR | What | Bought us |
+|---|---|---|
+| #793 | Right chart key (`customConfig` not `config`) + maxmemory=1500mb | Chart config actually reached Redis for the first time in months |
+| #795 | 1500mb → 1000mb + `save ""` | Bounded key data, removed BGSAVE spikes |
+| #797 | TTL 30d → 7d + PVC cleanup | Root cause — no more RDB reload on startup; steady state fits |
+
+**Additional gotcha:**
+- **Redis `save ""` doesn't clean OLD dump.rdb** — disables NEW snapshots but leaves the file on disk. Every pod restart LOADS it. Fix requires `rm /data/*.rdb` (from inside the pod) + `FLUSHDB` + pod restart. Without cleanup, "fresh" pods actually reload 1+ GiB of stale data.
 
 ---
 
