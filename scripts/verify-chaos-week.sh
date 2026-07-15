@@ -115,6 +115,7 @@ verify_schedule() {
   local sched="$1"
   local expected_kind="$2"   # PodChaos | NetworkChaos | StressChaos
   local hint="$3"
+  local action="${4:-}"      # optional: "pod-kill" → no recovery expected
   local now
   now=$(now_epoch)
 
@@ -127,48 +128,47 @@ verify_schedule() {
     return
   fi
 
-  # When did it last fire?
-  local last_run
-  last_run=$(kubectl get schedule.chaos-mesh.org -n chaos-mesh "$sched" \
-    -o jsonpath='{.status.lastScheduleTime}' 2>/dev/null)
-  if [ -z "$last_run" ]; then
-    echo "  ⏭️  Never fired yet"
+  # Find the most recent child experiment. `Schedule.status.lastScheduleTime`
+  # is NEVER populated by chaos-mesh in our cluster (verified 2026-07-15 —
+  # 3 fires that day all showed lastScheduleTime="" even though experiments
+  # ran). Key off child experiment creationTimestamp instead.
+  local child_json_all
+  child_json_all=$(kubectl get "${expected_kind}.chaos-mesh.org" -n chaos-mesh -o json 2>/dev/null)
+
+  local child_name
+  child_name=$(echo "$child_json_all" | jq -r --arg s "$sched" '
+    [.items[]
+     | select(.metadata.ownerReferences[]?.name == $s)
+     | {name: .metadata.name, created: .metadata.creationTimestamp}]
+    | sort_by(.created) | last | .name // empty
+  ')
+  if [ -z "$child_name" ]; then
+    # Owner-reference may have been cleaned up already; search by name prefix
+    child_name=$(echo "$child_json_all" | jq -r --arg s "$sched" '
+      [.items[]
+       | select(.metadata.name | startswith($s))
+       | {name: .metadata.name, created: .metadata.creationTimestamp}]
+      | sort_by(.created) | last | .name // empty
+    ')
+  fi
+  if [ -z "$child_name" ]; then
+    echo "  ⏭️  No child ${expected_kind} found — this Schedule has never fired (or historyLimit pruned all runs)"
     return
   fi
-  local since
-  since=$(seconds_since "$last_run")
-  echo "  lastScheduleTime: $last_run ($(humanize_ago "$since"))"
 
-  # If last run was > 8 days ago, this Wednesday's cron slot hasn't fired
+  local child_created
+  child_created=$(echo "$child_json_all" | jq -r --arg n "$child_name" '
+    .items[] | select(.metadata.name == $n) | .metadata.creationTimestamp
+  ')
+  local since
+  since=$(seconds_since "$child_created")
+  echo "  latest child: $child_name ($(humanize_ago "$since"))"
+
+  # If most recent fire was > 8 days ago, this week's slot didn't fire
   if [ "$since" -gt 691200 ]; then
     echo "  ❌ Last fire was > 8 days ago — this week's slot may not have fired"
     return
   fi
-
-  # Find the most recent child experiment
-  local child_name
-  child_name=$(kubectl get "${expected_kind}.chaos-mesh.org" -n chaos-mesh \
-    -o json 2>/dev/null | jq -r --arg s "$sched" '
-      [.items[]
-       | select(.metadata.ownerReferences[]?.name == $s)
-       | {name: .metadata.name, created: .metadata.creationTimestamp}]
-      | sort_by(.created) | last | .name // empty
-    ')
-  if [ -z "$child_name" ]; then
-    # Owner-reference may have been cleaned up already; search by name prefix
-    child_name=$(kubectl get "${expected_kind}.chaos-mesh.org" -n chaos-mesh \
-      -o json 2>/dev/null | jq -r --arg s "$sched" '
-        [.items[]
-         | select(.metadata.name | startswith($s))
-         | {name: .metadata.name, created: .metadata.creationTimestamp}]
-        | sort_by(.created) | last | .name // empty
-      ')
-  fi
-  if [ -z "$child_name" ]; then
-    echo "  ⚠️  No child ${expected_kind} found (may have been pruned by historyLimit)"
-    return
-  fi
-  echo "  latest child: $child_name"
 
   # Inspect its conditions + records
   local child_json
@@ -187,7 +187,22 @@ verify_schedule() {
      | .message] | length
   ' 2>/dev/null)
 
-  # Verdict logic
+  # Verdict logic. pod-kill has no "recovery" phase (the pod is dead and
+  # recreated fresh by the workload controller) — chaos-mesh leaves
+  # AllRecovered=False forever. Skip the recovered check in that case.
+  if [ "$action" = "pod-kill" ]; then
+    if [ "$all_injected" = "True" ] && [ "${inj_failures:-0}" = "0" ]; then
+      echo "  ✅ Pod killed successfully (pod-kill has no recovery phase)"
+    elif [ "$all_injected" = "True" ]; then
+      echo "  ⚠️  Killed but ${inj_failures} failure event(s):"
+      echo "$child_json" | jq -r '.status.experiment.containerRecords[]?.events[]?
+        | select(.type=="Failed") | "     - "+.message' | head -3
+    else
+      echo "  ❌ pod-kill failed to inject (chaos-daemon reachable? selector matches?)"
+    fi
+    return
+  fi
+
   if [ "$all_injected" = "True" ] && [ "$all_recovered" = "True" ] && [ "${inj_failures:-0}" = "0" ]; then
     echo "  ✅ Injected + Recovered cleanly (no failures)"
   elif [ "$all_injected" = "True" ] && [ "$all_recovered" = "True" ]; then
@@ -204,7 +219,8 @@ verify_schedule() {
 }
 
 verify_schedule "pod-kill-prometheus" "PodChaos" \
-  "Wed 09:00 UTC — kills 1 Prometheus pod, expect StatefulSet recovery"
+  "Wed 09:00 UTC — kills 1 Prometheus pod, expect StatefulSet recovery" \
+  "pod-kill"
 
 # Prometheus-specific extras
 prom_age_min=$(kubectl get pod -n default prometheus-kube-prometheus-stack-prometheus-0 \
