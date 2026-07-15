@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-13 (Chaos-mesh un-suspend + verify script + Falco Redis OOM fix)
+**Last Updated:** 2026-07-14 (Renovate batches A+B + Falco Redis OOM part 2 + gatekeeper hard-refresh gotcha)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,52 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-14: Renovate Batches A+B + Falco Redis OOM Part 2
+
+**Renovate:** 10 open PRs when the day started. Applied 7, closed 1 superseded, held 2 for review.
+
+| Batch | PRs | Change |
+|---|---|---|
+| A — patches | #776 zot img, #777 alloy 1.10.1, #778 argo-workflows 1.0.19, #782 istio 1.30.2 (4 apps), #783 velero img | all clean |
+| B — chart minors | #780 zot chart 0.1.117→0.1.122 (5-patch), #786 gatekeeper 3.22.2→3.23.0 | #786 needed hard refresh |
+| Closed | #779 cert-manager v1.20.3 | Superseded by #785 (v1.21.0) |
+| **Held** | **#784** apache/flink 2.2→2.3 | Needs release notes check for Java/PyFlink compat |
+| **Held** | **#785** cert-manager v1.20.2→v1.21.0 | Needs changelog check for CRD changes |
+
+**Discovered on the gatekeeper apply (PR #786):** ArgoCD reported `Synced + Healthy` immediately after the manifest apply, but the pods were STILL running the old image (v3.22.2 not v3.23.0) — the app-controller's repo cache was stale and rendered the old chart. `kubectl annotate app gatekeeper argocd.argoproj.io/refresh=hard` + explicit sync-patch was required to force a re-render, after which the pods rolled to v3.23.0. **This is a distinct failure mode from the "chart-label drift" pattern documented 2026-07-12** — that one was rendered-correctly-but-not-applied. This is rendered-with-stale-cache-and-Synced-anyway. Worth its own REFERENCE.md entry.
+
+**Falco Redis OOM Part 2 (PR #795):**
+
+Yesterday's PR #793 set `maxmemory=1500mb` but restarts kept climbing (~66 in 24h). Live observation: container hit 2047 MiB with maxmemory=1500mb.
+
+Root cause of the continued OOM:
+- `maxmemory` only caps Redis key data
+- Modules (RediSearch, TimeSeries) add ~300 MiB of overhead not counted in `maxmemory`
+- BGSAVE fork copy-on-write can spike RSS to ~1.5x during snapshots
+- Combined: 1500 + 300 + fork spike ≈ 2100+ MiB → OOM at 2 GiB container limit
+
+Revised budget for the 2Gi container:
+- 1000 MiB Redis data (maxmemory)
+- 300 MiB module overhead
+- 600 MiB fork COW headroom
+- 148 MiB process/kernel
+
+Also added `save ""` to disable RDB snapshots entirely. Removes the BGSAVE fork spike source. Trade-off: no persistence, so recent Falco UI event history is lost across restarts. Acceptable — falcosidekick-ui is a live-events viewer, not forensics. AOF also disabled by default in redis-stack → full no-persistence mode.
+
+**Verified live:** `CONFIG GET maxmemory` = `1048576000` (1000 MiB), `CONFIG GET save` = empty (RDB off), fresh pod at 0 restarts. Will monitor over the next few hours to confirm the 1000mb budget holds.
+
+**Pull Requests:**
+- **PR #776, #777, #778, #782, #783** — [Merged] Batch A patches
+- **PR #779** — [Closed] superseded by #785
+- **PR #780, #786** — [Merged] Batch B chart minors
+- **PR #795** — [Merged] Falco Redis OOM part 2 — tighter budget + no persistence
+
+**Key Gotchas Captured:**
+- **ArgoCD `Synced + Healthy` can hide stale-repo-cache renders.** After a chart bump apply, the app-controller may render from a cached older chart version and report Synced against that render. Runtime pod stays on the old image. Fix: `argocd.argoproj.io/refresh=hard` + explicit sync-patch. This is DISTINCT from the "chart-label drift" pattern (which is Synced-but-labels-mismatched); this is Synced-but-image-not-rolled.
+- **Redis `maxmemory` doesn't cap module overhead or fork spikes.** For redis-stack with modules on a tight container limit, budget roughly: `maxmemory + 300MB modules + (0.5 * maxmemory) BGSAVE_fork` should fit in container limit. Disabling RDB (`save ""`) removes the fork spike source when persistence isn't essential.
+
+---
 
 ### 2026-07-13: Chaos-Mesh Schedules Un-Suspended with Safety Fixes
 
