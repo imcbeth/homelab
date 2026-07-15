@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-14 (Renovate batches + Falco Redis OOM part 3: root cause fix)
+**Last Updated:** 2026-07-15 (Wednesday chaos audit — 3 bugs uncovered + fixed)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,44 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-15: Wednesday Chaos Fire Audit — 3 Bugs Uncovered
+
+First Wednesday since the chaos Schedules were un-suspended (2026-07-13 with safety fixes). Ran the healthcheck + `verify-chaos-week.sh`. Cluster fully healthy (38/38 apps, all alerts inactive, Falco Redis holding at 0 restarts 13h post-fix), BUT — the audit surfaced 3 latent chaos-mesh bugs, only 1/3 fires actually worked as intended.
+
+**Fire outcomes (fixed all root causes):**
+
+| Fire | Time | Verdict | Root cause |
+|---|---|---|---|
+| pod-kill-prometheus | 09:00 UTC | ✅ Worked | pod-kill uses a code path that doesn't need chaos-daemon gRPC — that's why this one succeeded while others failed |
+| network-delay-loki | 10:00 UTC | ❌ Stuck 6h | NetPol + mTLS bugs (both fixed today) |
+| cpu-stress-unipoller | 11:00 UTC | ❌ 0 records | Selector typo (`unipoller` vs `unifi-poller`) — silent no-op since inception |
+
+**Three bugs, all fixed same day:**
+
+1. **NetworkPolicy off-by-one on chaos-mesh** (PR #799) — intra-ns rule allowed port 31766 (chaos-daemon HTTP metrics) but NOT 31767 (chaos-daemon **gRPC** — the port controller-manager actually calls for injection). Explains why NetworkChaos and mode≠kill PodChaos have never worked reliably. Fixed in 3 rule sites (ingress + intra-ns ingress + intra-ns egress).
+2. **cpu-stress-unipoller selector typo** (PR #799) — labelSelector `app.kubernetes.io/name: unipoller` but real pod label is `unifi-poller` (with hyphen). Matched 0 pods, Selected=False, 0 records on every fire. StressChaos has never actually stressed anything in this cluster.
+3. **mTLS cert mismatch chaos-controller → chaos-daemon** (manual fix). After the NetPol was fixed, the actual error surfaced: `x509: certificate signed by unknown authority "chaos-mesh-ca"`. Chaos-daemon pods had stale certs from before some prior chart upgrade. Restarted the DaemonSet, fresh certs, verified working.
+
+**End-to-end verification** — manual 20s NetworkChaos on Loki: `AllInjected=True, err_events=0, AllRecovered=True`. Ambient-mesh compatibility is fine — the gRPC + TLS path was the entire blocker.
+
+**Verify script rewrite (PR #800):**
+
+The audit was mostly manual because `scripts/verify-chaos-week.sh` gave misleading output. It keyed off `Schedule.status.lastScheduleTime` — which chaos-mesh **never populates in our cluster**. Rewrote to key off child experiment creationTimestamps instead (owner references + name-prefix fallback). Also special-cased pod-kill verdict logic (pod-kill has no recovery phase, so `AllRecovered=False` is normal — the old script wrongly flagged this ❌).
+
+**Also cleaned up:** 2 stuck experiment records (network-delay-loki-7txn8, cpu-stress-unipoller-4t42n) + 5 orphan PodNetworkChaos records that were spamming events every 20s.
+
+**Pull Requests:**
+- **PR #799** — [Merged] NetPol port 31767 + cpu-stress selector typo
+- **PR #800** — [Merged] verify-chaos-week.sh rewrite (creationTimestamp + pod-kill verdict)
+
+**Key Gotchas Captured:**
+- **Chaos-mesh `Schedule.status.lastScheduleTime` is never populated in our cluster** — despite the Schedule firing correctly. Tools that key off that field will show ⏭️ ("never fired") even when experiments are running. Key off child experiment creationTimestamps (via ownerReferences or name prefix) instead.
+- **Chaos-mesh has TWO daemon ports and controller uses port 31767 (gRPC), not 31766 (HTTP metrics).** Documentation shows 31766 more prominently; easy to miss. Any NetworkPolicy for chaos-mesh needs BOTH ports.
+- **Chaos-mesh mTLS certs live in `chaos-mesh-daemon-certs`, `chaos-mesh-daemon-client-certs`, `chaos-mesh-webhook-certs`, `chaos-mesh-chaosd-client-certs` secrets.** Chart upgrades that rotate CA don't automatically restart pods to pick up new certs — daemon rollout may need manual `kubectl rollout restart daemonset`.
+- **pod-kill PodChaos leaves `AllRecovered=False` permanently.** There's nothing to un-kill; the workload controller recreates the pod fresh. Alerting/monitoring logic that treats AllRecovered=False as failure will false-alarm on every pod-kill.
+
+---
 
 ### 2026-07-14: Renovate Batches A+B + Falco Redis OOM Part 2
 
