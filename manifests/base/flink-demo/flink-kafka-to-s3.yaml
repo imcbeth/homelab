@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: flink-demo
     app.kubernetes.io/component: kafka-to-s3
 spec:
-  # Custom image: apache/flink:2.2-java17 + Python3 + PyFlink + Kafka JAR + boto3
+  # Custom image: apache/flink:2.3-java17 + Python3 + PyFlink + Kafka JAR + boto3
   image: registry.k8s.n37.ca/flink-demo:1.0.0
   flinkVersion: v1_20
 
