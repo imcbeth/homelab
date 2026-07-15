@@ -36,7 +36,9 @@ spec:
         - protocol: TCP
           port: 10080  # controller-manager metrics
         - protocol: TCP
-          port: 31766  # chaos-daemon gRPC/metrics
+          port: 31766  # chaos-daemon HTTP metrics endpoint
+        - protocol: TCP
+          port: 31767  # chaos-daemon gRPC (what controller-manager calls for injection)
 
     # Allow internal namespace communication
     - from:
@@ -45,7 +47,9 @@ spec:
         - protocol: TCP
           port: 10080  # controller-manager
         - protocol: TCP
-          port: 31766  # chaos-daemon gRPC
+          port: 31766  # chaos-daemon HTTP metrics
+        - protocol: TCP
+          port: 31767  # chaos-daemon gRPC (controller → daemon for injection)
         - protocol: TCP
           port: 2333   # dashboard UI
 
@@ -95,7 +99,9 @@ spec:
         - protocol: TCP
           port: 10080
         - protocol: TCP
-          port: 31766
+          port: 31766  # chaos-daemon HTTP metrics
+        - protocol: TCP
+          port: 31767  # chaos-daemon gRPC (controller → daemon for injection)
         - protocol: TCP
           port: 2333
 

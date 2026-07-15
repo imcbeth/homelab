@@ -27,7 +27,10 @@ spec:
       namespaces:
         - unipoller
       labelSelectors:
-        app.kubernetes.io/name: unipoller
+        # NOTE: actual pod label is `unifi-poller` (hyphen). Prior value
+        # `unipoller` (no hyphen) silently matched no pods — Selected=False,
+        # records=0 on every fire since inception. Discovered 2026-07-15.
+        app.kubernetes.io/name: unifi-poller
     stressors:
       cpu:
         workers: 2
