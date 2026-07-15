@@ -189,7 +189,12 @@ falcosidekick:
   webui:
     enabled: true
     replicaCount: 1
-    ttl: "30d"
+    # 30d was too much: 167k events → 1.19GB in Redis (2026-07-14 profile).
+    # Combined with ReJSON + RediSearch module overhead + fresh event ingest,
+    # the Redis container OOMKilled repeatedly against the 2Gi Gatekeeper cap.
+    # 7d ≈ 40k events ≈ ~280MB dataset, leaving plenty of headroom.
+    # Falco events also go out via AlertManager email → not the sole trail.
+    ttl: "7d"
     resources:
       requests:
         cpu: 10m
