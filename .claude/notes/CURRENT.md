@@ -235,6 +235,14 @@ The audit was mostly manual because `scripts/verify-chaos-week.sh` gave misleadi
 - **PR #799** — [Merged] NetPol port 31767 + cpu-stress selector typo
 - **PR #800** — [Merged] verify-chaos-week.sh rewrite (creationTimestamp + pod-kill verdict)
 
+**Follow-up (same day) — k8s-docs-n37 caught up to reality (3 PRs):**
+
+- **k8s-docs-n37 PR #101** — `docs/applications/chaos-mesh.md` gained a "Safe Schedule configuration" section (4 rules from real incidents) + 5 new troubleshooting entries (chaos-daemon TWO ports, mTLS cert rotation, selector no-match diagnosis, Schedule.status quirk, self-lockup recovery). Fixed the existing pod-kill example which literally showed the `startingDeadlineSeconds: null` anti-pattern that caused the 11-day lockup.
+- **k8s-docs-n37 PR #102** — `docs/applications/falco.md` Redis config was **actively wrong** in production docs — used `webui.redis.config:` (silently dropped by chart) instead of `customConfig:`. Anyone copy-pasting that config would have inherited the same 876-OOMKill bug. Rewrote with the working config + full 2Gi memory budget breakdown + the Redis memory profile diagnosis pattern.
+- **k8s-docs-n37 PR #103** — `docs/applications/argocd.md` new "Alerting" section documenting the 3 ArgoCDApp* alerts + `docs/operations/runbooks.md` new "ArgoCD app stuck in Progressing" runbook cross-linking to the chaos-mesh + PVC RO recovery procedures.
+
+All 3 built cleanly (no broken anchors). Docs site is current through 2026-07-15. Untouched intentionally: stable getting-started + networking pages (no changes there this month).
+
 **Key Gotchas Captured:**
 - **Chaos-mesh `Schedule.status.lastScheduleTime` is never populated in our cluster** — despite the Schedule firing correctly. Tools that key off that field will show ⏭️ ("never fired") even when experiments are running. Key off child experiment creationTimestamps (via ownerReferences or name prefix) instead.
 - **Chaos-mesh has TWO daemon ports and controller uses port 31767 (gRPC), not 31766 (HTTP metrics).** Documentation shows 31766 more prominently; easy to miss. Any NetworkPolicy for chaos-mesh needs BOTH ports.
