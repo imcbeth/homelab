@@ -1,3 +1,12 @@
+# Pre-flight for argocd chart v10.0.0 (PR #815):
+# Chart v10.0.0 flipped `global.networkPolicy.create` from false → true.
+# We manage our own argocd NetworkPolicy in manifests/base/network-policies/argocd/
+# — adding chart-managed NetPols on top would create overlapping/conflicting
+# rules. Explicit opt-out.
+global:
+  networkPolicy:
+    create: false
+
 server:
   service:
     type: ClusterIP # Expose Argo CD server via a ClusterIP
