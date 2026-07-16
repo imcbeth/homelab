@@ -7,8 +7,16 @@ commonLabels: {}
 crds:
   enabled: true
   upgradeJob:
-    enabled: false
-    forceConflicts: false
+    # Enabled 2026-07-16 as pre-flight for chart v87.0.0 (PR #816).
+    # Chart 87 bumps prometheus-operator v0.91.0 → v0.92.1 which requires
+    # 10 CRDs to be updated to v0.92.x BEFORE the operator starts. The
+    # upgradeJob runs a Job that kubectl-applies the CRDs pre-sync so we
+    # don't have to run those `kubectl apply --server-side` commands
+    # manually on every kps chart-minor bump.
+    enabled: true
+    # forceConflicts: true — needed to take SSA field-ownership from
+    # existing CRDs installed by the current chart version.
+    forceConflicts: true
     image:
       busybox:
         registry: docker.io
