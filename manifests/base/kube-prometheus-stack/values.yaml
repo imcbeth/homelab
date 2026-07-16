@@ -31,7 +31,18 @@ crds:
         sha: ""
         pullPolicy: IfNotPresent
     env: {}
-    resources: {}
+    # Required for Gatekeeper `require-resource-limits` constraint.
+    # Without these, the Job creation was denied by the admission webhook
+    # (verified 2026-07-16 during initial 87.0.0 apply). The kubectl
+    # container just runs `kubectl apply --server-side` per CRD, so
+    # minimal budget is plenty.
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
     extraVolumes: []
     extraVolumeMounts: []
     nodeSelector: {}
