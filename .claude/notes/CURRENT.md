@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-15 (Wednesday chaos audit — 3 bugs uncovered + fixed)
+**Last Updated:** 2026-07-16 (Clean steady state — fixes holding)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,21 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-16: Clean Steady-State Healthcheck
+
+Post-Wednesday-audit calm confirmed. All 12 checklist items ✅, no anomalies worth chasing.
+
+**Notable stability signals:**
+- **Falco Redis: 0 restarts, 39h stable** — the customConfig + TTL 7d + PVC cleanup fix (PRs #793/#795/#797) is holding. Previously the pod was restarting every ~24 min.
+- **All 3 ArgoCDApp* alerts inactive** — no OutOfSync/Progressing/Unknown states surfaced anywhere on the cluster.
+- **0 PVC RO mounts** — pvc-mount-monitor + auto-remediator quiet.
+- **0 open Renovate PRs** — no drift, no pending work.
+- Only anomaly: 1 transient istio-cni-node readiness probe fail (single instance, 3m ago). Not investigating.
+
+No fixes, no PRs, nothing changed. First "boring" day this week.
+
+---
 
 ### 2026-07-15: Wednesday Chaos Fire Audit — 3 Bugs Uncovered
 
