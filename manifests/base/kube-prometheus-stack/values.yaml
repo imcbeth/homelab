@@ -51,7 +51,12 @@ crds:
     topologySpreadConstraints: []
     labels: {}
     annotations: {}
-    podLabels: {}
+    # Required for Gatekeeper `require-labels` constraint (2026-07-16).
+    # Second gate after the resources fix; without podLabels the Job
+    # pod is denied at admission with "Resource is missing required
+    # labels: {app.kubernetes.io/name}".
+    podLabels:
+      app.kubernetes.io/name: kube-prometheus-stack-crds-upgrade
     podAnnotations: {}
     serviceAccount:
       create: true
