@@ -9,6 +9,13 @@ spec:
     matchLabels:
       app: localstack
   replicas: 1
+  # Single replica with a RWO iSCSI PVC — RollingUpdate would deadlock
+  # on Multi-Attach (new pod can't get the volume until the old pod
+  # releases it, but rolling update won't kill the old until the new is
+  # Ready). Recreate: kill old first, then start new. Discovered
+  # 2026-07-16 during PR #732's livenessProbe rollout.
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
