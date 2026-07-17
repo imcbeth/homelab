@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-16 (Clean steady state — fixes holding)
+**Last Updated:** 2026-07-16 (Major bumps: argocd v10 + kps v87 + 13 Renovate PRs + kafka)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -205,18 +205,66 @@
 
 ## Recent Sessions
 
-### 2026-07-16: Clean Steady-State Healthcheck
+### 2026-07-16: Renovate wave (13 PRs) + Kafka + argocd v10 + kps v87
 
-Post-Wednesday-audit calm confirmed. All 12 checklist items ✅, no anomalies worth chasing.
+Morning healthcheck was clean and boring (documented as the baseline below). Then the "0 open Renovate PRs" turned out to be wrong — my `--author "app/renovate"` filter was excluding hits. Real state: **16 open PRs** discovered mid-morning, applied 13 across the day with two chart-major bumps.
 
-**Notable stability signals:**
-- **Falco Redis: 0 restarts, 39h stable** — the customConfig + TTL 7d + PVC cleanup fix (PRs #793/#795/#797) is holding. Previously the pod was restarting every ~24 min.
-- **All 3 ArgoCDApp* alerts inactive** — no OutOfSync/Progressing/Unknown states surfaced anywhere on the cluster.
-- **0 PVC RO mounts** — pvc-mount-monitor + auto-remediator quiet.
-- **0 open Renovate PRs** — no drift, no pending work.
-- Only anomaly: 1 transient istio-cni-node readiness probe fail (single instance, 3m ago). Not investigating.
+**Batch 1 — 5 PRs (first triage):**
 
-No fixes, no PRs, nothing changed. First "boring" day this week.
+| PR | Change | Notes |
+|---|---|---|
+| #803 | loki chart 7.0.0 → 7.1.0 (appVersion 3.6.7 → 3.6.8) | Clean |
+| #804 | strimzi-kafka-operator 1.0.1 → 1.1.0 | **Broke Kafka CR** — see below |
+| #805 | velero chart 12.0.3 → 12.1.0 (appVersion unchanged) | Clean |
+| #806 | alertmanager image v0.32.2 → v0.33.1 | Stale-cache pattern — hard refresh |
+| #807 | prometheus image v3.12.0 → v3.13.1 | Same |
+
+**Kafka regression from strimzi 1.1.0 (PR #819):**
+strimzi 1.1.0 dropped support for Kafka 4.1.x. Our `kafka-cluster` CR was pinned at `spec.kafka.version: 4.1.2` → operator refused to reconcile → app went Degraded within minutes of the operator upgrade. Bumped to 4.2.1 (supported set is 4.2.0, 4.2.1, 4.3.0 — picked middle-minor patch). Single-broker KRaft cluster so the rolling upgrade was really just a pod restart.
+
+**Batch 2 — 9 more PRs (found after re-filter):**
+
+| PR | Change |
+|---|---|
+| #808 thanos v0.42.0, #809 csi-provisioner v6.3.0, #810 csi-resizer v2.2.1, #811 csi-snapshotter v8.6.0 | Image patches |
+| #812 sealed-secrets 2.19.1 + trivy-operator 0.34.0 | Chart minors |
+| #813 velero-plugin-for-aws v1.14.2, #814 actions/checkout v7, #818 cloudflared 2026.7.2 | Image + CI patches |
+| #817 argo-events/argo-workflows patch (2.4.22→2.4.23) | Ecosystem patch |
+
+**Batch 3 — TWO major chart bumps (with pre-flight review):**
+
+- **argocd chart 9.7.1 → 10.1.4** (PR #815). appVersion v3.4.4 → v3.4.5 (patch only). One breaking change in v10.0.0: `global.networkPolicy.create` default flipped `false → true` (chart now creates its own NetPols). We manage our own, so opted out explicitly with `global.networkPolicy.create: false` in pre-flight PR #820.
+- **kube-prometheus-stack chart 86.3.2 → 87.16.1** (PR #816). appVersion (prometheus-operator) v0.91.0 → v0.92.1 — minor operator bump requires 10 CRDs to be upgraded to v0.92 BEFORE the operator starts. Enabled `crds.upgradeJob.enabled: true + forceConflicts: true` in pre-flight PR #820 to automate CRD upgrade via a chart-run Job. Ended up needing 2 more fix PRs on top:
+  - PR #821: `crds.upgradeJob.resources` — Gatekeeper's `require-resource-limits` was denying the Job (kubectl container had no CPU limit)
+  - PR #822: `crds.upgradeJob.podLabels` with `app.kubernetes.io/name` — Gatekeeper's `require-labels` was denying the pod
+
+Once both Gatekeeper gates were satisfied, the CRD upgrade Job completed in 22s and the chart bump proceeded cleanly.
+
+**Pull Requests (7 total for the day's activity):**
+- **PR #815** — [Merged] argocd chart 10.1.4
+- **PR #816** — [Merged] kube-prometheus-stack 87.16.1
+- **PR #819** — [Merged] Kafka 4.1.2 → 4.2.1 for strimzi 1.1.0
+- **PR #820** — [Merged] pre-flight values (argocd NetPol opt-out + kps upgradeJob)
+- **PR #821** — [Merged] kps upgradeJob resources
+- **PR #822** — [Merged] kps upgradeJob podLabels
+
+**Final state:** 38/38 apps Synced+Healthy. argocd on v3.4.5 chart 10.1.4, kps operator on v0.92.1 chart 87.16.1, kafka on 4.2.1 + strimzi 1.1.0. 0 open Renovate PRs. All 3 ArgoCDApp* alerts inactive. Falco Redis: 0 restarts (~43h stable).
+
+**Key Gotchas Captured:**
+- **Chart-generated hook Jobs cross Gatekeeper gates too.** The `crds.upgradeJob` needed BOTH `resources` AND `podLabels` added to values before it could even create a pod. Any chart hook Job that spawns a pod (Helm-based CRD upgrade jobs, cert-generation jobs, webhook installers) will hit the same constraints on this cluster. Check chart values for `webhook.image`, `preInstall.image`, `postUpgrade.image`, `crds.upgradeJob.image` etc. and pre-fill `.resources` and `.podLabels` before the first upgrade.
+- **ArgoCD keeps re-creating stuck Jobs from the stale template during a Running operation.** After I updated values to fix the Gatekeeper block, the SYNC operation was still Running and kept re-creating the Job from the OLD chart render. Every "fix + retry" attempt just recreated the broken Job. Recovery pattern: clear BOTH `/operation` and `/status/operationState` on the Application, then `kubectl patch --type=merge -p '{"metadata":{"finalizers":null}}'` + force-delete the Job, THEN trigger a fresh sync. Otherwise you're chasing the same broken template forever.
+- **kubectl `--author "app/renovate"` filter can under-report PRs.** Discovered mid-day that `gh pr list --author "app/renovate"` returned 0 while `gh pr list` (no filter) returned 16. Case/quoting bug in either gh or the API. Use the unfiltered list + jq filter as fallback: `gh pr list --json number,title,author --jq '.[] | select(.author.login=="app/renovate")'`.
+
+---
+
+### 2026-07-16 (morning): Clean Steady-State Healthcheck
+
+Post-Wednesday-audit calm confirmed. All 12 checklist items ✅, no anomalies worth chasing. Documented as a "healthy baseline" for future comparisons — turned out to be the only boring part of the day.
+
+- **Falco Redis: 0 restarts, 39h stable** (fix arc #793/#795/#797 holding)
+- **All 3 ArgoCDApp* alerts inactive**
+- **0 PVC RO mounts**
+- Only anomaly: 1 transient istio-cni-node readiness probe fail (single instance, 3m ago)
 
 ---
 
