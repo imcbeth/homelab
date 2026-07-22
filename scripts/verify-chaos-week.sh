@@ -174,27 +174,27 @@ verify_schedule() {
   local child_json
   child_json=$(kubectl get "${expected_kind}.chaos-mesh.org" -n chaos-mesh "$child_name" -o json 2>/dev/null)
 
-  local all_injected
-  all_injected=$(echo "$child_json" | jq -r '.status.conditions[]? | select(.type=="AllInjected") | .status // "?"')
-  local all_recovered
-  all_recovered=$(echo "$child_json" | jq -r '.status.conditions[]? | select(.type=="AllRecovered") | .status // "?"')
-
-  # Injection failures in event log?
-  local inj_failures
-  inj_failures=$(echo "$child_json" | jq -r '
-    [.status.experiment.containerRecords[]?.events[]?
-     | select(.type=="Failed")
-     | .message] | length
-  ' 2>/dev/null)
+  # NOTE (2026-07-22): chaos-mesh resets AllInjected/AllRecovered to False
+  # after the experiment completes (records transition to phase="Not Injected"
+  # once recovered). The truth of "did it work?" is in the record-level
+  # `injectedCount` and `recoveredCount`, plus the record's event history.
+  # v1 of this script keyed off the parent conditions and misreported clean
+  # runs as ❌ Failed to inject. Now we count records + look at their events.
+  local n_records n_injected n_recovered n_failed_events n_success_events
+  n_records=$(echo "$child_json" | jq -r '.status.experiment.containerRecords | length // 0')
+  n_injected=$(echo "$child_json" | jq -r '[.status.experiment.containerRecords[]? | select((.injectedCount // 0) >= 1)] | length')
+  n_recovered=$(echo "$child_json" | jq -r '[.status.experiment.containerRecords[]? | select((.recoveredCount // 0) >= 1)] | length')
+  n_failed_events=$(echo "$child_json" | jq -r '[.status.experiment.containerRecords[]?.events[]? | select(.type=="Failed")] | length')
+  n_success_events=$(echo "$child_json" | jq -r '[.status.experiment.containerRecords[]?.events[]? | select(.type=="Succeeded")] | length')
 
   # Verdict logic. pod-kill has no "recovery" phase (the pod is dead and
-  # recreated fresh by the workload controller) — chaos-mesh leaves
-  # AllRecovered=False forever. Skip the recovered check in that case.
+  # recreated fresh by the workload controller) — chaos-mesh will show
+  # recoveredCount stuck at 0. Skip the recovered check in that case.
   if [ "$action" = "pod-kill" ]; then
-    if [ "$all_injected" = "True" ] && [ "${inj_failures:-0}" = "0" ]; then
-      echo "  ✅ Pod killed successfully (pod-kill has no recovery phase)"
-    elif [ "$all_injected" = "True" ]; then
-      echo "  ⚠️  Killed but ${inj_failures} failure event(s):"
+    if [ "$n_injected" -ge 1 ] && [ "$n_failed_events" = "0" ]; then
+      echo "  ✅ Pod killed successfully ($n_injected/$n_records records injected; pod-kill has no recovery phase)"
+    elif [ "$n_injected" -ge 1 ]; then
+      echo "  ⚠️  Killed but ${n_failed_events} failure event(s):"
       echo "$child_json" | jq -r '.status.experiment.containerRecords[]?.events[]?
         | select(.type=="Failed") | "     - "+.message' | head -3
     else
@@ -203,18 +203,20 @@ verify_schedule() {
     return
   fi
 
-  if [ "$all_injected" = "True" ] && [ "$all_recovered" = "True" ] && [ "${inj_failures:-0}" = "0" ]; then
-    echo "  ✅ Injected + Recovered cleanly (no failures)"
-  elif [ "$all_injected" = "True" ] && [ "$all_recovered" = "True" ]; then
-    echo "  ⚠️  Injected + Recovered but ${inj_failures} failure event(s) during injection:"
+  if [ "$n_injected" -ge 1 ] && [ "$n_recovered" -ge 1 ] && [ "$n_failed_events" = "0" ]; then
+    echo "  ✅ Injected + Recovered cleanly ($n_injected/$n_records injected, $n_recovered recovered, $n_success_events success events)"
+  elif [ "$n_injected" -ge 1 ] && [ "$n_recovered" -ge 1 ]; then
+    echo "  ⚠️  Injected + Recovered ($n_injected/$n_records) but ${n_failed_events} failure event(s) during injection:"
     echo "$child_json" | jq -r '.status.experiment.containerRecords[]?.events[]?
       | select(.type=="Failed") | "     - "+.message' | head -3
-  elif [ "$all_injected" = "True" ] && [ "$all_recovered" = "False" ]; then
-    echo "  ❌ Injected but NOT recovered — investigate"
-  elif [ "$all_injected" = "False" ]; then
-    echo "  ❌ Failed to inject (chaos-daemon reachable? selector matches?)"
+  elif [ "$n_injected" -ge 1 ] && [ "$n_recovered" = "0" ]; then
+    echo "  ❌ Injected ($n_injected/$n_records) but NOT recovered — investigate"
+  elif [ "$n_injected" = "0" ]; then
+    echo "  ❌ Failed to inject — chaos-daemon reachable? selector matches? ($n_records records, $n_failed_events fail events)"
+    echo "$child_json" | jq -r '.status.experiment.containerRecords[]?.events[]?
+      | select(.type=="Failed") | "     - "+.message' | head -3
   else
-    echo "  ⚠️  Ambiguous state: AllInjected=$all_injected AllRecovered=$all_recovered"
+    echo "  ⚠️  Ambiguous state: injected=$n_injected/$n_records recovered=$n_recovered failed_events=$n_failed_events"
   fi
 }
 
