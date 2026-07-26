@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-16 (Major bumps: argocd v10 + kps v87 + 13 Renovate PRs + kafka)
+**Last Updated:** 2026-07-22 (Chaos week fully clean + verify script fix + Renovate batch)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,42 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-22: First fully-clean chaos week + verify script bug fix + Renovate batch
+
+**Wednesday chaos audit** — first Wed since PR #799 fixed the NetPol port 31767 gRPC gate. The verify script (v2 from PR #800) initially reported 2/3 fires as ❌ Failed to inject. But the underlying event log told a different story: all 3 experiments actually injected + recovered cleanly at their scheduled times:
+
+| Fire | Time (UTC) | Record status |
+|---|---|---|
+| pod-kill-prometheus | 09:00 | 1/1 injected, killed successfully |
+| network-delay-loki | 10:00 | **5/5 injected, 5 recovered, 10 success events** (Apply + Recover for each pod) |
+| cpu-stress-unipoller | 11:00 | **1/1 injected, 1 recovered, 2 success events** |
+
+**Root cause of the false ❌:** chaos-mesh **resets** `AllInjected` / `AllRecovered` conditions on the parent CR back to `False` after the experiment completes (records transition to `phase="Not Injected"` once recovery finishes). The truth of "did it work?" lives in the record-level `injectedCount`/`recoveredCount` counters plus the event history — NOT in the parent conditions.
+
+**Fix (PR #829):** rewrote verdict logic to key off `n_injected = [records with injectedCount >= 1] | length` and `n_recovered = [records with recoveredCount >= 1] | length` + count `Failed`/`Succeeded` events on the records. Verdict messages now include the counts inline for easier debug. Verified against today's live data — all 3 fires correctly ✅.
+
+**Big meta-finding:** chaos-mesh has been working end-to-end since 2026-07-15 (PR #799). Last week's ❌ verdict from the same script fooled me into thinking the fix hadn't held — it had. First proven fully-clean chaos week in the cluster's history was actually last week; today is the second.
+
+**Same-session Renovate batch (3 PRs, all clean):**
+- **PR #826** — istio 1.30.2 → 1.30.3 (4 apps in lockstep)
+- **PR #827** — thanos image v0.42.0 → v0.42.2 (kps values-only; no ThanosRuler workloads deployed)
+- **PR #828** — alloy chart 1.10.1 → 1.11.0 (app v1.18.0) + kps 87.16.1 → 87.19.0
+
+**Notable — Gatekeeper fixes from 2026-07-16 held.** The kps chart bump triggered the same `crds-upgrade` Job that took 4+ retries last week; today it **completed in 23 seconds** without any intervention. PRs #821 (resources) + #822 (podLabels) proven durable across subsequent chart bumps.
+
+**Pull Requests:**
+- **PR #826** — [Merged] istio 1.30.3
+- **PR #827** — [Merged] thanos v0.42.2
+- **PR #828** — [Merged] alloy 1.11.0 + kps 87.19.0
+- **PR #829** — [Merged] verify-chaos-week.sh: key off record counts, not parent conditions
+
+**Final state:** 38/38 apps Synced+Healthy, 0 open PRs, all alerts inactive, Falco Redis 172h stable.
+
+**Key Gotcha Captured:**
+- **Chaos-mesh `AllInjected`/`AllRecovered` conditions reset to `False` on completion.** They're not a running-total success signal — they only reflect the current transient state. For "did this experiment succeed?" logic, use record-level `injectedCount`/`recoveredCount` + event history. The parent conditions can lull you into thinking a completed clean run failed.
+
+---
 
 ### 2026-07-16: Renovate wave (13 PRs) + Kafka + argocd v10 + kps v87
 
