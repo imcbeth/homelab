@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-26 (5-PR Renovate batch + uptime-kuma audit closed)
+**Last Updated:** 2026-07-26 (Renovate + uptime-kuma audit + k8s-docs-n37 catchup)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -225,8 +225,22 @@
 - **PR #830, #831, #832, #833, #834** — [Merged] Renovate patches
 - **PR #835** — [Merged] session notes for 2026-07-22 + chaos-mesh condition-reset gotcha
 - **PR #836** — [Merged] REFERENCE.md audit-complete note for the RWO+Recreate pattern
+- **PR #837** — [Merged] session notes for today
 
-**Final state:** 38/38 apps Synced+Healthy, 0 open PRs, all alerts inactive. Falco Redis ~10 days stable. Chaos-mesh: 2 consecutive fully-clean weeks proven.
+**Follow-up (later same day) — k8s-docs-n37 caught up to reality (2 PRs):**
+
+The docs site was ~5 weeks stale on version refs (last updated 2026-06-21) and completely missed the July incident lessons.
+
+- **k8s-docs-n37 PR #104** — refreshed 10 app pages' chart-version refs to current cluster state (argocd 10.2.1, kps 87.19.1, argo-workflows 1.0.23, oauth2-proxy 10.7.0, zot 0.1.122, velero 12.1.0, loki 7.1.0, falco 9.1.0, istio 1.30.3, argo-events 2.4.23). Also retrospectively corrected the istio note — the "manual sync required" pattern documented 2026-06-21 was misdiagnosis (selfHeal handles chart-label drift natively in 30-60s per the 2026-07-12 empirical test).
+- **k8s-docs-n37 PR #105** — added 4 new incident-lesson sections:
+  - `argocd.md` → chart v10 flipped `global.networkPolicy.create` to true; explicit opt-out required
+  - `kube-prometheus-stack.md` → CRD upgradeJob 3-key Gatekeeper requirement (`enabled + forceConflicts + resources + podLabels`)
+  - `kafka.md` gotchas → strimzi minor bumps drop Kafka versions
+  - `localstack.md` → new "Deployment strategy — Recreate required" section for single-replica + RWO PVC pattern
+
+Docs site is now fully current through 2026-07-26. All 8 incidents/patterns from July are captured.
+
+**Final state:** 38/38 apps Synced+Healthy, 0 open PRs in both repos, all alerts inactive. Falco Redis ~10 days stable. Chaos-mesh: 2 consecutive fully-clean weeks proven.
 
 ---
 
