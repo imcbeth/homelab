@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-22 (Chaos week fully clean + verify script fix + Renovate batch)
+**Last Updated:** 2026-07-26 (5-PR Renovate batch + uptime-kuma audit closed)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,31 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-26: Renovate batch (5 PRs) + uptime-kuma strategy audit closed
+
+**Renovate batch — all patches, no majors:**
+
+| PR | Change | Live |
+|---|---|---|
+| #830 | cloudflared 2026.7.2 → 2026.7.3 | ✅ |
+| #831 | argo-workflows chart 1.0.20 → 1.0.23 (v4.0.8 image) | ✅ |
+| #832 | kube-prometheus-stack 87.19.0 → 87.19.1 | ✅ CRD upgradeJob completed in 18s |
+| #833 | argocd chart 10.1.4 → 10.2.1 (v3.4.5 image unchanged) | ✅ |
+| #834 | GH action setup-python v6 → v7 | ✅ CI-only |
+
+**Standout:** kps CRD upgradeJob now routinely completes in <30s. Third consecutive chart bump where the Gatekeeper fixes from PR #821/#822 handled it with zero intervention.
+
+**Uptime-kuma strategy audit closed (PR #836):** the REFERENCE.md gotcha for "single-replica Deployment + RWO PVC needs Recreate" had flagged uptime-kuma as an audit candidate. **Already correctly configured** — values file has `strategy.type: Recreate` with a comment noting the RWO iSCSI PVC pattern; live cluster confirms. Likely fixed during the PR #731 livenessProbe work. Updated the REFERENCE.md row to note the audit is complete for all known candidates — no other single-replica-Deployment-with-RWO-PVC workloads exist on this cluster (StatefulSets don't hit this because per-pod PVCs come from VolumeClaimTemplates).
+
+**Pull Requests:**
+- **PR #830, #831, #832, #833, #834** — [Merged] Renovate patches
+- **PR #835** — [Merged] session notes for 2026-07-22 + chaos-mesh condition-reset gotcha
+- **PR #836** — [Merged] REFERENCE.md audit-complete note for the RWO+Recreate pattern
+
+**Final state:** 38/38 apps Synced+Healthy, 0 open PRs, all alerts inactive. Falco Redis ~10 days stable. Chaos-mesh: 2 consecutive fully-clean weeks proven.
+
+---
 
 ### 2026-07-22: First fully-clean chaos week + verify script bug fix + Renovate batch
 
