@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-26 (Renovate + uptime-kuma audit + k8s-docs-n37 catchup)
+**Last Updated:** 2026-07-28 (healthcheck clean + kps 87.19.2 patch)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,26 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-28: Clean healthcheck + kps 87.19.2 patch
+
+Quiet check-in. All 11 healthcheck items ✅, one Renovate patch merged.
+
+**Notable stability signals:**
+- **Falco Redis: 0 restarts, 13d stable** (from the 2026-07-14 fix arc — PRs #793/#795/#797)
+- **All 3 ArgoCDApp* alerts inactive** since they were added 2026-07-12
+- **0 PVC RO mounts** — remediator quiet
+- Chaos-mesh: 2 consecutive fully-clean weeks proven; next audit Wed 07-29
+
+**One anomaly investigated (benign):**
+Warning events 46min old about `SnapshotContentCheckandUpdateFailed` on 4 VSC objects. All 4 were **already deleted by the vsc-orphan-janitor** at its 03:00 MT scheduled run — events were stale. 71 total VSCs, 0 in Ready=false state. Janitor working as designed (10.5 months since deployment PR #724, has prevented every recurrence of the 2026-06-04 NAS-CPU incident).
+
+**Pull Requests:**
+- **PR #839** — [Merged] kube-prometheus-stack 87.19.1 → 87.19.2 (chart patch, operator image unchanged; CRD upgradeJob didn't even run). 4th consecutive zero-intervention kps chart bump since the Gatekeeper fixes landed.
+
+**Final state:** 38/38 apps Synced+Healthy, 0 open PRs, all alerts inactive.
+
+---
 
 ### 2026-07-26: Renovate batch (5 PRs) + uptime-kuma strategy audit closed
 
