@@ -5,9 +5,13 @@
 # =============================================================================
 # Replica Configuration
 # =============================================================================
-# Single replica sufficient for homelab (default is 3 for HA)
-# failurePolicy: Ignore (Helm default) allows requests through if webhook unavailable
-replicas: 1
+# 2 replicas + hard pod anti-affinity → PDB minAvailable=1 can be satisfied
+# during drain (one replica evicts cleanly, the other keeps webhook alive).
+# Previously replicas=1 + PDB minAvailable=1 was a chicken-and-egg: evict
+# would drop below minAvailable, drain hung for 5min PDB timeout before
+# --force killed the pod. Fixed 2026-07-30 during 1.35 → 1.36 upgrade
+# retrospective (node04 drain hit this).
+replicas: 2
 
 # =============================================================================
 # Audit Configuration
@@ -42,6 +46,21 @@ controllerManager:
     limits:
       cpu: 500m
       memory: 512Mi
+  # HARD anti-affinity — override the chart's default "preferred" (soft)
+  # rule with "required" so the 2 replicas MUST land on different nodes.
+  # This is what makes replicas=2 + PDB minAvailable=1 actually correct:
+  # even during drain, at least one replica is always available on a
+  # different node.
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: gatekeeper.sh/operation
+                operator: In
+                values:
+                  - webhook
+          topologyKey: kubernetes.io/hostname
 
 # =============================================================================
 # Logging & Events
