@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-28 (healthcheck clean + kps 87.19.2 patch)
+**Last Updated:** 2026-07-30 (Kubernetes 1.35 → 1.36.3 upgrade complete)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,60 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-30: Kubernetes 1.35.0 → 1.36.3 upgrade
+
+**Full cluster kubeadm upgrade completed in ~35 minutes** (much faster than the 90-min plan estimate; no incidents or rollbacks needed).
+
+**Component version changes:**
+
+| Component | Before | After |
+|---|---|---|
+| kube-apiserver / -scheduler / -controller-manager | v1.35.0 | v1.36.3 |
+| kubelet (all 5 nodes) | v1.35.0 | v1.36.3 |
+| kube-proxy | 1.35.0 | v1.36.3 |
+| CoreDNS | v1.13.1 | v1.14.2 (kubeadm bumped) |
+| etcd | 3.6.6-0 | 3.6.8-0 (kubeadm bumped) |
+
+**Pre-flight audit against 1.36 urgent-upgrade-notes** (per runbook PR #843): zero incompatibilities in our workloads — no `Service.spec.externalIPs`, no `gitRepo` volumes, no PromRule refs to the renamed `volume_operation_total_errors` metric.
+
+**Upgrade sequence (per runbook):**
+1. Chaos-mesh suspend skipped — CRD doesn't support `spec.suspend` field, and today is Thursday (6 days until next Wed fire; upgrade window well below overlap risk)
+2. Control-plane apt repo `/v1.35/deb` → `/v1.36/deb`, `kubeadm 1.36.3-1.1` installed
+3. `kubeadm upgrade plan` — clean report, zero manual config upgrades required
+4. `kubeadm upgrade apply v1.36.3` on control-plane — static pods rolled cleanly
+5. Drain + kubelet upgrade + uncordon control-plane; observe 90s
+6. Repeat Phase B for node01 → node02 → node03 → node04 (each with `kubeadm upgrade node` + drain + kubelet + uncordon)
+
+**Two minor observations during the upgrade:**
+
+- **node04 gatekeeper PDB drain wait** — both `gatekeeper-controller-manager` replicas landed on node04 at some point, so the PDB (`minAvailable: 1`) blocked eviction of the second replica for the full 5-min drain timeout. Drain proceeded anyway via `--force`. Worth a follow-up: gatekeeper Deployment could use pod anti-affinity to spread replicas across nodes, avoiding this on future drains. Not urgent; only visible during drain events.
+- **Kernel update pending** — all nodes have `6.8.0-1060-raspi` available (running `6.8.0-1057-raspi`). Separate coordinated reboot cycle later; not urgent.
+
+**Post-upgrade validation — all green:**
+- 5/5 nodes on v1.36.3, all Ready
+- 38/38 apps Synced+Healthy
+- 0 non-Running pods
+- **0 PVC RO cascades** — the biggest anticipated risk didn't fire
+- All 3 ArgoCDApp* alerts inactive
+- CoreDNS + etcd on new bumped versions confirmed
+- Renamed `volume_operation_errors_total` metric available (0 series = healthy state, no volume errors — proves 1.36 kcm is exporting it)
+
+**Pull Requests:**
+- **PR #843** — [Merged 2026-07-29] Upgrade plan runbook (`runbooks/k8s-1.36-upgrade.md`); worked as written
+- **PR #841** — [Merged 2026-07-29] vpa 4.12.4 patch (pre-upgrade housekeeping)
+- **PR #842** — [Merged 2026-07-29] kps 87.21.0 + loki 7.2.0 (pre-upgrade housekeeping)
+
+**Key Gotcha Captured:**
+- **Chaos-mesh Schedule CRD (v2.8.x) has no `spec.suspend` field** (confirmed 2026-07-30 during upgrade prep). Previously discovered 2026-07-12 when we suspended by commenting out of kustomization. For quick-window operations where suspension isn't critical, verify the day of week / cron schedule and rely on that instead. The REFERENCE.md already has this gotcha documented.
+
+**Follow-ups worth doing:**
+- Update `k8s-docs-n37/docs/kubernetes/cluster-configuration.md` version references (done alongside this notes update)
+- Consider gatekeeper pod anti-affinity to avoid the PDB drain-wait on future upgrades
+- Reboot cycle for kernel 6.8.0-1060 (per-node drain/reboot/uncordon)
+- Confirm chaos-mesh next-Wed fires still ✅ post-upgrade (2026-08-05 audit)
+
+---
 
 ### 2026-07-28: Clean healthcheck + kps 87.19.2 patch
 
