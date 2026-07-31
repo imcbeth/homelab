@@ -27,10 +27,16 @@ resources:
     memory: 256Mi
 
 # Init containers for backup plugins - ARM64 versions
-# Pinned to v1.13.2: v1.14.x sends x-amz-tagging on every PutObject; Backblaze B2 rejects that header
+# PINNED to v1.13.2 — DO NOT BUMP. v1.14.x sends x-amz-tagging on every
+# PutObject; Backblaze B2 rejects that header with HTTP 400 InvalidArgument,
+# failing EVERY backup silently.
+# History: originally pinned in PR #681 (2026-06-01). Renovate PR #813
+# (2026-07-16) bumped it to v1.14.2 past this comment → ~16 days of failed
+# backups before it was caught on 2026-07-31. Renovate is now blocked from
+# touching this dep (see renovate.json ignoreDeps).
 initContainers:
   - name: velero-plugin-for-aws
-    image: velero/velero-plugin-for-aws:v1.14.2
+    image: velero/velero-plugin-for-aws:v1.13.2
     imagePullPolicy: IfNotPresent
     resources:
       requests:
