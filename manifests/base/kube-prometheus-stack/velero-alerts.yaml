@@ -3,11 +3,18 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: velero-alerts
-  namespace: velero
+  # Must live where Prometheus's ruleSelector can find it AND carry the
+  # `release: kube-prometheus-stack` label. Was in the `velero` namespace
+  # WITHOUT that label — Prometheus's ruleSelector requires
+  # `release: kube-prometheus-stack`, so this rule sat dormant for 198
+  # days and never loaded. That silence let ~16 days of failed B2 backups
+  # go unnoticed (see PR #847). All sibling rules live in `default`.
+  namespace: default
   labels:
     app: velero
     prometheus: kube-prometheus
     role: alert-rules
+    release: kube-prometheus-stack
 spec:
   groups:
   - name: velero_backup
