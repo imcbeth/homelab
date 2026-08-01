@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-30 (Kubernetes 1.35 → 1.36.3 upgrade complete)
+**Last Updated:** 2026-07-31 (16-day silent backup failure found + fixed during weekend-reboot prep)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,35 @@
 ---
 
 ## Recent Sessions
+
+### 2026-07-31: Weekend-reboot prep uncovered a 16-day silent backup failure
+
+Running the `weekend-ubuntu-kernel-reboot.md` runbook prereqs (backup within 24h) surfaced that **every Velero backup had been failing for ~16 days** — and the alert that should have caught it had been dormant for 198 days. Two compounding silent failures; classic "monitor the system" gap.
+
+**Chain of failures:**
+
+1. **Plugin regression (root cause):** `velero-plugin-for-aws` was pinned to v1.13.2 in PR #681 because v1.14.x sends an `x-amz-tagging` header on every PutObject that Backblaze B2 rejects (HTTP 400 InvalidArgument). **Renovate PR #813 (2026-07-16) bumped it to v1.14.2 straight past the pin comment.** All backups (daily-argocd, daily-critical-pvcs, weekly) → `Failed` from that day.
+2. **Dormant alert (why it was silent):** the `velero-alerts` PrometheusRule was in the `velero` namespace missing the `release: kube-prometheus-stack` label that Prometheus's ruleSelector requires. It had NEVER loaded in 198 days — `/api/v1/rules` showed zero velero rules despite the metrics being scraped. So `VeleroBackupFailed` + `VeleroBackupDelayed` never fired.
+
+**Fixes (3 PRs):**
+- **PR #847** — revert plugin v1.14.2 → v1.13.2 + add `velero/velero-plugin-for-aws` to renovate.json `ignoreDeps` (can't recur) + strengthen pin comment with incident history
+- **PR #848** — move velero-alerts to `default` ns + add `release: kube-prometheus-stack` label. After apply, `VeleroBackupDelayed` went `pending` immediately (16d > 24h threshold) — proving the path finally works.
+- Verification: triggered manual backups for all 3 schedules post-fix → all **Completed**. daily-argocd + critical-pvcs metrics now <1h; weekly metric lagging but backup Completed (will refresh on next scrape / Sunday scheduled run).
+
+**Weekend runbook — now genuinely prereq-ready:**
+- 38/38 Synced+Healthy ✅
+- 0 open PRs ✅
+- Recent successful backups (all 3 types) ✅
+- Saturday (not Wednesday) ✅
+- Gatekeeper 2 replicas + hard anti-affinity (PR #845) ✅
+- **Note for the run:** iSCSI-PVC workloads have shifted — Prometheus AND Loki are BOTH on **node01** now (not node02/node03 as the runbook's node order assumes), Falco Redis on node02. Draining node01 will re-attach 2 iSCSI PVCs at once. Watch that node's drain closely; the pvc-ro-remediator covers RO cascades within ~4 min.
+
+**Key Gotchas Captured:**
+- **A version pin is only as strong as its Renovate ignore.** A comment saying "PINNED — do not bump" does nothing; Renovate bumped right past it. Any dep pinned for a compatibility reason MUST be in `ignoreDeps` (or have an `allowedVersions` constraint). PR #813 is the second time this exact plugin got un-pinned by Renovate.
+- **An alert rule proves nothing until you confirm it's LOADED.** The velero-alerts rule existed in git and in the cluster for 198 days but was invisible to Prometheus. Verify new PrometheusRules appear in `/api/v1/rules`, not just that the resource exists. This is the 2025-12-27 `release` label gotcha biting a rule that predated the fix.
+- **Backblaze B2 rejects `x-amz-tagging`** — velero-plugin-for-aws must stay ≤ v1.13.2 (predates object tagging). Documented on the pin comment + REFERENCE.md.
+
+---
 
 ### 2026-07-30: Kubernetes 1.35.0 → 1.36.3 upgrade
 

@@ -116,7 +116,7 @@ done
 
 Same shape as the k8s 1.36 upgrade:
 
-1. **PVC RO cascade during drain** — pvc-ro-remediator auto-heals within ~4 min. Watch node with iSCSI PVCs (node01 Falco Redis, node02 Prometheus, node03 Loki).
+1. **PVC RO cascade during drain** — pvc-ro-remediator auto-heals within ~4 min. Watch nodes with iSCSI PVCs. **NOTE (verified 2026-07-31): workload placement has drifted from the original baseline.** Current: **Prometheus AND Loki are both on node01**, Falco Redis on node02. Draining node01 re-attaches TWO iSCSI PVCs simultaneously — watch that drain most closely. Re-check placement the day of the run with: `for p in "default prometheus-kube-prometheus-stack-prometheus-0" "loki loki-0" "falco falco-falcosidekick-ui-redis-0"; do kubectl get pod -n ${p% *} ${p#* } -o jsonpath='{.metadata.name} -> {.spec.nodeName}{"\n"}'; done`
 2. **Gatekeeper PDB drain wait** — **RESOLVED** by PR #845 (2 replicas + hard anti-affinity). If drains still hang here, that PR didn't apply cleanly — check `kubectl get deploy -n gatekeeper-system gatekeeper-controller-manager -o jsonpath='{.spec.replicas}'` = 2 and `.spec.template.spec.affinity.podAntiAffinity.requiredDuringScheduling...` exists.
 3. **Chaos-mesh Wed fires** — not applicable if you run this on a Sat/Sun as planned.
 4. **etcd on control-plane** — the control-plane reboot briefly stops the api-server. During the ~1-2 min window, `kubectl` commands will fail. Everything comes back automatically once the control-plane is back Ready.
