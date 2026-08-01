@@ -1511,7 +1511,7 @@ prometheus:
     image:
       registry: quay.io
       repository: prometheus/prometheus
-      tag: v3.13.1
+      tag: v3.13.2
       sha: ""
       pullPolicy: IfNotPresent
     tolerations: []
