@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-06 (5 blind scrape targets repaired + kernel reboot cycle finished)
+**Last Updated:** 2026-09-06 (5 blind scrape targets repaired + kernel cycle complete on all 5 nodes)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -234,8 +234,11 @@ Alert volume before → after: `51x HighRiskRBACPermissions, 44x CriticalVulnera
 
 **New visibility gained:** `UptimeKumaMonitorDown x2` — only observable because the metrics scrape works again after 38 days. 13 monitors up, 2 down: **Flink UI** (`kafka-to-s3-rest.flink-demo:8081` — FlinkDeployment `kafka-to-s3` is FAILED, `file-to-kafka` FINISHED, no pods; demo isn't running) and **UNVR** (`https://10.0.20.130` — external UniFi hardware, outside cluster scope). Neither is a cluster health issue.
 
+**Kernel cycle completed same session:** after the first three nodes, node04 and node02 were also rolled `-1060` → `-1064`. **All 5 nodes now on `6.8.0-1064` with zero pending reboots and zero PVC RO cascades** — notable given node04 held Prometheus+Grafana and node02 held Falco Redis+Trivy Server.
+
+Useful technique when draining the Prometheus host: the `pvc_mount_readonly` query becomes unavailable, so query the `pvc-mount-monitor` DaemonSet pods directly (`/host/proc/1/mounts`). No upstream dependencies — exactly the monitor-direct property we built for in PR #753.
+
 **Open loose ends:**
-- **Kernel drift:** node02 + node04 are on `6.8.0-1060` (rebooted before this session); the other three are on `-1064`. They need another pass to converge.
 - 10 open Renovate PRs (#850-#859) deliberately left unmerged so reboot issues wouldn't be conflated with upgrade issues.
 - Flink UI uptime-kuma monitor points at a demo that isn't running — either restart the demo or retire the monitor.
 

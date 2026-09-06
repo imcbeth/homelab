@@ -7,7 +7,24 @@
 > **Progress log:**
 > - 2026-08 (before 09-06): node02, node04 → `6.8.0-1060`
 > - 2026-09-06: control-plane, node01, node03 → `6.8.0-1064`
-> - **Outstanding:** node02 + node04 still on `-1060`, need another pass to converge on `-1064`
+> - 2026-09-06 (same session): node04, node02 → `6.8.0-1064`
+> - ✅ **Cycle complete — all 5 nodes on `6.8.0-1064`, zero pending reboots.**
+>
+> **Result:** 5/5 nodes rebooted with **zero PVC RO cascades**, including the four
+> nodes holding iSCSI PVCs (Prometheus+Grafana on node04, Falco Redis+Trivy on
+> node02, Loki on node01/node03 as it moved). 38/38 apps stayed Synced+Healthy
+> throughout; only transient `Progressing` on metal-lb and falco during DaemonSet
+> reschedule, both self-healed within ~2 min.
+>
+> **Tip that proved useful:** when draining the node that hosts Prometheus, you
+> lose the `pvc_mount_readonly` query. Query the `pvc-mount-monitor` DaemonSet
+> pods directly instead — it has no upstream dependencies:
+> ```bash
+> for m in $(kubectl get pod -n synology-csi -l app.kubernetes.io/name=pvc-mount-monitor -o name); do
+>   kubectl exec -n synology-csi ${m#pod/} -- /bin/sh -c \
+>     "awk '\$2 ~ /kubernetes.io~csi.*\/mount/ && \$4 ~ /^ro,/' /host/proc/1/mounts | wc -l"
+> done
+> ```
 **Estimated wall time:** ~2 hours across all 5 nodes (with observation windows)
 **Drafted:** 2026-07-30
 **Do NOT run on:** Wednesday (chaos-mesh fires 09:00-11:00 UTC)
