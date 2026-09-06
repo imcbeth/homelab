@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-06 (5 blind scrape targets repaired + kernel cycle complete on all 5 nodes)
+**Last Updated:** 2026-09-06 (scrape targets repaired + kernel cycle + Renovate batch of 10)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -237,6 +237,30 @@ Alert volume before → after: `51x HighRiskRBACPermissions, 44x CriticalVulnera
 **Kernel cycle completed same session:** after the first three nodes, node04 and node02 were also rolled `-1060` → `-1064`. **All 5 nodes now on `6.8.0-1064` with zero pending reboots and zero PVC RO cascades** — notable given node04 held Prometheus+Grafana and node02 held Falco Redis+Trivy Server.
 
 Useful technique when draining the Prometheus host: the `pvc_mount_readonly` query becomes unavailable, so query the `pvc-mount-monitor` DaemonSet pods directly (`/host/proc/1/mounts`). No upstream dependencies — exactly the monitor-direct property we built for in PR #753.
+
+**Renovate batch applied same session (10 PRs triaged, 9 applied, 1 closed):**
+
+| Tier | PRs | Change |
+|---|---|---|
+| 1 — patches/images | #850 argocd-eco (argocd 10.2.3, argo-workflows 1.0.24, argo-events 2.4.26), #851 cert-manager v1.21.1, #852 prometheus v3.13.2, #853 thanos v0.42.4, #855 zot v2.1.21, #856 alloy 1.11.1, #857 vpa 4.12.5 | all clean |
+| 2 — kps 2-major | #854 kube-prometheus-stack 87.21.0 → **89.2.4** (appVersion v0.92.1 → v0.93.1) | pre-flighted, applied |
+| 2 — argocd 6-minor | #859 argo-cd 10.2.3 → **10.8.1** (v3.5.2), argo-workflows 1.0.24 → **1.1.1** | pre-flighted, applied |
+| **Closed** | **#858 synology-csi v1.3.0 → v1.3.1** | should never have been opened — see below |
+
+**#858 revealed a broken Renovate exclusion.** `renovate.json` `ignoreDeps` contained the bare string `synology-csi`, but Renovate's actual depName for the image is `synology/synology-csi` — **the entry never matched**, so the CSI driver bump was proposed despite clear intent to exclude it. This is the **second instance of "a pin that doesn't pin"**:
+
+- 2026-07-31 — velero-plugin-for-aws had a `# PINNED — do not bump` comment but no `ignoreDeps` entry → Renovate bumped it → 16 days of silent B2 backup failure
+- today — synology-csi *had* an `ignoreDeps` entry, but with the wrong name → equally ineffective
+
+Fixed in **PR #871** (added correctly-namespaced entry); **#858 closed**. The CSI driver backs all 9 PVCs and REFERENCE.md documents a v1.2.1 node-plugin iscsiadm regression — those bumps need isolated testing with a fresh backup and rollback plan, not a batch merge.
+
+**Pre-flight method that paid off** (per the renovate-apply skill): for both Tier 2 chart bumps, `helm show values <chart> --version <new>` diffed against our top-level keys, plus a full `helm template` render with our actual values file. kps 89.2.4 rendered 124 resources clean with all four `crds.upgradeJob` keys (the PR #821/#822 Gatekeeper fixes) intact; argo-cd 10.8.1 rendered 56 resources with **0 chart-created NetworkPolicies**, confirming our `global.networkPolicy.create: false` opt-out still holds in v10.8.
+
+**Stale-repo-cache hit twice more.** Both kps and argocd reported `Synced + Healthy` while their pods still ran the *old* image (operator v0.92.1, argocd-server v3.5.0). The documented `refresh=hard` + explicit sync-patch fixed both. **That's now four occurrences** (gatekeeper 2026-07-14, cert-manager 2026-07-14, kps + argocd today) — it is the normal behaviour for chart bumps here, not an anomaly. Always verify the running pod image after a chart bump, never trust ArgoCD status alone.
+
+**Post-apply validation:** 38/38 Synced+Healthy, 97/97 scrape targets up, 9/9 PVCs Bound, 0 non-Running pods, 0 PVC RO mounts.
+
+**Renovate opened 11 NEW PRs during the session** (#864–#874) — including **kps v90 (another major)**, istio 1.30.4, gatekeeper 3.23.1, sealed-secrets 2.19.3, chaos-mesh 2.8.4, and three overlapping alpine/k8s bumps (#864, #865, #872). Left untouched for a separate triage.
 
 **Open loose ends:**
 - 10 open Renovate PRs (#850-#859) deliberately left unmerged so reboot issues wouldn't be conflated with upgrade issues.
