@@ -260,7 +260,23 @@ Fixed in **PR #871** (added correctly-namespaced entry); **#858 closed**. The CS
 
 **Post-apply validation:** 38/38 Synced+Healthy, 97/97 scrape targets up, 9/9 PVCs Bound, 0 non-Running pods, 0 PVC RO mounts.
 
-**Renovate opened 11 NEW PRs during the session** (#864–#874) — including **kps v90 (another major)**, istio 1.30.4, gatekeeper 3.23.1, sealed-secrets 2.19.3, chaos-mesh 2.8.4, and three overlapping alpine/k8s bumps (#864, #865, #872). Left untouched for a separate triage.
+**Second Renovate wave triaged same session (#864–#874): 10 applied, 1 closed.**
+
+| Tier | PRs | Change |
+|---|---|---|
+| 1 | #866 chaos-mesh 2.8.4 · #867 gatekeeper 3.23.1 · #868 sealed-secrets 2.19.3 · #869 zot chart 0.1.124 · #870 istio 1.30.4 (4 apps) · #874 cloudflared 2026.8.3 · #865 alpine/k8s 1.36.4 (remediator) · #872 alpine/k8s 1.37.0 (build workflow) | all clean |
+| 2 | #873 kube-prometheus-stack 89.2.4 → **90.0.0** | pre-flighted, applied solo |
+| **Closed** | #864 alpine/k8s 1.36.4 | superseded by #872 (same file, higher version) |
+
+**kps v90 was a benign "major".** Pre-flight showed **appVersion unchanged** (v0.93.1), all top-level values keys surviving, all four `crds.upgradeJob` keys intact, and a render diff of exactly **+1 resource** — a ServiceAccount token `Secret`, nothing removed. Chart-template churn only. Confirms the value of rendering and diffing rather than trusting the semver label.
+
+**Stale-repo-cache hit ALL TEN Tier 1 apps simultaneously.** Every app reported `Synced + Healthy` while still running the old image (istiod 1.30.3, gatekeeper v3.23.0, chaos-mesh v2.8.3, cloudflared 2026.7.3, remediator 1.36.2…). One batched `refresh=hard` + sync-patch across all ten fixed it. This is no longer an occasional gotcha — **assume it on every bump and verify running images as a mandatory step.** Note it affected plain `base/` git-source files too (cloudflared, remediator), not just Helm chart sources.
+
+**Verified after the bumps:** gatekeeper kept its 2 replicas + hard anti-affinity (PR #845) with pods on separate nodes; the pvc-ro-remediator still runs clean on alpine/k8s 1.36.4 (`no RO mounts detected (5/5 monitors reachable)`).
+
+**The Renovate treadmill — root cause identified.** `renovate.json` sets `prConcurrentLimit: 10` with schedule `after 6am and before 9pm on saturday and sunday` (America/Vancouver). **Renovate refills the open-PR queue back to 10 as fast as it is drained, for the whole weekend window.** That is why each batch spawned another: wave 1 (#850–859) → wave 2 (#864–874) → wave 3 (#876–882), all within ~3 hours on a Sunday. It is not an endless backlog appearing from nowhere; it is a metered queue being continuously refilled. **Applying batches inside the active window is a losing game** — better to work them after the window closes (Mon–Fri), when the queue is static.
+
+**Third wave left open (#876–#882)** — alertmanager v0.34.0, monitoring stack (minor), uptime-kuma v4.2.0, trivy-operator v0.36.0, strimzi 1.2.0, metrics-server 3.14.0, alpine/k8s v1.37.0. Deliberately NOT applied: (a) kps has already moved 87→89→90 in one session and `#881 monitoring stack (minor)` would likely be a fourth monitoring change; (b) `#880 uptime-kuma v4.2.0` lands right on top of today's metrics-auth fix (PR #861) and deserves isolated verification that `basicAuth` still works after the chart bump.
 
 **Open loose ends:**
 - 10 open Renovate PRs (#850-#859) deliberately left unmerged so reboot issues wouldn't be conflated with upgrade issues.
