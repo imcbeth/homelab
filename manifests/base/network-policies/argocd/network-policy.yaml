@@ -60,7 +60,9 @@ spec:
         - protocol: TCP
           port: 8083   # argocd-server metrics
         - protocol: TCP
-          port: 8082   # repo-server metrics
+          port: 8082   # application-controller metrics
+        - protocol: TCP
+          port: 8084   # repo-server metrics
 
     # Admission webhooks from API server (bare port for IPIP compat)
     - ports:
