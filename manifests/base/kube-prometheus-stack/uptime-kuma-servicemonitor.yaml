@@ -17,7 +17,17 @@ spec:
     - port: http
       path: /metrics
       interval: 60s
-      authorization:
-        credentials:
+      # Uptime Kuma's /metrics uses HTTP BASIC auth (empty username, API key
+      # as password) — NOT bearer. The previous `authorization.credentials`
+      # block sent `Authorization: Bearer <key>` and got HTTP 401 for 38 days
+      # (since ~2026-07-30). Verified empirically 2026-09-06:
+      #   Bearer <key>              → 401
+      #   Basic base64(":" + <key>) → 200 + real metrics
+      # The API key itself was always valid; only the scheme was wrong.
+      basicAuth:
+        username:
           name: uptime-kuma-metrics-token
-          key: token
+          key: username
+        password:
+          name: uptime-kuma-metrics-token
+          key: password
