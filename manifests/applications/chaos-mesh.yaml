@@ -15,7 +15,7 @@ spec:
     # Chaos Mesh Helm chart
     - repoURL: https://charts.chaos-mesh.org
       chart: chaos-mesh
-      targetRevision: 2.8.3
+      targetRevision: 2.8.4
       helm:
         valueFiles:
           - $values/manifests/base/chaos-mesh/values.yaml
