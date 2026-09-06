@@ -181,9 +181,13 @@ spec:
         - protocol: TCP
           port: 9402   # cert-manager metrics
         - protocol: TCP
-          port: 8083   # ArgoCD metrics
+          port: 8083   # ArgoCD server metrics
         - protocol: TCP
-          port: 8082   # ArgoCD repo-server metrics
+          port: 8082   # ArgoCD application-controller metrics
+        - protocol: TCP
+          port: 8084   # ArgoCD repo-server metrics
+        - protocol: TCP
+          port: 10080  # chaos-mesh controller-manager metrics
         - protocol: TCP
           port: 8765   # Falco metrics
         - protocol: TCP
