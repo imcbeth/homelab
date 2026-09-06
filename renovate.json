@@ -144,6 +144,7 @@
   ],
   "ignoreDeps": [
     "synology-csi",
+    "synology/synology-csi",
     "registry.k8s.io/ingress-nginx/kube-webhook-certgen",
     "golift/unifi-poller",
     "velero/velero-plugin-for-aws"
