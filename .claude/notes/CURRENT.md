@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-07-31 (16-day silent backup failure found + fixed during weekend-reboot prep)
+**Last Updated:** 2026-09-06 (5 blind scrape targets repaired + kernel reboot cycle finished)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,48 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-06: Five blind scrape targets repaired + kernel reboot cycle finished
+
+Healthcheck after a ~5-week gap. Cluster core was fine (38/38 apps, 0 RO mounts, Velero healthy — the 2026-07-31 pin fix held), but **five Prometheus scrape targets were down**, two of them for 77 days. The `TargetDown` alerts were firing correctly the whole time; nobody was reading them.
+
+**Worked the full list in one pass:**
+
+| # | Item | Result |
+|---|---|---|
+| 1 | 3 stale failed Jobs (`pvc-ro-remediator-2970120{4,6,8}`, 77d) keeping `KubeJobFailed` firing | Deleted — pure tombstones from the pre-fix era; every run since is `Complete` in 4-5s |
+| 2 | argocd repo-server + chaos-mesh metrics blind 77d | **PR #860** |
+| 3 | uptime-kuma metrics 401 for 38d | **PR #861** |
+| 4 | kube-controller-manager + kube-scheduler unreachable 38d | Host-level fix, folded into the control-plane reboot |
+| 5 | Kernel reboot cycle (3 remaining nodes) | Done — control-plane, node01, node03 |
+
+**Root causes (each different, all silent):**
+
+- **argocd-repo-server (77d)** — metrics moved to port **8084**. The default-ns egress list had **8082** *mislabeled* as "ArgoCD repo-server metrics" (8082 is actually application-controller). 8084 was allowed on neither side. Fixed both halves + corrected the comments. Subtler than the usual both-directions gotcha: a port *number* drifted under a correct-looking comment.
+- **chaos-mesh-controller-manager (77d)** — metrics on **10080**. chaos-mesh ns ingress already allowed it; only default-ns **egress** was missing. Isolated it by confirming `wget http://127.0.0.1:10080/metrics` returned real metrics from inside the pod.
+- **uptime-kuma (38d)** — ServiceMonitor used `authorization.credentials` → sends `Bearer <key>`. Uptime Kuma's `/metrics` wants **HTTP Basic** (empty username, API key as password). Proved it from the Prometheus pod: `Bearer` → 401, `Basic base64(":"+key)` → 200 + real metrics. The API key was valid all along; only the scheme was wrong. Resealed the secret with `username`/`password` keys (kept `token`).
+- **kube-controller-manager + kube-scheduler (38d — exactly the 1.36 upgrade date)** — `--bind-address=127.0.0.1` in the static pod manifests. Egress already allowed 10257/10259, so it was purely the bind address. **The kubeadm 1.36 upgrade reset these.** Changed to `0.0.0.0` on the control-plane with timestamped backups in `/root/k8s-manifest-backups/`, verified they survived the reboot.
+
+**Kernel reboot cycle:** control-plane, node01, node03 all `6.8.0-1057` → **`6.8.0-1064`** (not `-1060` — the runbook was written in July; newer kernels shipped since). Each: drain → apt upgrade → reboot → Ready → uncordon → observe. **Zero PVC RO cascades**, including node01 which held Loki's iSCSI PVC. Transient `Progressing` on metal-lb (node03) and falco (node01) during DaemonSet reschedule; both self-healed.
+
+**Result:** all scrape targets `up`, 38/38 Synced+Healthy, 0 non-Running pods, 9/9 PVCs Bound, 0 RO mounts.
+
+Alert volume before → after: `51x HighRiskRBACPermissions, 44x CriticalVulnerabilitiesDetected, 8x CPUThrottlingHigh, 5x TargetDown, 3x KubeJobFailed` → `7x CPUThrottlingHigh, 2x UptimeKumaMonitorDown, 1x Watchdog`. **Caveat: the Trivy RBAC/vuln alerts cleared because trivy-operator restarted mid-reboot and is re-scanning — they will likely return once scans complete.** Only the TargetDown and KubeJobFailed reductions are genuine fixes.
+
+**New visibility gained:** `UptimeKumaMonitorDown x2` — only observable because the metrics scrape works again after 38 days. 13 monitors up, 2 down: **Flink UI** (`kafka-to-s3-rest.flink-demo:8081` — FlinkDeployment `kafka-to-s3` is FAILED, `file-to-kafka` FINISHED, no pods; demo isn't running) and **UNVR** (`https://10.0.20.130` — external UniFi hardware, outside cluster scope). Neither is a cluster health issue.
+
+**Open loose ends:**
+- **Kernel drift:** node02 + node04 are on `6.8.0-1060` (rebooted before this session); the other three are on `-1064`. They need another pass to converge.
+- 10 open Renovate PRs (#850-#859) deliberately left unmerged so reboot issues wouldn't be conflated with upgrade issues.
+- Flink UI uptime-kuma monitor points at a demo that isn't running — either restart the demo or retire the monitor.
+
+**Key Gotchas Captured:**
+- **kubeadm upgrades reset `/etc/kubernetes/manifests/*` static pod configs.** The 1.36 upgrade silently reverted `--bind-address` on kube-controller-manager and kube-scheduler to `127.0.0.1`, breaking their metrics scrape for 38 days. These files are host-level and NOT in git, so nothing detects the drift. **Add a post-upgrade check for bind-address (and any other static-pod customization) to the k8s upgrade runbook.**
+- **A firing alert nobody reads is the same as no alert.** Unlike the 2026-07-31 Velero case (rule never loaded), `TargetDown` worked perfectly here — it fired for 77 days into an inbox nobody checked. Detection and *attention* are separate problems.
+- **Uptime Kuma `/metrics` uses HTTP Basic, not Bearer** — empty username, API key as password. Prometheus `authorization.credentials` sends Bearer and gets 401.
+- **Port numbers drift under correct-looking comments.** argocd repo-server metrics moved 8082 → 8084; the NetworkPolicy comment still said "repo-server" next to 8082. When a scrape times out, verify the port against the live Service, not the comment.
+
+---
 
 ### 2026-07-31: Weekend-reboot prep uncovered a 16-day silent backup failure
 

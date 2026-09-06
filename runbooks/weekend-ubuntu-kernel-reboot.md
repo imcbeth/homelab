@@ -1,6 +1,13 @@
 # Weekend Runbook — Ubuntu updates + kernel reboot cycle
 
-**Target:** apply pending apt updates + roll each node through a reboot for the pending kernel (6.8.0-1057-raspi → 6.8.0-1060-raspi)
+**Target:** apply pending apt updates + roll each node through a reboot onto the latest available raspi kernel
+
+> **Kernel versions in this runbook go stale fast.** As drafted (2026-07-30) the pending kernel was `6.8.0-1060`. By the 2026-09-06 run it was `6.8.0-1064`. Don't hard-code the expected version — check what `apt-get upgrade` actually installs (`ls /boot/vmlinuz-*`) and confirm `uname -r` matches it after reboot.
+>
+> **Progress log:**
+> - 2026-08 (before 09-06): node02, node04 → `6.8.0-1060`
+> - 2026-09-06: control-plane, node01, node03 → `6.8.0-1064`
+> - **Outstanding:** node02 + node04 still on `-1060`, need another pass to converge on `-1064`
 **Estimated wall time:** ~2 hours across all 5 nodes (with observation windows)
 **Drafted:** 2026-07-30
 **Do NOT run on:** Wednesday (chaos-mesh fires 09:00-11:00 UTC)
@@ -79,7 +86,9 @@ echo "  $NODE is Ready"
 
 # --- 6. Verify kernel bumped ---
 ssh -i ~/.ssh/id_ed25519_k8s -o StrictHostKeyChecking=no imcbeth@$IP "uname -r; test -f /var/run/reboot-required && echo 'STILL needs reboot' || echo 'clean'"
-# Expect: 6.8.0-1060-raspi + clean
+# Expect: the kernel apt just installed (check `ls /boot/vmlinuz-*`) + clean
+# NOTE: kubelet's Node.status.nodeInfo.kernelVersion lags a minute or two after
+# reboot — `uname -r` over ssh is authoritative for what's actually running.
 
 # --- 7. Uncordon ---
 kubectl uncordon $NODE
