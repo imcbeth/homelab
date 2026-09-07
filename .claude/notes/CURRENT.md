@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-06 (scrape targets repaired + kernel cycle + Renovate batch of 10)
+**Last Updated:** 2026-09-07 (alert-noise triage — Velero + Trivy; follow-up list opened in TODO.md)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -204,6 +204,34 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-07 (later): Alert-noise triage — Velero + Trivy
+
+Two alerts fixed, and a persistent follow-up list opened in `TODO.md` so the remaining items stop living only in session notes.
+
+**F1 — Velero delayed alert cried wolf 6 days a week (PR #889).** `VeleroBackupDelayed` used a flat 24h threshold against *every* schedule, including `velero-weekly-cluster-resources` (`0 3 * * 0`). A weekly backup is "older than 24h" for ~6 of every 7 days, so it fired continuously **while the backup was succeeding exactly on schedule**. Caught one day after the rule was resurrected from 198 days dormant (PR #848) — which is what makes it serious: this is the specific alert that should have caught the 16-day silent backup outage. Split into `VeleroBackupDelayed` (`velero-daily-.*`, 24h) and `VeleroWeeklyBackupDelayed` (`velero-weekly-.*`, 8d). The daily rule matches positively rather than negating the weekly one, so a newly added schedule surfaces as an un-alerted gap instead of being silently mis-thresholded.
+
+**F2 — Trivy CVE backlog: 51 permanent alerts (PR #890).** `CriticalVulnerabilitiesDetected` used `> 0` at per-workload cardinality → one permanently-firing alert per workload with any critical CVE. "Some critical CVEs exist in upstream base images" is the steady state of any cluster, not an incident; there is no fix to apply and the alert never resolves.
+
+Trivy exposes no `fixed_version` label, so filtering to *actionable* CVEs is impossible from metrics. Replaced with the two things that are actionable:
+
+| Rule | Expression | Alerts |
+|---|---|---|
+| `CriticalVulnerabilitiesIncreased` | 24h delta > 0 | fires on regression — **+13 today** (141→154 from the Renovate image bumps) |
+| `ImageCriticalVulnerabilitiesHigh` | per-image > 10, `for: 6h` | **5** |
+
+**51 permanent → 5 actionable + 1 regression signal.** Threshold of 10 chosen from the measured distribution (selects the 5-image head; excludes the tail of 22 images carrying 1-3 criticals). Both expressions validated against live Prometheus before commit.
+
+**Second noise source found during triage (now F3):** trivy-operator writes one VulnerabilityReport **per ReplicaSet**, and Kubernetes retains old ReplicaSets (`revisionHistoryLimit`, default 10). After three argocd upgrades in one day there were reports for v3.4.5, v3.5.0 and v3.5.2 while only v3.5.2 was running — inflating CVE counts with images that are not deployed.
+
+**Follow-up list now tracked in `TODO.md` → "Active Follow-Ups"** — F1-F10, two done, eight open. It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.* F9 (CPUThrottlingHigh ×7) and F10 (cluster RBAC alerts) are the next noise items to triage.
+
+**Key Gotchas Captured:**
+- **Alert thresholds must match the cadence of what they watch.** A 24h staleness threshold on a weekly job fires 86% of the time. When adding a schedule, add a matching rule — do not let it inherit a threshold meant for a different cadence.
+- **`> 0` is almost never the right threshold for a security-finding alert.** Vulnerability counts are never zero in practice. Alert on *change* (regression) or *outliers*, not on presence.
+- **Fixing a dormant alert is only half the job** — verify its threshold is right for the thing it watches, or you trade silence for noise and end up ignored either way.
+
+---
 
 ### 2026-09-06: Five blind scrape targets repaired + kernel reboot cycle finished
 
