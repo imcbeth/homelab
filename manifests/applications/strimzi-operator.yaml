@@ -22,6 +22,23 @@ spec:
     - repoURL: git@github.com:imcbeth/homelab.git
       targetRevision: HEAD
       ref: values
+  # Chart 1.2.0 renders `properties: {}` at
+  # .spec.versions[0].schema.openAPIV3Schema.properties.status
+  #   .properties.clusterSecurity.properties
+  # The apiserver strips empty `properties` maps when persisting a CRD schema,
+  # so the rendered manifest and the live object can NEVER converge — the app
+  # sits OutOfSync forever and selfHeal retries indefinitely. Same family as
+  # the documented "apiextensions/v1 CRD field defaulting" gotcha
+  # (priority=0, conversion.strategy=None).
+  #
+  # Scoped as tightly as possible: only this CRD, only that one schema node.
+  # A real schema change anywhere else still shows as drift.
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: kafkas.kafka.strimzi.io
+      jqPathExpressions:
+        - '.spec.versions[].schema.openAPIV3Schema.properties.status.properties.clusterSecurity.properties'
   destination:
     server: https://kubernetes.default.svc
     namespace: strimzi-system
