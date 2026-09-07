@@ -519,6 +519,45 @@ Wave   -4: vpa (Vertical Pod Autoscaler)
 
 ---
 
+## 🔁 **Active Follow-Ups** (opened 2026-09-07)
+
+Tracking list for work identified during the 2026-09-06/07 sessions. Update the
+status column as items land; do not delete completed rows — the history is the
+point.
+
+| # | Item | Status | Notes |
+|---|---|---|---|
+| F1 | **Velero delayed-alert cried wolf on the weekly schedule** | ✅ Done 2026-09-07 | PR #889. Flat 24h threshold applied to a weekly cron fired ~6 days out of 7. Split into `VeleroBackupDelayed` (daily, 24h) + `VeleroWeeklyBackupDelayed` (weekly, 8d). |
+| F2 | **Trivy CVE alert backlog — 51 permanent alerts** | ✅ Done 2026-09-07 | PR #890. `> 0` per-workload replaced with `CriticalVulnerabilitiesIncreased` (24h delta) + `ImageCriticalVulnerabilitiesHigh` (per-image > 10). 51 → 5 + a regression signal. |
+| F3 | **Stale VulnerabilityReports for dead ReplicaSets** | ⬜ Open | trivy-operator writes one report per ReplicaSet; k8s keeps old ones (`revisionHistoryLimit`, default 10). After 3 argocd upgrades in a day: reports for v3.4.5, v3.5.0, v3.5.2 with only v3.5.2 running. Decide between lowering `revisionHistoryLimit` cluster-wide vs a GC CronJob. Inflates CVE counts and wastes etcd. |
+| F4 | **`ignoreDeps` audit for wrong dep names** | ⬜ Open | `synology-csi` never matched — Renovate's depName is `synology/synology-csi` (fixed, PR #871). Verify the remaining entries the same way: `registry.k8s.io/ingress-nginx/kube-webhook-certgen`, `golift/unifi-poller`, `velero/velero-plugin-for-aws`. A wrong-named entry is silently ineffective. |
+| F5 | **Flink UI uptime-kuma monitor points at a dead demo** | ⬜ Open | Monitor targets `kafka-to-s3-rest.flink-demo:8081`; the FlinkDeployment `kafka-to-s3` is FAILED and `file-to-kafka` FINISHED, no pods. Either restart the demo or retire the monitor. Currently one of two permanent `UptimeKumaMonitorDown` alerts. |
+| F6 | **UNVR uptime-kuma monitor down** | ⬜ Open | `https://10.0.20.130` — external UniFi Protect hardware, outside the cluster. Confirm whether the device/IP is still valid; retire the monitor if not. Second of the two permanent `UptimeKumaMonitorDown` alerts. |
+| F7 | **Dead-man switch for pvc-ro-remediator** | ⬜ Open | From the 2026-06-21 DR postmortem. Needs to alert if no successful remediator Job has completed in N hours — **via a path that does not depend on Prometheus rule evaluation**, or it shares the failure mode it is meant to catch. Genuinely unsolved; the hard part is the independent path. |
+| F8 | **uptime-kuma image pinned to the 1.x line** | ⬜ Open | Image pinned `1.23.17-debian` while the chart appVersion is now `2.5.0`. Deliberate, but the gap is widening. Decide whether to move to 2.x (breaking changes likely) or document the pin as permanent. |
+| F9 | **CPUThrottlingHigh — 6-7 permanent alerts** | ⬜ Open | Long-standing (oldest ~52d). Not yet triaged. Same class as F2: either the thresholds are wrong for a Pi cluster or the limits genuinely need tuning. Needs a look before it becomes accepted background noise. |
+| F10 | **Cluster RBAC alerts** | ⬜ Open | `CriticalClusterRoleRBACIssues` + `HighClusterRoleRBACIssues` each firing 1x. Trivy RBAC assessment findings, never triaged. Determine whether these are real or expected-for-homelab, then fix or document. |
+
+### Why this list exists
+
+Three separate failures in one week traced to the same root cause: **a
+monitoring control that exists but does not work is worse than none**, because
+it stops anyone looking.
+
+- Velero plugin pinned only by a code comment → Renovate bumped past it → 16 days of silent backup failure
+- `velero-alerts` PrometheusRule missing its `release` label → never loaded in 198 days → the alert that would have caught the above
+- `ignoreDeps: ["synology-csi"]` with the wrong dep name → silently ineffective
+
+And two more traced to the sibling problem: **an alert nobody reads is the same
+as no alert.** `TargetDown` fired correctly for 77 days on two blind scrape
+targets; 51 permanent Trivy alerts and a mis-thresholded Velero alert were
+actively burying it.
+
+F2, F9 and F10 are all instances of the second problem. Working them down is
+what keeps the alert stream trustworthy.
+
+---
+
 ## 📋 **Notes**
 
 - **Resource Constraints:** All implementations must consider the Pi 5 cluster constraints (80GB RAM total, 20 ARM cores)
