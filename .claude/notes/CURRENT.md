@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-07 (alert-noise 66 → 9; 7 dormant rules found, CI-enforced, then audited)
+**Last Updated:** 2026-09-07 (alert-noise 66 → 9; 7 dormant rules fixed + dead-man switch shipped)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -259,7 +259,7 @@ That seventh one is the notable one: **`PVCMountReadOnly` had zero rules loaded 
 
 Rule groups **55 → 71** over the session.
 
-**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F14, nine done, five open. **F13/F7 (a notification path independent of what it watches) is next**, and is the one genuinely hard problem remaining.
+**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F14, ten done, four open (F3 stale VulnerabilityReports, F4 ignoreDeps audit, F5/F6 dead uptime-kuma monitors, F8 uptime-kuma 1.x pin). All four are small and well-scoped; the hard ones are done.
 
 **Immediately after F12, the resurrected rules started firing — and needed tuning (PR #900).** Firing went 10 → 17 as the newly-loaded rules evaluated for the first time. All three new alerts turned out to be threshold or scope bugs rather than real conditions:
 
@@ -280,6 +280,20 @@ Pass 3 found the one real defect. NAS disk temperature was at **46°C against a 
 **That third pass is the transferable bit.** Passes 1 and 2 only prove a rule *can* fire. Only comparing thresholds to live values tells you whether it will fire *at the right time* — and it is the check nobody runs, because a quiet alert looks identical to a correct one.
 
 Firing settled at **9**. F14 fixed 4 alerts total (3 in #900, 1 in #902) and verified the rest sound.
+
+**F7/F13 — dead-man switch for the remediator (PR #904).** The one genuinely hard item on the list, and the difficulty was entirely in the constraint rather than the code.
+
+A watcher must not share a failure mode with what it watches. The remediator guards against iSCSI PVCs going read-only — which disqualifies *every* in-cluster candidate already running, because they all sit on iSCSI PVCs: Prometheus (50Gi — the 2026-06-21 casualty), Uptime Kuma (2Gi), Grafana (5Gi), Loki (20Gi). Any of them would have shared exactly the failure being guarded against.
+
+The solution is a CronJob with **no volumes at all**. Its full dependency set is K8s API + DNS + SMTP. It reads the remediator's Job history and emails directly via curl's `smtps` support, reusing AlertManager's existing credentials. Runs in `default` because the SMTP Secret lives there (Secrets are not cross-namespace) and that namespace already permits 587/465 egress; a Role/RoleBinding in `synology-csi` grants read-only Job access.
+
+One placement trap worth recording: it had to go in the **kube-prometheus-stack** kustomization, not synology-csi's, because that one sets `namespace: synology-csi` and would have silently rewritten the resources that must stay in `default` — breaking the Secret reference. Exactly the namespace-transformer gotcha already in REFERENCE.md, caught before merge this time by checking `kustomize build` output.
+
+Detection window: no successful remediator Job within 60 minutes (a 30× margin on its 2-minute cadence), plus explicit reporting if the CronJob is suspended or missing. Runs every 6h, bounding "silently dead" to **6 hours instead of 16 days**.
+
+**Tested all three paths live**, because an untested notification path is precisely the failure being fixed: healthy (silent), failure (detected both the missing CronJob and the absent Jobs), and a real SMTP send that delivered.
+
+**Stated limits, in the manifest as well as here:** it does not catch total cluster loss, and nothing watches the deadman itself. That regress cannot be closed from inside the cluster — whatever watches last is unwatched. The only honest response is to make that final component as small and dependency-free as possible, which is what it is: no PVC, no Prometheus, no AlertManager, ~30 lines of shell.
 
 **Reflection on the week's pattern.** Every fix this session was the same shape: something existed, looked correct, and did nothing. A pin that was a comment. An `ignoreDeps` entry with the wrong name. Seven PrometheusRules without a label. An alert threshold matched to the wrong cadence. The lesson that keeps repeating is that **creation is not activation** — for anything safety-relevant, verify the runtime effect, not the object. It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.*
 
