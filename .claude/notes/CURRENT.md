@@ -276,7 +276,27 @@ Fixed in **PR #871** (added correctly-namespaced entry); **#858 closed**. The CS
 
 **The Renovate treadmill — root cause identified.** `renovate.json` sets `prConcurrentLimit: 10` with schedule `after 6am and before 9pm on saturday and sunday` (America/Vancouver). **Renovate refills the open-PR queue back to 10 as fast as it is drained, for the whole weekend window.** That is why each batch spawned another: wave 1 (#850–859) → wave 2 (#864–874) → wave 3 (#876–882), all within ~3 hours on a Sunday. It is not an endless backlog appearing from nowhere; it is a metered queue being continuously refilled. **Applying batches inside the active window is a losing game** — better to work them after the window closes (Mon–Fri), when the queue is static.
 
-**Third wave left open (#876–#882)** — alertmanager v0.34.0, monitoring stack (minor), uptime-kuma v4.2.0, trivy-operator v0.36.0, strimzi 1.2.0, metrics-server 3.14.0, alpine/k8s v1.37.0. Deliberately NOT applied: (a) kps has already moved 87→89→90 in one session and `#881 monitoring stack (minor)` would likely be a fourth monitoring change; (b) `#880 uptime-kuma v4.2.0` lands right on top of today's metrics-auth fix (PR #861) and deserves isolated verification that `basicAuth` still works after the chart bump.
+**Third wave applied 2026-09-07 (Monday, window closed — queue static as predicted): all 10 merged, 0 closed.**
+
+| Tier | PRs | Change |
+|---|---|---|
+| 1 | #876 alpine/k8s 1.37.0 (remediator) · #877 metrics-server 3.14.0 · #881 alloy 1.12.1 + loki 7.3.0 · #882 alertmanager v0.34.0 · #884 prometheus v3.14.0 | clean |
+| 2 | #878 strimzi 1.2.0 · #879 trivy-operator 0.36.0 · #880 uptime-kuma 4.2.0 | pre-flighted |
+| 2 — MAJOR | #885 argo-workflows 1.1.1 → **2.0.4** (v4.1.2) · #886 vpa 4.12.5 → **5.0.1** (v1.7.1) | pre-flighted, applied one at a time |
+
+**Corrections to yesterday's triage — both my calls were wrong:**
+- I flagged `#881 monitoring stack (minor)` as possibly a 4th kps change. It is **alloy + loki**, not kps.
+- I flagged `#878 strimzi` against the "minor bumps drop Kafka versions" gotcha. Checked the actual support matrix: **1.1.0 supports 4.2.0/4.2.1/4.3.0; 1.2.0 supports those plus 4.3.1** — it *adds* a version and drops nothing. Our pinned 4.2.1 was never at risk. The first read came from a truncated `STRIMZI_KAFKA_IMAGES` env dump showing only the first line.
+
+**Both majors were benign, and pre-flight is what proved it:** argo-workflows v2 → appVersion v4.1.0 → v4.1.2 (patch on the app), vpa v5 → 1.6.0 → 1.7.1. All four Tier 2 charts rendered clean against our real values files. Verified after: all 5 CronWorkflows/WorkflowTemplates survived the argo-workflows major (`cluster-healthcheck` ran today 12:00 UTC), all 7 VPA objects still producing recommendations.
+
+**uptime-kuma (#880) — the one that needed care — was a no-op for the running app.** Our values pin `tag: "1.23.17-debian"`, so the chart bump changed templates only and the pod never restarted (chart appVersion is 2.5.0; **we are deliberately on the 1.x image line**). Confirmed the Service still exposes a port named `http` and the ServiceMonitor still uses `basicAuth`; target stayed `up` with 15 monitors reporting. Yesterday's PR #861 fix is intact.
+
+**One real problem surfaced: un-convergeable CRD drift (PR #887).** After the strimzi bump the app sat permanently `OutOfSync` on a single line — chart 1.2.0 renders `properties: {}` at `.spec.versions[0].schema.openAPIV3Schema.properties.status.properties.clusterSecurity.properties`, and the apiserver **strips empty `properties` maps** when persisting CRD schemas. Desired and live can never converge, so selfHeal retries forever. Distinct from ordinary chart-label drift (which selfHeal clears in 30-60s, verified 2026-07-12). Fixed with a tightly-scoped `ignoreDifferences` on that one CRD + that one node. Kafka was unaffected throughout (`kafka-cluster` Ready on 4.2.1, both pods Running).
+
+**Timing recommendation validated.** Working the queue on Monday with the window closed meant it stayed static at 10 and drained to **zero** — versus Sunday, where three waves appeared in ~3 hours because `prConcurrentLimit: 10` refills continuously inside the window.
+
+**Superseded note — third wave WAS applied:** the deferral reasoning above was recorded on 2026-09-06; all of it was applied the next day (Monday) once the Renovate window closed.
 
 **Open loose ends:**
 - 10 open Renovate PRs (#850-#859) deliberately left unmerged so reboot issues wouldn't be conflated with upgrade issues.
