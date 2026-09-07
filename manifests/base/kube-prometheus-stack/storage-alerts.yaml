@@ -226,7 +226,11 @@ spec:
           4. Review system logs for disk errors
 
     - alert: SynologyDiskTemperatureHigh
-      expr: diskTemperature{job="snmp-synology"} > 50
+      # Scoped to spinning disks. M.2/NVMe runs hotter by design (46C observed
+      # vs 34-38C for the HDDs) and would trip an HDD threshold spuriously —
+      # only 4C of headroom before this fix. See SynologyNVMeTemperatureHigh
+      # below for the NVMe equivalent.
+      expr: diskTemperature{job="snmp-synology",diskID!~"M\\.2.*"} > 50
       for: 10m
       labels:
         severity: warning
@@ -247,7 +251,7 @@ spec:
           3. Ensure adequate airflow around NAS
 
     - alert: SynologyDiskTemperatureCritical
-      expr: diskTemperature{job="snmp-synology"} > 60
+      expr: diskTemperature{job="snmp-synology",diskID!~"M\\.2.*"} > 60
       for: 5m
       labels:
         severity: critical
@@ -265,6 +269,33 @@ spec:
           3. Consider shutting down NAS if temperature continues rising
           4. Check for blocked ventilation
 
+
+    # NVMe/M.2 thermal limits are higher than HDD by design. Typical NVMe
+    # throttles around 70C and is rated to ~85C, so 60/70 gives real warning
+    # without the false positives an HDD threshold produces at 46C idle.
+    - alert: SynologyNVMeTemperatureHigh
+      expr: diskTemperature{job="snmp-synology",diskID=~"M\\.2.*"} > 60
+      for: 10m
+      labels:
+        severity: warning
+        component: storage
+      annotations:
+        summary: "Synology NVMe {{ $labels.diskID }} at {{ $value }}C"
+        description: |
+          NVMe drive {{ $labels.diskID }} is running warm. Typical NVMe
+          throttles near 70C. Check NAS airflow and ambient temperature.
+
+    - alert: SynologyNVMeTemperatureCritical
+      expr: diskTemperature{job="snmp-synology",diskID=~"M\\.2.*"} > 70
+      for: 5m
+      labels:
+        severity: critical
+        component: storage
+      annotations:
+        summary: "Synology NVMe {{ $labels.diskID }} CRITICAL at {{ $value }}C"
+        description: |
+          NVMe drive {{ $labels.diskID }} is at or past its throttling point.
+          Expect degraded IOPS for every iSCSI-backed PVC on this NAS.
     - alert: SynologyRAIDDegraded
       expr: raidStatus{job="snmp-synology"} != 1
       for: 5m
