@@ -118,7 +118,7 @@ spec:
         - alert: NodeNetworkInterfaceDown
           expr: |
             node_network_up{
-              device!~"lo|cali.*|tunl.*|vxlan.*|veth.*|docker.*"
+              device!~"lo|cali.*|tunl.*|vxlan.*|veth.*|docker.*|wlan.*"
             } == 0
           for: 2m
           labels:
