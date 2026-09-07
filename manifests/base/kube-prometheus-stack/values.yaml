@@ -440,7 +440,7 @@ alertmanager:
     image:
       registry: quay.io
       repository: prometheus/alertmanager
-      tag: v0.33.1
+      tag: v0.34.0
       sha: ""
       pullPolicy: IfNotPresent
     useExistingSecret: false
