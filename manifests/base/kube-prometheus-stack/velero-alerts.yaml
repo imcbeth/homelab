@@ -60,17 +60,56 @@ spec:
           2. kubectl get schedule -n velero
           3. kubectl logs -n velero -l app.kubernetes.io/name=velero
 
+    # Thresholds are PER-SCHEDULE CADENCE. A single flat 24h threshold fired
+    # on velero-weekly-cluster-resources (cron `0 3 * * 0`) for ~6 of every
+    # 7 days — the backup had succeeded on schedule, the threshold was just
+    # wrong for a weekly cadence. Caught 2026-09-07, one day after this rule
+    # was resurrected from 198 days dormant (see PR #848).
+    #
+    # That matters more than the false positive itself: VeleroBackupDelayed
+    # is the alert that should have caught the 16-day silent backup outage.
+    # An alert that cries wolf 6 days a week trains people to ignore it,
+    # which recreates the original failure by a different route.
+    #
+    # If you add a schedule, add a matching rule here — the daily rule
+    # deliberately matches only `velero-daily-.*` so a new schedule shows up
+    # as an un-alerted gap rather than being silently mis-thresholded.
     - alert: VeleroBackupDelayed
-      expr: time() - velero_backup_last_successful_timestamp > 86400
+      expr: |
+        time() - velero_backup_last_successful_timestamp{schedule=~"velero-daily-.*"} > 86400
       for: 1h
       labels:
         severity: critical
         component: backup
       annotations:
-        summary: "No successful Velero backup in 24 hours"
+        summary: "No successful Velero backup in 24 hours (daily schedule)"
         description: |
-          No successful backup for schedule {{ $labels.schedule }} in 24+ hours.
+          No successful backup for DAILY schedule {{ $labels.schedule }} in 24+ hours.
           Last successful backup was more than 24 hours ago.
+
+          NOTE: This alert only fires when at least one successful backup has occurred.
+          If the metric is absent, see VeleroBackupMetricAbsent.
+
+          Troubleshooting:
+          1. kubectl get schedule {{ $labels.schedule }} -n velero
+          2. kubectl get backups -n velero
+          3. kubectl get pods -n velero
+
+    # Weekly cadence: 8 days = the 7-day interval plus a day of slack, so a
+    # single missed run alerts but an on-time run never does.
+    - alert: VeleroWeeklyBackupDelayed
+      expr: |
+        time() - velero_backup_last_successful_timestamp{schedule=~"velero-weekly-.*"} > 691200
+      for: 1h
+      labels:
+        severity: critical
+        component: backup
+      annotations:
+        summary: "No successful Velero backup in 8 days (weekly schedule)"
+        description: |
+          No successful backup for WEEKLY schedule {{ $labels.schedule }} in 8+ days.
+          The weekly schedule runs Sundays 03:00; 8 days means at least one
+          run was missed entirely.
 
           NOTE: This alert only fires when at least one successful backup has occurred.
           If the metric is absent (no backups configured or completed), see VeleroBackupMetricAbsent alert.
