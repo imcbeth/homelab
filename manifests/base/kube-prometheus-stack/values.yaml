@@ -192,7 +192,25 @@ defaultRules:
   runbookUrl: "https://runbooks.prometheus-operator.dev/runbooks"
   node:
     fsSelector: 'fstype!=""'
-  disabled: {}
+  disabled:
+    # Replaced by CPUThrottlingHighSaturated in pi-cluster-alerts.yaml.
+    #
+    # The upstream rule is throttled_periods / total_periods > 25%, with no
+    # reference to whether the container is actually resource-starved. On a
+    # Pi cluster that makes it fire permanently on burst-then-idle agents.
+    #
+    # Measured 2026-09-07 (F9): node-exporter, unifi-poller and the Grafana
+    # dashboard sidecar were throttled 51-78% of periods while using 3-15%
+    # of their CPU limits, for ~52 days. Raising limits (PR #894) cut
+    # node-exporter scrape time 801ms -> 205ms but only moved throttling
+    # 51% -> 29%, because the burst is INSTANTANEOUS: CFS accounts per
+    # 100ms period, so a process wanting a full core for a few ms throttles
+    # no matter how large the quota. Clearing 25% would need a ~1000m limit
+    # on a process averaging 14m.
+    #
+    # Conclusion: throttle percentage alone is a poor proxy for harm. The
+    # replacement requires high throttling AND high utilization.
+    CPUThrottlingHigh: true
 additionalPrometheusRulesMap: {}
 global:
   rbac:
