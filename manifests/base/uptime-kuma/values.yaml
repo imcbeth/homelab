@@ -1,11 +1,28 @@
 # Uptime Kuma Helm values
-# Chart: uptime-kuma/uptime-kuma v2.25.0 (app v1.23.17)
+# Chart: uptime-kuma/uptime-kuma v4.2.0 (app v2.5.0)
 # Cluster: 5x Raspberry Pi 5 (ARM64)
 # URL: https://status.k8s.n37.ca
 
+# Migrated 1.23.17 -> 2.5.3 on 2026-09-07.
+#
+# NOTE ON THE TAG SHAPE: 1.x used a `-debian` suffix; 2.x DROPPED it. The
+# unsuffixed tag is the Debian build, `-slim` is the smaller one. Writing
+# "2.5.3-debian" here yields an ImagePullBackOff, not a helpful error.
+#
+# The unsuffixed image runs as root, matching 1.x. The `-rootless` variants
+# run as uid 1000 and CANNOT write this PVC, whose files are root-owned
+# (root:root 755) — switching to rootless needs a chown first.
+#
+# The 2.x upgrade rewrites the SQLite schema in place and is ONE-WAY: a
+# migrated DB cannot be opened by 1.x. Rollback is restore-from-backup only.
+# Pre-migration artifacts (2026-09-07, verified `pragma integrity_check` ok,
+# 14 monitors / 1,950,531 heartbeats):
+#   - /app/data/pre2x.db on this PVC (instant in-place rollback)
+#   - ~/backups/uptime-kuma/kuma-pre2x-20260907.db.gz (off-cluster)
+#   - Velero: uptime-kuma is now in velero-daily-critical-pvcs (PR #907)
 image:
   repository: docker.io/louislam/uptime-kuma
-  tag: "1.23.17-debian"
+  tag: "2.5.3"
 
 # Deployment (not StatefulSet) with Recreate strategy — RWO iSCSI PVC
 useDeploy: true
@@ -40,7 +57,16 @@ volume:
 # Mount path /app/data per chart default.
 livenessProbe:
   enabled: true
-  initialDelaySeconds: 180
+  # RAISED 180 -> 900 FOR THE 2.x MIGRATION (2026-09-07). Uptime Kuma runs its
+  # schema migration on first start, against 1.95M heartbeat rows on an iSCSI
+  # PVC. At the old 180s + 3x30s the kubelet would kill the container roughly
+  # 270s in — mid-migration, on a half-rewritten SQLite file. That is the one
+  # way this upgrade turns into actual data loss rather than a failed start.
+  #
+  # Lower this back to 180 once the migration has completed and the pod has
+  # been stable through a restart; 900s is too slow to catch a wedged pod as a
+  # steady-state setting.
+  initialDelaySeconds: 900
   periodSeconds: 30
   failureThreshold: 3
   timeoutSeconds: 5
