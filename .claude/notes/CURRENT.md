@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-07 (alert-noise 66 → 9; 7 dormant rules fixed + dead-man switch shipped)
+**Last Updated:** 2026-09-07 (follow-up list worked to completion: 12 closed, 2 need you, 1 new)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -259,7 +259,7 @@ That seventh one is the notable one: **`PVCMountReadOnly` had zero rules loaded 
 
 Rule groups **55 → 71** over the session.
 
-**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F14, ten done, four open (F3 stale VulnerabilityReports, F4 ignoreDeps audit, F5/F6 dead uptime-kuma monitors, F8 uptime-kuma 1.x pin). All four are small and well-scoped; the hard ones are done.
+**Follow-up list in `TODO.md` → "Active Follow-Ups"** — **F1-F15: 12 resolved, 2 awaiting your decision (F5 needs a UI click; F8 needs a change window), 1 newly opened (F15).** Nothing is blocked on further investigation.
 
 **Immediately after F12, the resurrected rules started firing — and needed tuning (PR #900).** Firing went 10 → 17 as the newly-loaded rules evaluated for the first time. All three new alerts turned out to be threshold or scope bugs rather than real conditions:
 
@@ -294,6 +294,19 @@ Detection window: no successful remediator Job within 60 minutes (a 30× margin 
 **Tested all three paths live**, because an untested notification path is precisely the failure being fixed: healthy (silent), failure (detected both the missing CronJob and the absent Jobs), and a real SMTP send that delivered.
 
 **Stated limits, in the manifest as well as here:** it does not catch total cluster loss, and nothing watches the deadman itself. That regress cannot be closed from inside the cluster — whatever watches last is unwatched. The only honest response is to make that final component as small and dependency-free as possible, which is what it is: no PVC, no Prometheus, no AlertManager, ~30 lines of shell.
+
+**Worked the remaining four (F3, F4, F5, F6, F8) to completion.** Three closed on evidence, two deliberately handed back.
+
+- **F4 — verified clean, no change needed.** Checked the three remaining `ignoreDeps` entries against the depNames Renovate actually uses, read out of its own PR titles: all three match exactly, and none has had a PR opened since its ignore landed. The synology failure was specifically a *bare name vs full image path* problem; none of the others has that shape.
+- **F6 — resolved itself.** UNVR is UP; the monitor targets `10.0.20.131` and the device had simply moved from `.130`. A stale IP, not a dead device. 14 of 15 monitors green.
+- **F3 — closed with no fix, because my original framing was overstated.** I opened it claiming stale reports "inflate CVE counts". Measured: only **12 of 111** reports point at dead ReplicaSets, and the alerting harm self-corrects — the stale `argocd:v3.4.5`/`v3.5.0` entries aged out unaided, and all four images currently matching the outlier alert are verified running. What remains is 311 dead ReplicaSet objects (median 138d), which is modest etcd usage and does not justify changing `revisionHistoryLimit` across many Helm charts. Closed as measured-and-deprioritised rather than fixed.
+
+**Two I chose not to decide unilaterally:**
+
+- **F5 — cannot be fixed via GitOps.** Diagnosis is complete: `kafka-to-s3` is FAILED, `file-to-kafka` FINISHED, 0 pods, and the target Service only exists while a job runs — the monitor watches a *batch demo* as if it were a service, so it is simply the wrong monitor. But **uptime-kuma monitors live in its SQLite DB, not git**, and 1.x has no REST API for monitor CRUD. It needs a UI action: pause or delete the "Flink UI" monitor.
+- **F8 — a real decision, not a tidy-up.** Moving uptime-kuma 1.23.17 → 2.x is a major upgrade carrying a **data migration** (monitors, history and settings all live on the PVC). That is not something to do as a side effect of clearing a follow-up list. Recommendation is to migrate eventually, since 1.23.x gets no fixes, but on its own change window with a fresh backup and tested rollback.
+
+**F15 opened, surfaced by F5:** the uptime-kuma monitor set is the one significant piece of cluster configuration not under version control. Velero does back up the PVC so it is recoverable, but monitors cannot be reviewed or changed via GitOps and drift is invisible.
 
 **Reflection on the week's pattern.** Every fix this session was the same shape: something existed, looked correct, and did nothing. A pin that was a comment. An `ignoreDeps` entry with the wrong name. Seven PrometheusRules without a label. An alert threshold matched to the wrong cadence. The lesson that keeps repeating is that **creation is not activation** — for anything safety-relevant, verify the runtime effect, not the object. It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.*
 
