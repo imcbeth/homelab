@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-07 (alert-noise triage 66 → 10; SEVEN dormant PrometheusRules found + CI enforcement)
+**Last Updated:** 2026-09-07 (alert-noise 66 → 9; 7 dormant rules found, CI-enforced, then audited)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -259,7 +259,7 @@ That seventh one is the notable one: **`PVCMountReadOnly` had zero rules loaded 
 
 Rule groups **55 → 71** over the session.
 
-**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F14, seven done, seven open. **F14 (audit the never-validated rules) is next**; F13/F7 (a notification path independent of what it watches) remains the one genuinely hard problem on the list.
+**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F14, nine done, five open. **F13/F7 (a notification path independent of what it watches) is next**, and is the one genuinely hard problem remaining.
 
 **Immediately after F12, the resurrected rules started firing — and needed tuning (PR #900).** Firing went 10 → 17 as the newly-loaded rules evaluated for the first time. All three new alerts turned out to be threshold or scope bugs rather than real conditions:
 
@@ -268,6 +268,18 @@ Rule groups **55 → 71** over the session.
 - `NodeNetworkInterfaceDown` fired 5× on **wlan0** — the Pi onboard WiFi, deliberately unused on a wired cluster. Added `wlan.*` to the exclusion list.
 
 Back to 10 firing. These were not alerts I silenced: **they were never correct, and nobody could know because they had never run.** That generalises — **F14** is now open to audit the rest of the rules #896 resurrected, since none of them has ever been validated against real data.
+
+**F14 — audited the resurrected rules (PRs #900 + #902).** Sixteen rule groups had just come online having never evaluated once, so none had ever been checked against reality. Audited all six files in three passes, cheapest first:
+
+1. **Rule health** via `/api/v1/rules` — 0 errors.
+2. **Selector reality** — every referenced metric exists *and* its specific label selector returns series. All sound: `PiNodeUndervoltage` matches 5 series (all 0 — no undervoltage), the SLO framework has 5 targets reporting 99.99% availability, blackbox has 15 probe series and 6 cert-expiry series.
+3. **Threshold headroom** — compare each threshold against the metric's *current* value.
+
+Pass 3 found the one real defect. NAS disk temperature was at **46°C against a 50°C threshold** — 4°C of headroom, far too tight to be right. The 46°C turned out to be the **M.2 NVMe**, while the four spinning disks sit at 34-38°C: a threshold written for HDDs was being applied to every device, and NVMe simply runs hotter (throttles near 70°C, rated ~85°C). Split on the `diskID` label into `SynologyDiskTemperature*` (HDD, 50/60) and `SynologyNVMeTemperature*` (NVMe, 60/70).
+
+**That third pass is the transferable bit.** Passes 1 and 2 only prove a rule *can* fire. Only comparing thresholds to live values tells you whether it will fire *at the right time* — and it is the check nobody runs, because a quiet alert looks identical to a correct one.
+
+Firing settled at **9**. F14 fixed 4 alerts total (3 in #900, 1 in #902) and verified the rest sound.
 
 **Reflection on the week's pattern.** Every fix this session was the same shape: something existed, looked correct, and did nothing. A pin that was a comment. An `ignoreDeps` entry with the wrong name. Seven PrometheusRules without a label. An alert threshold matched to the wrong cadence. The lesson that keeps repeating is that **creation is not activation** — for anything safety-relevant, verify the runtime effect, not the object. It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.*
 
