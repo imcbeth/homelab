@@ -242,11 +242,20 @@ schedules:
     useOwnerReferencesInBackup: false
     template:
       ttl: "720h"  # 30 days retention
+      # Every namespace holding a PVC whose loss would cost real data must be
+      # listed here. Membership is NOT automatic — a namespace with a PVC that
+      # is missing from this list is silently unprotected, and nothing alerts
+      # on the omission. Verified 2026-09-07: uptime-kuma had a 5Gi iSCSI PVC
+      # (135 days old, 14 monitors, 1.95M heartbeats) that had never once been
+      # backed up, because it was never added here. Its StorageClass is
+      # synology-iscsi-DELETE, so there was no reclaim-policy safety net
+      # either. Cross-check with: kubectl get pvc -A
       includedNamespaces:
         - default      # Prometheus, Grafana
         - loki         # Loki
         - trivy-system # Trivy vulnerability DB
         - falco        # Falco Sidekick Redis
+        - uptime-kuma  # Uptime Kuma SQLite DB (monitors + heartbeat history)
       includeClusterResources: false
       defaultVolumesToFsBackup: false  # Disabled: Use CSI snapshots only (faster, more efficient)
       snapshotVolumes: true            # Use CSI volume snapshots via Synology CSI

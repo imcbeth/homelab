@@ -119,6 +119,51 @@ spec:
           2. kubectl get backups -n velero
           3. kubectl get pods -n velero
 
+    # Backup COVERAGE, as distinct from backup success. Every alert above this
+    # one answers "did the backups we configured run?" — none of them answers
+    # "are the backups we configured pointed at everything that matters?"
+    #
+    # Found 2026-09-07: uptime-kuma held a 135-day-old 5Gi iSCSI PVC (14
+    # monitors, 1.95M heartbeats) that had never been backed up, because its
+    # namespace was simply never added to velero-daily-critical-pvcs. Every
+    # backup reported Completed the whole time. Nothing was wrong with Velero;
+    # the PVC was just outside its scope, and no signal existed for that.
+    #
+    # Deliberately-unprotected namespaces are listed in the exclusion below so
+    # this stays silent until something genuinely new appears. Adding a
+    # namespace to the schedule means adding it here too — a coupled edit, and
+    # an intentional one: it forces a decision about whether new stateful
+    # workloads are worth protecting, rather than defaulting to silence.
+    - alert: PVCNotCoveredByBackup
+      expr: |
+        kube_persistentvolumeclaim_info{
+          namespace!~"default|loki|trivy-system|falco|uptime-kuma|localstack|tempo|zot"
+        }
+      for: 6h
+      labels:
+        severity: warning
+        component: backup
+      annotations:
+        summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is in no backup schedule"
+        description: |
+          A PersistentVolumeClaim exists in a namespace that no Velero
+          schedule covers, so its data is NOT being backed up. Backups will
+          continue reporting success — this PVC is simply outside their scope.
+
+          Decide which of these applies, then act:
+
+          1. The data matters → add {{ $labels.namespace }} to
+             includedNamespaces in velero-daily-critical-pvcs
+             (manifests/base/velero/values.yaml).
+          2. The data is disposable/regenerable → add the namespace to this
+             alert's exclusion list with a comment saying why.
+
+          Deliberately excluded today: localstack (test S3 emulator,
+          disposable), tempo (short-TTL traces, regenerable), zot (50Gi,
+          mostly pull-through cache that repopulates from upstream).
+
+          `for: 6h` so short-lived PVCs from restore tests and CI do not fire.
+
     - alert: VeleroBackupDurationHigh
       expr: velero_backup_duration_seconds > 1800
       for: 5m
