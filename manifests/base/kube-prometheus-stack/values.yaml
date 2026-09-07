@@ -591,12 +591,16 @@ grafana:
     create: true
     autoMount: true
   sidecar:
+    # CPU limit raised 100m -> 200m on 2026-09-07. The sidecar averages ~3m
+    # but bursts when reconciling dashboard ConfigMaps; at 100m it was
+    # throttled on 78% of periods — the worst offender in the cluster (F9).
+    # Burst ceiling only; requests unchanged.
     resources:
       requests:
         cpu: 10m
         memory: 128Mi
       limits:
-        cpu: 100m
+        cpu: 200m
         memory: 256Mi
     dashboards:
       enabled: true
@@ -990,13 +994,23 @@ prometheus-node-exporter:
   releaseLabel: true
   hostNetwork: false
   hostPID: true
-  # Resource limits for node-exporter (actual usage ~25Mi per node)
+  # Resource limits for node-exporter (actual usage ~25Mi, ~15m CPU per node)
+  #
+  # CPU limit raised 100m -> 300m on 2026-09-07. node-exporter averages only
+  # ~15m but reads all of /proc in a burst on each scrape. With a 100m limit
+  # the CFS quota is 10ms per 100ms period, so those bursts were throttled on
+  # 51% of periods (CPUThrottlingHigh, F9). Scrapes still completed in
+  # 500-1000ms against a 10s timeout, so nothing was breaking — but the
+  # throttling was real and the alert was correct to flag it.
+  #
+  # This is a LIMIT (burst ceiling), not a request: nothing extra is reserved
+  # and scheduling is unaffected. Requests stay at 10m.
   resources:
     requests:
       cpu: 10m
       memory: 32Mi
     limits:
-      cpu: 100m
+      cpu: 300m
       memory: 64Mi
   extraArgs:
     - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/containerd/.+|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
