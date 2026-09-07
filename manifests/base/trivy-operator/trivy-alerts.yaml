@@ -14,7 +14,21 @@ spec:
   - name: trivy_rbac_security
     interval: 60s
     rules:
-    # Critical RBAC issues on ClusterRoles
+    # Critical RBAC issues on ClusterRoles — AGGREGATE ONLY.
+    #
+    # A second rule (`HighRiskRBACPermissions`, group trivy_rbac_assessment)
+    # used the same metric WITHOUT aggregation:
+    #   trivy_clusterrole_clusterrbacassessments{severity="Critical"} > 0
+    # That produced 51 per-ClusterRole alerts alongside this one aggregate —
+    # the identical signal counted twice, at two cardinalities. Removed
+    # 2026-09-07; this rule carries the same information in one alert.
+    #
+    # On the findings themselves: they are real Trivy KSV checks, but largely
+    # inherent rather than fixable. The 67 failing CRITICAL checks are
+    # dominated by KSV041 (can manage secrets, 38x) and KSV046 (can manage
+    # all resources, 15x) against operator ClusterRoles — ArgoCD, Gatekeeper,
+    # Velero and friends legitimately need those grants to function.
+    # Treat this alert as a "did the count change" signal, not a work queue.
     - alert: CriticalClusterRoleRBACIssues
       expr: sum(trivy_clusterrole_clusterrbacassessments{severity="Critical"}) > 0
       for: 10m
@@ -24,8 +38,17 @@ spec:
         summary: "Critical RBAC issues detected in ClusterRoles"
         description: |
           {{ $value }} ClusterRoles have CRITICAL RBAC security issues.
-          Review ClusterRbacAssessmentReports for details.
-          These may indicate overly permissive roles.
+
+          Mostly inherent to operators that need broad grants (KSV041 manage
+          secrets, KSV046 manage all resources). Investigate when the COUNT
+          CHANGES, not on every evaluation.
+
+          List the failing checks:
+            kubectl get clusterrbacassessmentreports -o json | jq -r '
+              .items[] | .metadata.name as $n
+              | .report.checks[]
+              | select(.severity=="CRITICAL" and .success==false)
+              | "\($n) \(.checkID) \(.title)"'
 
     - alert: HighClusterRoleRBACIssues
       expr: sum(trivy_clusterrole_clusterrbacassessments{severity="High"}) > 10
@@ -141,21 +164,6 @@ spec:
           Critical configuration issues found in {{ $labels.resource_kind }}/{{ $labels.resource_name }}.
           Namespace: {{ $labels.namespace }}
           Review and remediate configuration audit findings.
-
-  - name: trivy_rbac_assessment
-    interval: 60s
-    rules:
-    # RBAC permission alerts
-    - alert: HighRiskRBACPermissions
-      expr: trivy_clusterrole_clusterrbacassessments{severity="Critical"} > 0
-      for: 1h
-      labels:
-        severity: warning
-      annotations:
-        summary: "High-risk RBAC permissions detected in {{ $labels.resource_name }}"
-        description: |
-          ClusterRole {{ $labels.resource_name }} has {{ $value }} critical RBAC issues.
-          Review the role's permissions and apply principle of least privilege.
 
   - name: trivy_exposed_secrets
     interval: 60s
