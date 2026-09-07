@@ -535,8 +535,21 @@ point.
 | F6 | **UNVR uptime-kuma monitor down** | ⬜ Open | `https://10.0.20.130` — external UniFi Protect hardware, outside the cluster. Confirm whether the device/IP is still valid; retire the monitor if not. Second of the two permanent `UptimeKumaMonitorDown` alerts. |
 | F7 | **Dead-man switch for pvc-ro-remediator** | ⬜ Open | From the 2026-06-21 DR postmortem. Needs to alert if no successful remediator Job has completed in N hours — **via a path that does not depend on Prometheus rule evaluation**, or it shares the failure mode it is meant to catch. Genuinely unsolved; the hard part is the independent path. |
 | F8 | **uptime-kuma image pinned to the 1.x line** | ⬜ Open | Image pinned `1.23.17-debian` while the chart appVersion is now `2.5.0`. Deliberate, but the gap is widening. Decide whether to move to 2.x (breaking changes likely) or document the pin as permanent. |
-| F9 | **CPUThrottlingHigh — 6-7 permanent alerts** | ⬜ Open | Long-standing (oldest ~52d). Not yet triaged. Same class as F2: either the thresholds are wrong for a Pi cluster or the limits genuinely need tuning. Needs a look before it becomes accepted background noise. |
-| F10 | **Cluster RBAC alerts** | ⬜ Open | `CriticalClusterRoleRBACIssues` + `HighClusterRoleRBACIssues` each firing 1x. Trivy RBAC assessment findings, never triaged. Determine whether these are real or expected-for-homelab, then fix or document. |
+| F9 | **CPUThrottlingHigh — 7 permanent alerts** | ⬜ Open | **Next up.** Long-standing (oldest ~52d). Same class as F2/F10: either the threshold is wrong for a Pi cluster or the limits genuinely need tuning. Now the single largest remaining noise source. |
+| F10 | **Cluster RBAC alerts** | ✅ Done 2026-09-07 | PR #892. Scope was larger than first catalogued: `HighRiskRBACPermissions` returned at **51x** once Trivy scans finished re-running post-reboot. It was the un-aggregated twin of `CriticalClusterRoleRBACIssues` — same metric, same condition, 52 alerts for one thing. Dropped the per-series rule. Findings are real but inherent (KSV041 manage-secrets 38x, KSV046 manage-all-resources 15x on operator ClusterRoles); surviving alert documented as a "did the count change" signal. |
+
+### Alert-noise scorecard
+
+Progress on the noise problem, measured as total firing alerts:
+
+| Point in time | Firing | Change |
+|---|---|---|
+| Start of triage (2026-09-07) | 66 | — |
+| After F1 (Velero cadence split, PR #889) | 65 | −1 permanent false positive |
+| After F2 (CVE alert redesign, PR #890) | 66* | 51 CVE alerts removed; 51 RBAC alerts surfaced as scans completed |
+| After F10 (RBAC dedup, PR #892) | **21** | −51 duplicates |
+
+\* the CVE fix landed as Trivy's post-reboot re-scan was still completing, so the RBAC alerts appeared in the same window. Net effect of the three fixes: **66 → 21**, and the survivors are either genuine (`CriticalVulnerabilitiesIncreased` correctly caught today's +13) or known-open items on this list.
 
 ### Why this list exists
 
