@@ -538,7 +538,7 @@ point.
 | F9 | **CPUThrottlingHigh — 7 permanent alerts** | ✅ Done 2026-09-07 | PRs #894 + #895. Measured first: containers throttled 51-78% while using **3-15%** of their CPU limits. Raised burst ceilings (#894) — real win, node-exporter scrape **801ms → 205ms** — but throttling only fell 51%→29% because the burst is *instantaneous* (CFS accounts per 100ms period; clearing 25% would need ~1000m on a process averaging 14m). So the rule was the problem: disabled upstream `CPUThrottlingHigh`, added `CPUThrottlingHighSaturated` requiring throttling >25% **AND** utilization >50% (#895). Validated: 0 matches, correct — most-utilized container is tempo at 34.7%. |
 | **F11** | **Six PrometheusRules had never loaded** | ✅ Done 2026-09-07 | PR #896. Found while verifying F9's replacement rule reached Prometheus — it hadn't, and nor had five others. Missing `release: kube-prometheus-stack`, so `ruleSelector` never matched: `blackbox-exporter`, `log-pipeline`, `network`, `pi-cluster`, `slo`, `storage`. **Undervoltage detection and the entire SLO burn-rate framework had never evaluated.** Third instance of this bug (velero-alerts, 198 days, PR #848). Rule groups went 55 → 70. |
 | **F12** | **CI check: every PrometheusRule carries the release label** | ✅ Done 2026-09-07 | PR #898. `scripts/validate-prometheusrules.sh` wired as a pre-commit hook; scans **by content, not filename**, so it finds rules embedded in multi-doc manifests. Verified both directions. **It immediately caught a seventh dormant rule** the F11 audit had missed: `pvc-mount-monitor-alerts` (inside `pvc-mount-monitor.yaml`, not an `*alerts*.yaml` file) — `PVCMountReadOnly` had never loaded. Rule groups 55 → 71. |
-| **F14** | **Audit the rules resurrected by F11/F12 — none were ever validated** | ⬜ Open | **Next up.** PR #896 loaded 6 rule files that had never evaluated; #900 already had to fix 3 of their alerts (Synology pool-vs-volume scope, NAS temp threshold 50°C on hardware that idles at 63°C, wlan0 false positives). A rule that never ran has never been checked against reality. Remaining to review: `blackbox-exporter-alerts`, `log-pipeline-alerts`, and the untouched parts of `network-alerts` / `storage-alerts` / `pi-cluster-alerts` / `slo-alerts`. Validate each expression against live data before trusting it. |
+| **F14** | **Audit the rules resurrected by F11/F12** | ✅ Done 2026-09-07 | PRs #900 + #902. Audited all 6 files three ways: (1) rule health per Prometheus — 0 errors; (2) every referenced metric exists and its **selector matches real series** — all do, incl. `PiNodeUndervoltage` (5 series, all 0) and the SLO framework (5 targets, 99.99% availability); (3) **threshold headroom vs current value** — which caught the one real problem. Net: 4 alerts fixed, rest verified sound. |
 | **F13** | **PVCMountReadOnly never fired — human notification gap** | ⬜ Open | **Next up.** Surfaced by F12. The remediator was fine (PR #753 queries monitor pods directly, by design), but the *alert* had zero rules loaded — so if the remediator itself stopped, nothing would say so. Now loaded, which partially closes it. Remaining question is the same as F7: a notification path that does not depend on the thing it watches. **Consider merging F7 and F13** — they are the same problem seen from two angles. |
 | F10 | **Cluster RBAC alerts** | ✅ Done 2026-09-07 | PR #892. Scope was larger than first catalogued: `HighRiskRBACPermissions` returned at **51x** once Trivy scans finished re-running post-reboot. It was the un-aggregated twin of `CriticalClusterRoleRBACIssues` — same metric, same condition, 52 alerts for one thing. Dropped the per-series rule. Findings are real but inherent (KSV041 manage-secrets 38x, KSV046 manage-all-resources 15x on operator ClusterRoles); surviving alert documented as a "did the count change" signal. |
 
@@ -555,9 +555,20 @@ Progress on the noise problem, measured as total firing alerts:
 | After F9 (#894 + #895) + F11 (#896) | 10 | −7 CPU throttling, +15 rule groups resurrected |
 | After F12 (#898) | 10 | +1 rule group (PVCMountReadOnly finally loaded) |
 | Resurrected rules began evaluating | 17 | +7 — **real findings, previously invisible** |
-| After F14 first pass (#900) | **10** | −7: all three were threshold/scope bugs in never-validated rules |
+| After F14 first pass (#900) | 10 | −7: three threshold/scope bugs in never-validated rules |
+| After F14 completion (#902) | **9** | Synology disk-temp split by device class; audit found no other defects |
 
 \* the CVE fix landed as Trivy's post-reboot re-scan was still completing, so the RBAC alerts appeared in the same window. Net effect: **66 → 10**, and the survivors are either genuine (`CriticalVulnerabilitiesIncreased` correctly caught today's +13) or known-open items on this list.
+
+### What the F14 audit method was
+
+Worth reusing whenever rules come online that have never run. Three passes, cheapest first:
+
+1. **Rule health** — `/api/v1/rules` reports `health` and `lastError` per rule. Catches syntax and evaluation errors. Result: 0 errors.
+2. **Selector reality** — a rule can be healthy and still be dead if its metric has no series, or its label selector matches nothing. Checked every referenced metric exists *and* that the specific selector returns series. Result: all sound — `node_hwmon_in_lcrit_alarm_volts{chip="soc:firmware_raspberrypi_hwmon"}` returns 5 series (all 0, i.e. no undervoltage), and `probe_success{slo_target!=""}` returns 5.
+3. **Threshold headroom** — compare each threshold against the metric's *current* value. This is what caught the real defect: NAS disk temp at 46°C against a 50°C threshold. Too tight to be a coincidence, and indeed the 46°C was the M.2 NVMe being measured against an HDD threshold.
+
+Pass 3 is the one worth remembering. Passes 1 and 2 prove a rule *can* fire; only pass 3 tells you whether it will fire *at the right time*.
 
 ### Why this list exists
 
