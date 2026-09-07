@@ -8,6 +8,10 @@ metadata:
     app: blackbox-exporter
     prometheus: kube-prometheus
     role: alert-rules
+    # REQUIRED: Prometheus ruleSelector matches on this label. Without it the
+    # rule is created in-cluster but NEVER loaded — silently. Added 2026-09-07
+    # after finding six rules dormant this way (see PR #848 for the first).
+    release: kube-prometheus-stack
 spec:
   groups:
   - name: blackbox_exporter
