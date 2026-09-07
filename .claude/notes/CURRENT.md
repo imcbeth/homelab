@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-07 (alert-noise triage — Velero + Trivy; follow-up list opened in TODO.md)
+**Last Updated:** 2026-09-07 (alert-noise triage: 66 → 21 firing; follow-up list F1-F10 in TODO.md)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -224,7 +224,13 @@ Trivy exposes no `fixed_version` label, so filtering to *actionable* CVEs is imp
 
 **Second noise source found during triage (now F3):** trivy-operator writes one VulnerabilityReport **per ReplicaSet**, and Kubernetes retains old ReplicaSets (`revisionHistoryLimit`, default 10). After three argocd upgrades in one day there were reports for v3.4.5, v3.5.0 and v3.5.2 while only v3.5.2 was running — inflating CVE counts with images that are not deployed.
 
-**Follow-up list now tracked in `TODO.md` → "Active Follow-Ups"** — F1-F10, two done, eight open. It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.* F9 (CPUThrottlingHigh ×7) and F10 (cluster RBAC alerts) are the next noise items to triage.
+**F10 — cluster RBAC alerts, bigger than catalogued (PR #892).** After the CVE fix landed, `HighRiskRBACPermissions` reappeared at **51x** as Trivy's post-reboot re-scan completed — I had originally logged it as 1x. It turned out to be the un-aggregated twin of `CriticalClusterRoleRBACIssues`: same metric, same condition, 52 alerts for one thing. Dropped the per-series rule. The findings are real but inherent — 67 failing CRITICAL checks dominated by KSV041 (manage secrets, 38x) and KSV046 (manage all resources, 15x) against operator ClusterRoles that legitimately need those grants. Documented the survivor as a "did the count change" signal with a jq one-liner for listing failures.
+
+**Alert-noise scorecard: 66 → 21 firing.** F1 removed a permanent false positive; F2 removed 51 CVE alerts (and surfaced the 51 RBAC ones as scans finished); F10 removed those 51 duplicates. The survivors are either genuine — `CriticalVulnerabilitiesIncreased` correctly caught today's +13 — or tracked open items.
+
+**Process note:** I merged PR #892 with `--admin` while CI was red, then checked. It was a transient GitHub 504 fetching kustomize, not the change — but the right order is check first. Re-validated locally afterwards: kubeconform 172 valid / 0 invalid.
+
+**Follow-up list now tracked in `TODO.md` → "Active Follow-Ups"** — F1-F10, three done, seven open. **F9 (CPUThrottlingHigh ×7) is next** — now the single largest remaining noise source. It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.*
 
 **Key Gotchas Captured:**
 - **Alert thresholds must match the cadence of what they watch.** A 24h staleness threshold on a weekly job fires 86% of the time. When adding a schedule, add a matching rule — do not let it inherit a threshold meant for a different cadence.
