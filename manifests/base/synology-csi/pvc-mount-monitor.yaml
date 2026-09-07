@@ -251,6 +251,16 @@ metadata:
   labels:
     app: kube-prometheus-stack
     prometheus: kube-prometheus
+    # REQUIRED: Prometheus's ruleSelector matches on this label. Without it
+    # the rule is created without error and NEVER loads — PVCMountReadOnly
+    # had zero rules in /api/v1/rules until 2026-09-07.
+    #
+    # The remediator itself was unaffected: PR #753 rewrote it to query the
+    # pvc-mount-monitor pods directly rather than Prometheus alerts, exactly
+    # so it would not depend on the monitoring stack. But that means the
+    # HUMAN-facing notification has never fired — if the remediator itself
+    # stopped working, nothing would have said so. See F7 (dead-man switch).
+    release: kube-prometheus-stack
     role: alert-rules
 spec:
   groups:

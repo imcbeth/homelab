@@ -68,6 +68,13 @@ repos:
         verbose: true
         description: 'Validate Kubernetes manifests against schemas (manifests without available schemas are skipped due to -ignore-missing-schemas)'
 
+      - id: prometheusrule-label
+        name: PrometheusRule release label
+        entry: scripts/validate-prometheusrules.sh
+        language: script
+        files: ^manifests/.*\.(yaml|yml)$
+        pass_filenames: true
+
       - id: kustomize-build
         name: Validate kustomizations build
         entry: scripts/validate-kustomizations.sh
