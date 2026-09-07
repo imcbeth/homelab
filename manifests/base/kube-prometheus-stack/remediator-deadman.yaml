@@ -1,0 +1,303 @@
+---
+# pvc-ro-remediator dead-man switch (TODO F7 / F13)
+#
+# THE PROBLEM
+#
+# On 2026-06-21 the pvc-ro-remediator silently stopped working for 16 days.
+# Its Jobs failed every 2 minutes and nothing said so. The root cause was
+# that the remediator queried Prometheus for firing alerts — and Prometheus
+# was itself one of the workloads whose PVC had gone read-only.
+#
+# PR #753 fixed the remediator by making it query the pvc-mount-monitor pods
+# directly, removing the Prometheus dependency from the REMEDIATION path.
+# But the NOTIFICATION path was never fixed: if the remediator stops, the
+# only thing that would tell a human is a Prometheus alert — and
+# PVCMountReadOnly had itself never loaded until 2026-09-07 (PR #898).
+#
+# WHY THIS RUNS WHERE IT DOES
+#
+# A watcher must not share a failure mode with the thing it watches. The
+# remediator guards against iSCSI PVCs going read-only, so any watcher
+# sitting on an iSCSI PVC is disqualified. That rules out every in-cluster
+# option we already run:
+#
+#   Prometheus    50Gi iSCSI PVC   ← the 2026-06-21 casualty
+#   Uptime Kuma    2Gi iSCSI PVC
+#   Grafana        5Gi iSCSI PVC
+#   Loki          20Gi iSCSI PVC
+#
+# This CronJob has NO volumes at all. Its entire dependency set is:
+#
+#   Kubernetes API   (to read the remediator's Job history)
+#   DNS              (to resolve smtp.gmail.com)
+#   SMTP             (to send the mail)
+#
+# It runs in `default` rather than `synology-csi` for two reasons: the
+# alertmanager-smtp-credentials Secret already lives there (Secrets are not
+# cross-namespace), and the default namespace already permits egress on
+# 587/465 — that is how AlertManager sends mail today. Cross-namespace read
+# access to the remediator's Jobs is granted by the Role below.
+#
+# WHAT THIS DOES AND DOES NOT CATCH
+#
+#   catches:      remediator Jobs failing; CronJob suspended or deleted;
+#                 monitor DaemonSet down; a NetworkPolicy change breaking it
+#   does NOT:     total cluster loss, and its own failure
+#
+# The regress is real and cannot be closed from inside the cluster: whatever
+# watches last is itself unwatched. The response is to make that final
+# component as small and dependency-free as possible, which is what this is
+# — no PVC, no Prometheus, no AlertManager, ~30 lines of shell. Catching
+# total cluster loss requires something outside the cluster and is tracked
+# separately.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: remediator-deadman
+  namespace: default
+  labels:
+    app.kubernetes.io/name: remediator-deadman
+---
+# Read-only access to the remediator's Jobs, in ITS namespace, granted to the
+# ServiceAccount in default. Deliberately a Role rather than a ClusterRole —
+# this needs to see exactly one namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: remediator-deadman
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: remediator-deadman
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: remediator-deadman
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: remediator-deadman
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: remediator-deadman
+subjects:
+  - kind: ServiceAccount
+    name: remediator-deadman
+    namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: remediator-deadman-script
+  namespace: default
+  labels:
+    app.kubernetes.io/name: remediator-deadman
+data:
+  deadman.sh: |
+    #!/bin/sh
+    set -eu
+
+    NS="${REMEDIATOR_NS:-synology-csi}"
+    NAME="${REMEDIATOR_NAME:-pvc-ro-remediator}"
+    # The remediator runs every 2 minutes, so a healthy newest-success is
+    # always under ~6 minutes old. 60 minutes is a 30x margin — generous
+    # enough that transient churn never pages, tight enough that a genuine
+    # stall is caught within the hour.
+    MAX_AGE_MIN="${MAX_AGE_MIN:-60}"
+    DRY_RUN="${DRY_RUN:-false}"
+
+    ts() { date -u +%FT%TZ; }
+    echo "[$(ts)] remediator-deadman starting (ns=$NS name=$NAME max_age=${MAX_AGE_MIN}m)"
+
+    # --- gather state -------------------------------------------------------
+    # Any failure here is itself alertable: if we cannot read the API we
+    # cannot rule out that the remediator is dead, so we say so rather than
+    # exiting quietly.
+    if ! jobs_json=$(kubectl get jobs -n "$NS" \
+          -l "app.kubernetes.io/name=$NAME" -o json 2>&1); then
+      PROBLEM="cannot list Jobs in $NS: $jobs_json"
+    else
+      PROBLEM=$(echo "$jobs_json" | jq -r --argjson maxage "$MAX_AGE_MIN" '
+        [ .items[]
+          | select((.status.succeeded // 0) >= 1)
+          | select(.status.completionTime != null)
+          | .status.completionTime ]
+        | sort
+        | if length == 0 then
+            "no successful \($ENV.REMEDIATOR_NAME // "pvc-ro-remediator") Job found at all"
+          else
+            (.[-1]) as $newest
+            | ((now - ($newest | fromdateiso8601)) / 60) as $age
+            | if $age > $maxage then
+                "newest successful Job completed \($age | floor) minutes ago (limit \($maxage)m); last success \($newest)"
+              else
+                ""
+              end
+          end')
+    fi
+
+    # Also flag an explicitly suspended CronJob — Jobs would simply stop
+    # appearing, which the age check catches eventually, but naming the
+    # actual cause saves a debugging round-trip.
+    if suspended=$(kubectl get cronjob -n "$NS" "$NAME" \
+          -o jsonpath='{.spec.suspend}' 2>/dev/null); then
+      if [ "$suspended" = "true" ]; then
+        PROBLEM="CronJob $NS/$NAME is SUSPENDED${PROBLEM:+ — also: $PROBLEM}"
+      fi
+    else
+      PROBLEM="CronJob $NS/$NAME not found${PROBLEM:+ — also: $PROBLEM}"
+    fi
+
+    if [ -z "$PROBLEM" ]; then
+      echo "[$(ts)] OK — remediator healthy, nothing to report"
+      exit 0
+    fi
+
+    echo "[$(ts)] PROBLEM: $PROBLEM"
+
+    if [ "$DRY_RUN" = "true" ]; then
+      echo "[$(ts)] DRY-RUN — would email and exit"
+      exit 0
+    fi
+
+    # --- notify -------------------------------------------------------------
+    # curl speaks smtps directly, so no mail client is needed in the image.
+    # Credentials come from the same Secret AlertManager uses.
+    cat > /tmp/mail.txt <<EOM
+    From: alertmanager@n37.ca
+    To: ${MAIL_TO}
+    Subject: [CRITICAL] PVC RO remediator may be dead - K8s Homelab
+
+    The pvc-ro-remediator dead-man switch fired.
+
+      $PROBLEM
+
+    The remediator auto-recovers PVCs that btrfs has remounted read-only.
+    While it is down, a read-only PVC will NOT be repaired automatically and
+    the affected workload will fail writes silently - exactly the failure that
+    went unnoticed for 16 days on 2026-06-21.
+
+    Check:
+      kubectl get cronjob -n ${NS} ${NAME}
+      kubectl get jobs -n ${NS} -l app.kubernetes.io/name=${NAME}
+      kubectl logs -n ${NS} \$(kubectl get pods -n ${NS} \\
+        -l app.kubernetes.io/name=${NAME} \\
+        --sort-by=.metadata.creationTimestamp \\
+        -o jsonpath='{.items[-1].metadata.name}')
+
+    Sent by the remediator-deadman CronJob, which deliberately does not depend
+    on Prometheus, AlertManager, or any PersistentVolume.
+    EOM
+
+    # Strip the leading indentation the heredoc preserved.
+    sed -i 's/^    //' /tmp/mail.txt
+
+    if curl --silent --show-error --ssl-reqd \
+         --url "smtps://${SMTP_HOST}:${SMTP_PORT}" \
+         --mail-from "alertmanager@n37.ca" \
+         --mail-rcpt "${MAIL_TO}" \
+         --user "${SMTP_USER}:${SMTP_PASS}" \
+         --upload-file /tmp/mail.txt; then
+      echo "[$(ts)] alert email sent to ${MAIL_TO}"
+    else
+      echo "[$(ts)] ERROR: failed to send alert email"
+      exit 1
+    fi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: remediator-deadman
+  namespace: default
+  labels:
+    app.kubernetes.io/name: remediator-deadman
+spec:
+  # Every 6 hours. The remediator runs every 2 minutes, so this bounds
+  # "silently dead" to at most 6h rather than the 16 days it took in 2026-06.
+  schedule: "17 */6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  # Deliberately deeper than the remediator's 3. If the deadman itself starts
+  # failing, that history is the only forensic trail there is.
+  failedJobsHistoryLimit: 10
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: remediator-deadman
+        spec:
+          serviceAccountName: remediator-deadman
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: deadman
+              image: docker.io/alpine/k8s:1.37.0
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "/scripts/deadman.sh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              env:
+                - name: REMEDIATOR_NS
+                  value: "synology-csi"
+                - name: REMEDIATOR_NAME
+                  value: "pvc-ro-remediator"
+                - name: MAX_AGE_MIN
+                  value: "60"
+                - name: DRY_RUN
+                  value: "false"
+                - name: MAIL_TO
+                  value: "imcbeth1980@gmail.com"
+                - name: SMTP_HOST
+                  value: "smtp.gmail.com"
+                - name: SMTP_PORT
+                  value: "465"
+                - name: SMTP_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: alertmanager-smtp-credentials
+                      key: smtp_username
+                - name: SMTP_PASS
+                  valueFrom:
+                    secretKeyRef:
+                      name: alertmanager-smtp-credentials
+                      key: smtp_password
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+                - name: kube
+                  mountPath: /.kube
+          volumes:
+            - name: scripts
+              configMap:
+                name: remediator-deadman-script
+                defaultMode: 0555
+            - name: tmp
+              emptyDir: {}
+            - name: kube
+              emptyDir: {}
