@@ -12,6 +12,12 @@ resources:
   - snmp-exporter-sealed.yaml
   - argo-workflows-alerts.yaml
   - argocd-alerts.yaml
+  # Dead-man switch for the pvc-ro-remediator. Lives in THIS kustomization,
+  # not synology-csi's, because that one sets `namespace: synology-csi` which
+  # would rewrite the resources that must stay in `default` — the SMTP Secret
+  # is there and Secrets are not cross-namespace. This kustomization sets no
+  # namespace, so the explicit per-resource namespaces are preserved.
+  - remediator-deadman.yaml
   - blackbox-exporter-alerts.yaml
   - blackbox-exporter-configmap.yaml
   - blackbox-exporter-deployment.yaml
