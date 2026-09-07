@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-07 (alert-noise triage: 66 → 21 firing; follow-up list F1-F10 in TODO.md)
+**Last Updated:** 2026-09-07 (alert-noise triage 66 → 10; found SIX PrometheusRules that had never loaded)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -230,7 +230,30 @@ Trivy exposes no `fixed_version` label, so filtering to *actionable* CVEs is imp
 
 **Process note:** I merged PR #892 with `--admin` while CI was red, then checked. It was a transient GitHub 504 fetching kustomize, not the change — but the right order is check first. Re-validated locally afterwards: kubeconform 172 valid / 0 invalid.
 
-**Follow-up list now tracked in `TODO.md` → "Active Follow-Ups"** — F1-F10, three done, seven open. **F9 (CPUThrottlingHigh ×7) is next** — now the single largest remaining noise source. It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.*
+**F9 — CPUThrottlingHigh, measured rather than muted (PRs #894 + #895).** Seven containers throttled 51-78% of CFS periods while using only **3-15% of their CPU limits**, for ~52 days.
+
+Raised the burst ceilings first (#894: node-exporter 100m→300m, grafana sidecar and unifi-poller →200m). That produced a **real win — node-exporter scrape time 801ms → 205ms** — but throttling only fell 51% → 29%. **My hypothesis was half wrong:** the burst is *instantaneous*. CFS accounts per 100ms period, so a process wanting a full core for a few milliseconds throttles regardless of quota size; clearing 25% would need a ~1000m limit on a process averaging 14m.
+
+So the rule was the problem, not the resources. Disabled upstream `CPUThrottlingHigh` and added `CPUThrottlingHighSaturated` (#895) requiring throttling >25% **AND** utilization >50%. Validated live: 0 matches — correct, the most-utilized container in the cluster is tempo at 34.7%. Kept the limit increases; 4× faster scrapes stands on its own merits.
+
+**F11 — six PrometheusRules had NEVER loaded (PR #896).** Found only because I checked that F9's replacement rule had actually reached Prometheus. It hadn't — and neither had five others. All were missing `release: kube-prometheus-stack`, so `ruleSelector` never matched them:
+
+| Rule file | Dormant coverage |
+|---|---|
+| `pi-cluster-alerts` | SoC + NVMe thermal, **undervoltage**, PoE draw |
+| `slo-alerts` | **the entire SLO burn-rate framework** |
+| `storage-alerts` | PV capacity, Synology disk/RAID health |
+| `blackbox-exporter-alerts` | endpoint availability, SSL expiry |
+| `log-pipeline-alerts` | Loki log-based alerting |
+| `network-alerts` | network/connectivity |
+
+Two of those matter a great deal here: **undervoltage detection** (on Pi hardware that causes silent throttling and corruption — the failure you cannot see any other way) and the **SLO framework**, which k8s-docs-n37 documents as operational and which had never evaluated once.
+
+**Third instance of this exact bug** — velero-alerts was dormant 198 days (PR #848, which let 16 days of failed backups pass). REFERENCE.md has carried the gotcha since 2026-07-31, and six more still slipped through. A written note is clearly not enough, so **F12 is now open: a CI assertion that every PrometheusRule carries the label.**
+
+Rule groups went **55 → 70**. Firing alerts **66 → 10**.
+
+**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F12, five done, seven open. **F12 (CI label check) is next.** It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.*
 
 **Key Gotchas Captured:**
 - **Alert thresholds must match the cadence of what they watch.** A 24h staleness threshold on a weekly job fires 86% of the time. When adding a schedule, add a matching rule — do not let it inherit a threshold meant for a different cadence.

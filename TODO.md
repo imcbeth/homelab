@@ -535,7 +535,9 @@ point.
 | F6 | **UNVR uptime-kuma monitor down** | ⬜ Open | `https://10.0.20.130` — external UniFi Protect hardware, outside the cluster. Confirm whether the device/IP is still valid; retire the monitor if not. Second of the two permanent `UptimeKumaMonitorDown` alerts. |
 | F7 | **Dead-man switch for pvc-ro-remediator** | ⬜ Open | From the 2026-06-21 DR postmortem. Needs to alert if no successful remediator Job has completed in N hours — **via a path that does not depend on Prometheus rule evaluation**, or it shares the failure mode it is meant to catch. Genuinely unsolved; the hard part is the independent path. |
 | F8 | **uptime-kuma image pinned to the 1.x line** | ⬜ Open | Image pinned `1.23.17-debian` while the chart appVersion is now `2.5.0`. Deliberate, but the gap is widening. Decide whether to move to 2.x (breaking changes likely) or document the pin as permanent. |
-| F9 | **CPUThrottlingHigh — 7 permanent alerts** | ⬜ Open | **Next up.** Long-standing (oldest ~52d). Same class as F2/F10: either the threshold is wrong for a Pi cluster or the limits genuinely need tuning. Now the single largest remaining noise source. |
+| F9 | **CPUThrottlingHigh — 7 permanent alerts** | ✅ Done 2026-09-07 | PRs #894 + #895. Measured first: containers throttled 51-78% while using **3-15%** of their CPU limits. Raised burst ceilings (#894) — real win, node-exporter scrape **801ms → 205ms** — but throttling only fell 51%→29% because the burst is *instantaneous* (CFS accounts per 100ms period; clearing 25% would need ~1000m on a process averaging 14m). So the rule was the problem: disabled upstream `CPUThrottlingHigh`, added `CPUThrottlingHighSaturated` requiring throttling >25% **AND** utilization >50% (#895). Validated: 0 matches, correct — most-utilized container is tempo at 34.7%. |
+| **F11** | **Six PrometheusRules had never loaded** | ✅ Done 2026-09-07 | PR #896. Found while verifying F9's replacement rule reached Prometheus — it hadn't, and nor had five others. Missing `release: kube-prometheus-stack`, so `ruleSelector` never matched: `blackbox-exporter`, `log-pipeline`, `network`, `pi-cluster`, `slo`, `storage`. **Undervoltage detection and the entire SLO burn-rate framework had never evaluated.** Third instance of this bug (velero-alerts, 198 days, PR #848). Rule groups went 55 → 70. |
+| **F12** | **CI check: every PrometheusRule carries the release label** | ⬜ Open | **Next up.** Three occurrences of the same silent failure (velero 198d; six more in F11) proves the REFERENCE.md note is insufficient — it needs enforcement. Add a pre-commit/CI assertion that every `kind: PrometheusRule` under `manifests/` has `metadata.labels.release: kube-prometheus-stack`. Cheap, and closes the class permanently. |
 | F10 | **Cluster RBAC alerts** | ✅ Done 2026-09-07 | PR #892. Scope was larger than first catalogued: `HighRiskRBACPermissions` returned at **51x** once Trivy scans finished re-running post-reboot. It was the un-aggregated twin of `CriticalClusterRoleRBACIssues` — same metric, same condition, 52 alerts for one thing. Dropped the per-series rule. Findings are real but inherent (KSV041 manage-secrets 38x, KSV046 manage-all-resources 15x on operator ClusterRoles); surviving alert documented as a "did the count change" signal. |
 
 ### Alert-noise scorecard
@@ -547,9 +549,10 @@ Progress on the noise problem, measured as total firing alerts:
 | Start of triage (2026-09-07) | 66 | — |
 | After F1 (Velero cadence split, PR #889) | 65 | −1 permanent false positive |
 | After F2 (CVE alert redesign, PR #890) | 66* | 51 CVE alerts removed; 51 RBAC alerts surfaced as scans completed |
-| After F10 (RBAC dedup, PR #892) | **21** | −51 duplicates |
+| After F10 (RBAC dedup, PR #892) | 21 | −51 duplicates |
+| After F9 (#894 + #895) + F11 (#896) | **10** | −7 CPU throttling, +15 rule groups resurrected |
 
-\* the CVE fix landed as Trivy's post-reboot re-scan was still completing, so the RBAC alerts appeared in the same window. Net effect of the three fixes: **66 → 21**, and the survivors are either genuine (`CriticalVulnerabilitiesIncreased` correctly caught today's +13) or known-open items on this list.
+\* the CVE fix landed as Trivy's post-reboot re-scan was still completing, so the RBAC alerts appeared in the same window. Net effect: **66 → 10**, and the survivors are either genuine (`CriticalVulnerabilitiesIncreased` correctly caught today's +13) or known-open items on this list.
 
 ### Why this list exists
 
