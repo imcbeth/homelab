@@ -28,13 +28,18 @@ spec:
           name: tcp
           protocol: TCP
         imagePullPolicy: IfNotPresent
-        # Right-sized resources (actual usage ~8Mi)
+        # Right-sized resources (actual usage ~8Mi, ~7.5m CPU)
+        #
+        # CPU limit raised 100m -> 200m on 2026-09-07: unifi-poller polls the
+        # controller on an interval and bursts on each poll. At 100m it was
+        # throttled on 52% of periods (CPUThrottlingHigh, F9) while averaging
+        # 7.5m. Burst ceiling only; request unchanged at 25m.
         resources:
           requests:
             cpu: 25m
             memory: 64Mi
           limits:
-            cpu: 100m
+            cpu: 200m
             memory: 128Mi
         env:
         - name: UP_UNIFI_CONTROLLER_0_API_KEY
