@@ -140,3 +140,55 @@ spec:
               12W heavy). Likely USB peripheral pulling power, or NVMe
               under stress. If undervoltage alarms accompany this, the
               power path is the limit.
+
+    # CPU throttling — replaces the upstream CPUThrottlingHigh, which is
+    # disabled in values.yaml (defaultRules.disabled).
+    #
+    # The upstream rule is throttled_periods / total_periods > 25% with no
+    # reference to whether the container is actually starved. On a Pi cluster
+    # that fires permanently on burst-then-idle agents.
+    #
+    # Measured 2026-09-07 (F9): node-exporter, unifi-poller and the Grafana
+    # dashboard sidecar were throttled 51-78% of periods while using only
+    # 3-15% of their CPU limits — for ~52 days. Raising the limits (PR #894)
+    # cut node-exporter scrape time 801ms -> 205ms but only moved throttling
+    # 51% -> 29%, because the burst is INSTANTANEOUS: CFS accounts per 100ms
+    # period, so a process wanting a full core for a few milliseconds is
+    # throttled regardless of quota size. Clearing 25% would need a ~1000m
+    # limit on a process averaging 14m.
+    #
+    # Conclusion: throttle percentage alone is a poor proxy for harm. This
+    # rule requires high throttling AND high utilization together.
+    - name: pi_cpu_throttling
+      interval: 60s
+      rules:
+        - alert: CPUThrottlingHighSaturated
+          expr: |
+            (
+              sum by (namespace, pod, container) (rate(container_cpu_cfs_throttled_periods_total{container!=""}[10m]))
+              /
+              sum by (namespace, pod, container) (rate(container_cpu_cfs_periods_total{container!=""}[10m]))
+              > 0.25
+            )
+            and on (namespace, pod, container)
+            (
+              sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{container!=""}[10m]))
+              /
+              sum by (namespace, pod, container) (kube_pod_container_resource_limits{resource="cpu"})
+              > 0.5
+            )
+          for: 30m
+          labels:
+            severity: warning
+            component: resources
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.container }} is CPU-starved"
+            description: |
+              Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }}
+              is throttled on >25% of CFS periods AND averaging >50% of its
+              CPU limit. Unlike raw throttling, that combination means the
+              limit is genuinely too low — raise it.
+
+              If utilization is LOW but throttling is high, that is normal
+              burst behaviour on this cluster and is not actionable. See F9
+              in TODO.md for the measurements behind this rule.
