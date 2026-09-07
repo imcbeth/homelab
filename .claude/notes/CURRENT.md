@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-07 (alert-noise triage 66 → 10; found SIX PrometheusRules that had never loaded)
+**Last Updated:** 2026-09-07 (alert-noise triage 66 → 10; SEVEN dormant PrometheusRules found + CI enforcement)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -253,7 +253,15 @@ Two of those matter a great deal here: **undervoltage detection** (on Pi hardwar
 
 Rule groups went **55 → 70**. Firing alerts **66 → 10**.
 
-**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F12, five done, seven open. **F12 (CI label check) is next.** It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.*
+**F12 — CI enforcement, which immediately paid for itself (PR #898).** Added `scripts/validate-prometheusrules.sh` as a pre-commit hook. Crucially it scans **by content rather than filename** — and on its first run it caught a **seventh** dormant rule that the F11 audit had missed: `pvc-mount-monitor-alerts`, which lives inside `pvc-mount-monitor.yaml` next to the DaemonSet rather than in an `*alerts*.yaml` file.
+
+That seventh one is the notable one: **`PVCMountReadOnly` had zero rules loaded in Prometheus this entire time.** The remediator was never affected — PR #753 deliberately rewrote it to query the monitor pods directly rather than Prometheus alerts, precisely so it would not depend on the monitoring stack. But the consequence is that the **human-facing notification never fired once**. If the remediator itself had stopped working, nothing would have told anyone. That is F7 (dead-man switch) arriving from a completely different direction, so **F13 is opened and flagged for merging with F7**.
+
+Rule groups **55 → 71** over the session.
+
+**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F13, six done, seven open. **F13/F7 (notification path independent of what it watches) is next**, and is the one genuinely hard problem left on the list.
+
+**Reflection on the week's pattern.** Every fix this session was the same shape: something existed, looked correct, and did nothing. A pin that was a comment. An `ignoreDeps` entry with the wrong name. Seven PrometheusRules without a label. An alert threshold matched to the wrong cadence. The lesson that keeps repeating is that **creation is not activation** — for anything safety-relevant, verify the runtime effect, not the object. It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.*
 
 **Key Gotchas Captured:**
 - **Alert thresholds must match the cadence of what they watch.** A 24h staleness threshold on a weekly job fires 86% of the time. When adding a schedule, add a matching rule — do not let it inherit a threshold meant for a different cadence.
