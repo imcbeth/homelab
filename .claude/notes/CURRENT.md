@@ -259,7 +259,15 @@ That seventh one is the notable one: **`PVCMountReadOnly` had zero rules loaded 
 
 Rule groups **55 → 71** over the session.
 
-**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F13, six done, seven open. **F13/F7 (notification path independent of what it watches) is next**, and is the one genuinely hard problem left on the list.
+**Follow-up list in `TODO.md` → "Active Follow-Ups"** — F1-F14, seven done, seven open. **F14 (audit the never-validated rules) is next**; F13/F7 (a notification path independent of what it watches) remains the one genuinely hard problem on the list.
+
+**Immediately after F12, the resurrected rules started firing — and needed tuning (PR #900).** Firing went 10 → 17 as the newly-loaded rules evaluated for the first time. All three new alerts turned out to be threshold or scope bugs rather than real conditions:
+
+- `SynologyVolumeSpace{Low,Critical}` fired on **Storage Pool 2 at 0.01% free** — but on Synology a pool is fully carved into volumes, so ~0% free is the *normal* state (Volumes 3 and 4, 762GB each at 99.9% free, are allocated from it). Scoped the alerts to `raidName=~"Volume.*"`. Actual volume state: Volume 1 37% free, Volume 2 95%, Volumes 3/4 99.9% — nothing near full.
+- `SynologySystemTemperatureHigh` used `>50°C` against a NAS that idles at **63°C**, with disks at 34-38°C and M.2 at 46°C. Raised to `>70°C`.
+- `NodeNetworkInterfaceDown` fired 5× on **wlan0** — the Pi onboard WiFi, deliberately unused on a wired cluster. Added `wlan.*` to the exclusion list.
+
+Back to 10 firing. These were not alerts I silenced: **they were never correct, and nobody could know because they had never run.** That generalises — **F14** is now open to audit the rest of the rules #896 resurrected, since none of them has ever been validated against real data.
 
 **Reflection on the week's pattern.** Every fix this session was the same shape: something existed, looked correct, and did nothing. A pin that was a comment. An `ignoreDeps` entry with the wrong name. Seven PrometheusRules without a label. An alert threshold matched to the wrong cadence. The lesson that keeps repeating is that **creation is not activation** — for anything safety-relevant, verify the runtime effect, not the object. It exists because three failures this week shared one root cause: *a monitoring control that exists but does not work is worse than none, because it stops anyone looking.*
 
