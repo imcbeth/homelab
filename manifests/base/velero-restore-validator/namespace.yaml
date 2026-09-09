@@ -16,6 +16,17 @@ metadata:
   labels:
     app.kubernetes.io/name: velero-restore-test
     app.kubernetes.io/part-of: velero-restore-validator
-    # Restored workloads are never actually run here — only mounted and read —
-    # but the verify pod itself must satisfy the cluster's restricted baseline.
-    pod-security.kubernetes.io/enforce: restricted
+    # `baseline`, not `restricted`, and deliberately so.
+    #
+    # The verify pod must READ arbitrary restored data. Under `restricted` it
+    # is forced to run non-root, and would then fail on any file the original
+    # workload wrote with restrictive ownership — reporting a permissions
+    # artifact as data loss. A validator that cries wolf gets ignored, which
+    # is the exact failure this whole component exists to prevent.
+    #
+    # Running as root with a READ-ONLY mount, all capabilities dropped and no
+    # privilege escalation makes the test measure the data rather than the
+    # file modes. The blast radius is one short-lived busybox pod in a
+    # namespace that holds nothing else.
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: baseline

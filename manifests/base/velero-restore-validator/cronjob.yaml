@@ -56,6 +56,13 @@ data:
 
     RESTORE_NAME=""
 
+    # `set -e` means any unchecked non-zero command exits the script outright,
+    # skipping fail() and leaving a restored PVC and Restore behind. That
+    # happened on the first live run (the verify pod was rejected by admission)
+    # and the debris would have made the NEXT run restore into a dirty
+    # namespace. The trap guarantees cleanup on every exit path.
+    trap cleanup EXIT
+
     # Cleanup is idempotent and runs both at start and at exit. Running it at
     # START matters as much as at exit: if a previous run was killed (node
     # drain, activeDeadlineSeconds) its debris would otherwise make the next
@@ -183,7 +190,11 @@ data:
     spec:
       restartPolicy: Never
       securityContext:
-        runAsNonRoot: false
+        # Root ON PURPOSE — see namespace.yaml. The mount is read-only and all
+        # capabilities are dropped; this exists so the check measures whether
+        # the DATA is readable, not whether the file modes happen to suit a
+        # particular uid.
+        runAsUser: 0
         seccompProfile:
           type: RuntimeDefault
       containers:
