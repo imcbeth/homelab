@@ -1,0 +1,337 @@
+---
+# Monthly Velero restore validation.
+#
+# THE PROBLEM
+#
+# Every Velero alert on this cluster answers "did the backups run?". None of
+# them answers "would a restore actually work?", and until 2026-09-07 nothing
+# ever had. Two failures found that week make the case:
+#
+#   * uptime-kuma's 5Gi PVC sat in NO backup schedule for 135 days while every
+#     nightly backup reported Completed with zero errors.
+#   * Restorability had never been tested. It was proven by hand for the first
+#     time only because a one-way migration needed a rollback.
+#
+# "Completed" is a statement about the backup job, not about the data.
+#
+# WHAT THIS DOES
+#
+# Once a month it takes the newest COMPLETED SCHEDULED backup — the real
+# artifact an incident would restore from, not a fresh one made for the test —
+# restores one namespace into a scratch namespace, mounts the restored volume,
+# reads bytes off it, then cleans up. Any failure exits non-zero, and the Job
+# failing is what the alert watches.
+#
+# WHY IT ROTATES
+#
+# TARGET_NAMESPACES is walked by month index, so coverage accumulates over the
+# year rather than testing one namespace forever. zot (50Gi) and default (50Gi
+# Prometheus) are deliberately off the list: a 5Gi restore exercises exactly
+# the same code path, and monthly 50Gi LUN churn on the NAS buys nothing.
+# That means this validates the MECHANISM, not that a 50Gi restore fits.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-restore-validator-script
+  namespace: velero
+  labels:
+    app.kubernetes.io/name: velero-restore-validator
+data:
+  validate.sh: |
+    #!/bin/sh
+    set -eu
+
+    VELERO_NS="${VELERO_NS:-velero}"
+    SCRATCH_NS="${SCRATCH_NS:-velero-restore-test}"
+    SCHEDULE="${SCHEDULE_NAME:-velero-daily-critical-pvcs}"
+    TARGETS="${TARGET_NAMESPACES:-uptime-kuma falco trivy-system loki}"
+    RESTORE_TIMEOUT="${RESTORE_TIMEOUT:-600}"
+    BIND_TIMEOUT="${BIND_TIMEOUT:-600}"
+    VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-300}"
+    VERIFY_IMAGE="${VERIFY_IMAGE:-docker.io/library/busybox:1.37.0}"
+
+    ts() { date -u +%FT%TZ; }
+    say() { echo "[$(ts)] $*"; }
+    fail() { say "FAIL: $*"; cleanup; exit 1; }
+
+    RESTORE_NAME=""
+
+    # Cleanup is idempotent and runs both at start and at exit. Running it at
+    # START matters as much as at exit: if a previous run was killed (node
+    # drain, activeDeadlineSeconds) its debris would otherwise make the next
+    # run's restore a merge into existing objects, which tests nothing.
+    cleanup() {
+      say "cleanup: removing verify pod, PVCs and restore"
+      kubectl -n "$SCRATCH_NS" delete pod -l app.kubernetes.io/name=restore-verify \
+        --ignore-not-found --wait=false >/dev/null 2>&1 || true
+      # Deleting the PVC releases the PV; the storage class is Delete-reclaim,
+      # so the LUN goes with it. Leaving these behind would slowly fill the NAS.
+      kubectl -n "$SCRATCH_NS" delete pvc --all \
+        --ignore-not-found --wait=false >/dev/null 2>&1 || true
+      if [ -n "$RESTORE_NAME" ]; then
+        kubectl -n "$VELERO_NS" delete restore "$RESTORE_NAME" \
+          --ignore-not-found --wait=false >/dev/null 2>&1 || true
+      fi
+    }
+
+    say "velero-restore-validator starting (schedule=$SCHEDULE scratch=$SCRATCH_NS)"
+    cleanup
+
+    # --- pick the namespace to validate this month --------------------------
+    set -- $TARGETS
+    COUNT=$#
+    [ "$COUNT" -gt 0 ] || fail "TARGET_NAMESPACES is empty"
+    IDX=$(( $(date -u +%-m) % COUNT ))
+    SHIFT=$IDX
+    while [ "$SHIFT" -gt 0 ]; do shift; SHIFT=$((SHIFT - 1)); done
+    TARGET_NS="$1"
+    say "target namespace this month: $TARGET_NS (index $IDX of $COUNT)"
+
+    # --- find the newest COMPLETED scheduled backup -------------------------
+    # Sorting by name works because Velero timestamps the suffix, but phase is
+    # filtered explicitly: a PartiallyFailed backup may be missing exactly the
+    # volume under test, and would produce a misleading pass.
+    BACKUP=$(kubectl -n "$VELERO_NS" get backup \
+      -l "velero.io/schedule-name=$SCHEDULE" -o json 2>/dev/null \
+      | jq -r '[.items[] | select(.status.phase=="Completed")]
+               | sort_by(.metadata.creationTimestamp)
+               | if length==0 then "" else .[-1].metadata.name end')
+    [ -n "$BACKUP" ] || fail "no Completed backup found for schedule $SCHEDULE"
+
+    # A backup that does not include the target namespace cannot validate it.
+    # Saying so explicitly is the whole point of this job — it is exactly the
+    # coverage gap that hid for 135 days.
+    if ! kubectl -n "$VELERO_NS" get backup "$BACKUP" \
+          -o jsonpath='{.spec.includedNamespaces}' 2>/dev/null \
+          | grep -q "\"$TARGET_NS\""; then
+      fail "backup $BACKUP does not include namespace $TARGET_NS — it is NOT being backed up"
+    fi
+    say "validating backup: $BACKUP"
+
+    # --- restore ------------------------------------------------------------
+    # includedResources MUST list the snapshot types. Restoring only PVCs/PVs
+    # leaves the PVC Pending forever with "VolumeSnapshot not found", because
+    # Velero recreates the VolumeSnapshot first and the PVC binds from it.
+    # That mistake produced a false "backups are unrestorable" conclusion on
+    # 2026-09-07 — do not remove these two lines.
+    RESTORE_NAME="rv-$(date -u +%Y%m%d%H%M%S)"
+    say "creating restore $RESTORE_NAME ($TARGET_NS -> $SCRATCH_NS)"
+    cat <<EOR | kubectl apply -f - >/dev/null
+    apiVersion: velero.io/v1
+    kind: Restore
+    metadata:
+      name: $RESTORE_NAME
+      namespace: $VELERO_NS
+      labels:
+        app.kubernetes.io/name: velero-restore-validator
+    spec:
+      backupName: $BACKUP
+      restorePVs: true
+      namespaceMapping:
+        $TARGET_NS: $SCRATCH_NS
+      includedResources:
+        - persistentvolumeclaims
+        - persistentvolumes
+        - volumesnapshots.snapshot.storage.k8s.io
+        - volumesnapshotcontents.snapshot.storage.k8s.io
+    EOR
+
+    ELAPSED=0
+    while [ "$ELAPSED" -lt "$RESTORE_TIMEOUT" ]; do
+      PHASE=$(kubectl -n "$VELERO_NS" get restore "$RESTORE_NAME" \
+        -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+      case "$PHASE" in
+        Completed) say "restore phase: Completed"; break ;;
+        Failed|PartiallyFailed)
+          fail "restore $RESTORE_NAME ended in phase $PHASE" ;;
+      esac
+      sleep 10; ELAPSED=$((ELAPSED + 10))
+    done
+    [ "$PHASE" = "Completed" ] || fail "restore did not complete within ${RESTORE_TIMEOUT}s (last phase: ${PHASE:-unknown})"
+
+    # --- wait for the PVC to actually bind ----------------------------------
+    # Restore "Completed" only means Velero finished submitting objects. The
+    # CSI driver provisions from the snapshot asynchronously, and this is the
+    # step that fails when a snapshot is missing.
+    ELAPSED=0; PVC=""
+    while [ "$ELAPSED" -lt "$BIND_TIMEOUT" ]; do
+      PVC=$(kubectl -n "$SCRATCH_NS" get pvc -o json 2>/dev/null \
+        | jq -r '[.items[] | select(.status.phase=="Bound")] | if length==0 then "" else .[0].metadata.name end')
+      [ -n "$PVC" ] && break
+      sleep 10; ELAPSED=$((ELAPSED + 10))
+    done
+    if [ -z "$PVC" ]; then
+      say "--- PVC state ---"; kubectl -n "$SCRATCH_NS" get pvc 2>&1 || true
+      kubectl -n "$SCRATCH_NS" describe pvc 2>&1 | tail -20 || true
+      fail "no PVC reached Bound within ${BIND_TIMEOUT}s"
+    fi
+    say "PVC bound: $PVC"
+
+    # --- verify the data is really there ------------------------------------
+    # The pod asserts its own result in its exit code, so no pods/exec rights
+    # are needed. Labels and explicit limits are mandatory: Gatekeeper runs in
+    # deny mode and rejects pods without app.kubernetes.io/name or limits.
+    say "creating verify pod to read from $PVC"
+    cat <<EOP | kubectl apply -f - >/dev/null
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: restore-verify
+      namespace: $SCRATCH_NS
+      labels:
+        app.kubernetes.io/name: restore-verify
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: false
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verify
+          image: $VERIFY_IMAGE
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "listing /data:"
+              ls -la /data | head -20
+              # Existence is not enough — an empty volume mounts perfectly well.
+              # Require a real file AND prove bytes can be read off it.
+              f=\$(find /data -type f -size +0 2>/dev/null | head -1)
+              if [ -z "\$f" ]; then
+                echo "VERIFY FAIL: no non-empty regular file on the restored volume"
+                exit 1
+              fi
+              echo "reading: \$f"
+              dd if="\$f" of=/dev/null bs=4096 count=64 2>&1
+              echo "VERIFY OK: restored volume is readable (\$f)"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: restored
+              mountPath: /data
+              readOnly: true
+      volumes:
+        - name: restored
+          persistentVolumeClaim:
+            claimName: $PVC
+            readOnly: true
+    EOP
+
+    ELAPSED=0; POD_PHASE=""
+    while [ "$ELAPSED" -lt "$VERIFY_TIMEOUT" ]; do
+      POD_PHASE=$(kubectl -n "$SCRATCH_NS" get pod restore-verify \
+        -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+      case "$POD_PHASE" in Succeeded|Failed) break ;; esac
+      sleep 5; ELAPSED=$((ELAPSED + 5))
+    done
+
+    say "--- verify pod output ---"
+    kubectl -n "$SCRATCH_NS" logs restore-verify 2>&1 || say "(no logs available)"
+    say "--- end verify pod output ---"
+
+    [ "$POD_PHASE" = "Succeeded" ] || fail "verify pod ended in phase ${POD_PHASE:-timeout} — restored data unreadable"
+
+    cleanup
+    say "PASS — backup $BACKUP restored from $TARGET_NS and its data is readable"
+    exit 0
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: velero-restore-validator
+  namespace: velero
+  labels:
+    app.kubernetes.io/name: velero-restore-validator
+spec:
+  # 1st of the month at 04:00 — after the 02:00 nightly backup has finished,
+  # so the newest Completed backup is genuinely fresh.
+  schedule: "0 4 1 * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 6
+  # Deeper than usual on purpose: a monthly job leaves very little forensic
+  # trail, and the failures this exists to catch are the quiet kind.
+  failedJobsHistoryLimit: 10
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      # No retries. A retry would restart a restore that may be half-applied,
+      # and a flaky pass is worse than a clean fail here — the alert should
+      # reflect the first honest result.
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: velero-restore-validator
+        spec:
+          serviceAccountName: velero-restore-validator
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: validator
+              image: docker.io/alpine/k8s:1.37.0
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "/scripts/validate.sh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 300m
+                  memory: 256Mi
+              env:
+                - name: VELERO_NS
+                  value: "velero"
+                - name: SCRATCH_NS
+                  value: "velero-restore-test"
+                - name: SCHEDULE_NAME
+                  value: "velero-daily-critical-pvcs"
+                # Rotates by month index. zot and default are omitted on
+                # purpose — see the header comment.
+                - name: TARGET_NAMESPACES
+                  value: "uptime-kuma falco trivy-system loki"
+                - name: RESTORE_TIMEOUT
+                  value: "600"
+                - name: BIND_TIMEOUT
+                  value: "600"
+                - name: VERIFY_TIMEOUT
+                  value: "300"
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+                - name: kube
+                  mountPath: /.kube
+          volumes:
+            - name: scripts
+              configMap:
+                name: velero-restore-validator-script
+                defaultMode: 0555
+            - name: tmp
+              emptyDir: {}
+            - name: kube
+              emptyDir: {}

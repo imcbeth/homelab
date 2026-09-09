@@ -23,6 +23,13 @@ spec:
     - repoURL: git@github.com:imcbeth/homelab.git
       path: manifests/base/velero
       targetRevision: HEAD
+    # Monthly restore validation. Kept in a SEPARATE path because the
+    # kustomization above sets `namespace: velero`, which would rewrite the
+    # validator's velero-restore-test RoleBinding into velero and silently
+    # break its permissions. That directory has no namespace transformer.
+    - repoURL: git@github.com:imcbeth/homelab.git
+      path: manifests/base/velero-restore-validator
+      targetRevision: HEAD
   destination:
     server: https://kubernetes.default.svc
     namespace: velero
