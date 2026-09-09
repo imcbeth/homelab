@@ -37,7 +37,22 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "delete"]
+    # `watch` added 2026-09-09. Without it `kubectl delete pod` still deletes,
+    # but its wait-for-deletion watch fails, spamming reflector errors and
+    # leaving the remediator unable to confirm the delete completed:
+    #   Failed to watch ... cannot watch resource "pods" in namespace "..."
+    verbs: ["get", "list", "watch", "delete"]
+  # Cordon/uncordon. Required because deleting the pod is NOT sufficient on
+  # its own — see the remediation block below. `patch` on nodes is the
+  # narrowest verb that can set spec.unschedulable.
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "patch"]
+  # Read-only: used to confirm the volume actually detached from the bad node,
+  # which is the only real proof the read-only globalmount was torn down.
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list"]
   # Needed to discover pvc-mount-monitor pod IPs without going through
   # Prometheus. Endpoints are RBAC-checked at namespace scope but the
   # remediator may query monitors from any node, so keep cluster-scoped.
@@ -71,6 +86,30 @@ data:
   remediate.sh: |
     #!/bin/sh
     set -eu
+
+    # Tracks a node WE cordoned, so the EXIT trap can undo it.
+    #
+    # A cordon that outlives this Job is worse than the fault it was meant to
+    # fix: the node quietly stops accepting work and nothing says why. The
+    # trap fires on every exit path — success, failure, `set -e` abort, or the
+    # Job hitting activeDeadlineSeconds — which is the same lesson the restore
+    # validator learned the hard way on 2026-09-08.
+    #
+    # Deliberately empty when the node was ALREADY cordoned by someone else:
+    # that state is not ours to clear.
+    CORDONED_NODE=""
+
+    uncordon_if_needed() {
+      if [ -n "${CORDONED_NODE:-}" ]; then
+        if kubectl uncordon "$CORDONED_NODE" >/dev/null 2>&1; then
+          echo "[$(date -u +%FT%TZ)] uncordoned node=$CORDONED_NODE"
+        else
+          echo "[$(date -u +%FT%TZ)] ALERT failed to uncordon node=$CORDONED_NODE — uncordon it by hand"
+        fi
+        CORDONED_NODE=""
+      fi
+    }
+    trap uncordon_if_needed EXIT
 
     # Query the pvc-mount-monitor DaemonSet pods DIRECTLY via the headless
     # Service, bypassing Prometheus + alert evaluation entirely.
@@ -189,13 +228,84 @@ data:
       echo "[$(date -u +%FT%TZ)] ACTION pvc=$pvc node=$node pod=$ns/$pod uid=$pod_uid"
 
       if [ "$DRY_RUN" = "true" ]; then
-        echo "[$(date -u +%FT%TZ)] DRY-RUN would: kubectl delete pod -n $ns $pod"
+        echo "[$(date -u +%FT%TZ)] DRY-RUN would: cordon $node; delete pod -n $ns $pod; wait for detach; uncordon"
       else
-        if kubectl delete pod -n "$ns" "$pod" --grace-period=30 2>&1; then
+        # WHY THIS IS NOT JUST `kubectl delete pod`
+        #
+        # A pod's volume dir is a bind-mount of the CSI driver's per-node
+        # globalmount. When btrfs remounts that globalmount read-only, deleting
+        # the pod achieves nothing if the replacement lands on the SAME node —
+        # it bind-mounts the identical read-only globalmount and crashes the
+        # same way. Only NodeUnstageVolume rebuilds it, and that requires the
+        # volume to detach from the node entirely.
+        #
+        # Observed live 2026-09-09: uptime-kuma went EROFS, this remediator
+        # deleted the pod every 2 minutes and reported OK each time, and the
+        # replacement kept landing back on node03 still read-only. It took
+        # manual intervention. The Jobs were succeeding while fixing nothing.
+        #
+        # Scaling the workload to 0 is not an option either: ArgoCD selfHeal
+        # reverts it within seconds (confirmed — it self-healed at 18:51:29
+        # that same day, seconds after a manual scale to 0).
+        #
+        # So: cordon the node, delete the pod, and let the scheduler place the
+        # replacement elsewhere. The cordon is what makes it deterministic
+        # rather than a coin flip on scheduler placement.
+        cordon_ok="false"
+        already_cordoned=$(kubectl get node "$node" -o jsonpath='{.spec.unschedulable}' 2>/dev/null)
+
+        if [ "$already_cordoned" = "true" ]; then
+          # Someone else cordoned this node. Work with it, but do NOT uncordon
+          # on the way out — that state is not ours to clear.
+          echo "[$(date -u +%FT%TZ)] node=$node already cordoned (not by us); leaving it that way"
+          cordon_ok="true"
+        else
+          # Refuse if there is nowhere for the pod to go. Cordoning the last
+          # schedulable node converts a one-workload outage into a cluster-wide
+          # one, which is a far worse failure than the one being fixed.
+          schedulable=$(kubectl get nodes -o json 2>/dev/null \
+            | jq '[.items[] | select(.spec.unschedulable != true)] | length')
+          if [ "${schedulable:-0}" -lt 2 ]; then
+            echo "[$(date -u +%FT%TZ)] REFUSE cordon node=$node — only ${schedulable:-0} schedulable node(s); pod would have nowhere to go"
+            continue
+          fi
+          if kubectl cordon "$node" >/dev/null 2>&1; then
+            CORDONED_NODE="$node"   # the EXIT trap guarantees this is undone
+            cordon_ok="true"
+            echo "[$(date -u +%FT%TZ)] cordoned node=$node ($schedulable schedulable before)"
+          else
+            echo "[$(date -u +%FT%TZ)] FAIL could not cordon node=$node — deleting pod anyway (may land on the same node)"
+          fi
+        fi
+
+        if kubectl delete pod -n "$ns" "$pod" --grace-period=30 >/dev/null 2>&1; then
           echo "[$(date -u +%FT%TZ)] OK deleted pod=$ns/$pod"
         else
           echo "[$(date -u +%FT%TZ)] FAIL kubectl delete returned non-zero"
         fi
+
+        # Success is the volume DETACHING from the bad node. That is the only
+        # evidence NodeUnstageVolume ran and the read-only globalmount is gone.
+        # Pod-is-Running is not evidence: it can be Running on the same node,
+        # still read-only, which is exactly how this went unnoticed.
+        if [ "$cordon_ok" = "true" ]; then
+          waited=0
+          detached="false"
+          while [ "$waited" -lt "${DETACH_TIMEOUT:-180}" ]; do
+            n_att=$(kubectl get volumeattachment -o json 2>/dev/null \
+              | jq --arg pv "$pvc" --arg n "$node" \
+                  '[.items[] | select(.spec.source.persistentVolumeName==$pv and .spec.nodeName==$n)] | length')
+            if [ "${n_att:-1}" = "0" ]; then detached="true"; break; fi
+            sleep 5; waited=$((waited + 5))
+          done
+          if [ "$detached" = "true" ]; then
+            echo "[$(date -u +%FT%TZ)] OK volume $pvc detached from $node after ${waited}s — globalmount torn down"
+          else
+            echo "[$(date -u +%FT%TZ)] WARN volume $pvc still attached to $node after ${waited}s; it may still be read-only"
+          fi
+        fi
+
+        uncordon_if_needed
       fi
     done
 
