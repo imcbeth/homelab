@@ -209,6 +209,24 @@
 
 ## Recent Sessions
 
+### 2026-09-09 (late): Argo DR workflow fixed + 4 alerts that could never fire
+
+**The monthly Velero DR validation workflow was failing** (PR #925). Every step runs `bitnami/kubectl`, which does not fit the 128Mi `templateDefaults` limit — `create-test-resources` died with exit 137. Raised to 256Mi; re-ran by hand and it **Succeeded**, so the workflow was sound, just under-resourced.
+
+**Why nobody knew: 4 of the 8 Argo alerts could never fire.** They select `argo_workflows_gauge{status="..."}` but the label is **`phase`**. That selector matches ZERO series, so `ArgoWorkflowFailed`, `ArgoWorkflowError`, `ArgoWorkflowStuck` and `ArgoWorkflowHighFailureRate` were inert. Proven: two real failures that day (`lifeonabike-build` and the DR workflow) produced no alert at all.
+
+Three also applied `increase()` — a counter function — to a gauge.
+
+`ArgoWorkflowHighFailureRate` was rewritten rather than patched: it derived a 24h failure RATIO from `increase()` over a gauge that only counts workflows CURRENTLY PRESENT, and completed workflows are TTL'd within hours. There is no 24h history in it to rate. Now `sum(argo_workflows_gauge{phase=~"Failed|Error"}) > 3`.
+
+The workflow's own header claimed failures surface via `VeleroBackupFailed` — they do not; that watches `velero_backup_failure_total`, which a failed verify step never increments. Wrong claim plus broken selectors meant a monthly job could fail indefinitely in silence.
+
+Verified: all 8 selectors match live series (4 previously matched zero), and 0 rules still use `status=` after reload.
+
+**Recurring pattern across this whole day:** four separate mechanisms that looked configured and did nothing — `PERSISTENCE=1` on community LocalStack, a 300Mi limit the workload lived at, these alert selectors, and the DR workflow's claimed alert path. Plus two claims of my own that failed the same way. `REFERENCE.md` now carries the technique that settles all of them: run a control whose answer you already know.
+
+---
+
 ### 2026-09-09 (afternoon): LocalStack bucket durability + trivy-operator OOM loop
 
 **Argo Workflows had been failing every build** (PR #922). `lifeonabike-build` failed at artifact upload with `The specified bucket does not exist`; `GET /argo-workflows` returned HTTP 404.
