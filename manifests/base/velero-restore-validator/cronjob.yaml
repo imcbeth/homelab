@@ -29,6 +29,15 @@
 # Prometheus) are deliberately off the list: a 5Gi restore exercises exactly
 # the same code path, and monthly 50Gi LUN churn on the NAS buys nothing.
 # That means this validates the MECHANISM, not that a 50Gi restore fits.
+#
+# falco is off the list for a different reason: its 2Gi redis PVC is EMPTY —
+# verified 2026-09-08 on both the live volume and a restore of it. The
+# restore was byte-perfect; there are simply no bytes. A namespace with no
+# data cannot validate that data survives a round trip, so including it would
+# only ever produce a false failure. (Separately: nightly-backing-up an empty
+# 2Gi volume is worth revisiting.)
+#
+# A namespace belongs on this list only if its volume genuinely holds data.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -211,7 +220,12 @@ data:
               # Require a real file AND prove bytes can be read off it.
               f=\$(find /data -type f -size +0 2>/dev/null | head -1)
               if [ -z "\$f" ]; then
-                echo "VERIFY FAIL: no non-empty regular file on the restored volume"
+                echo "VERIFY FAIL: volume mounted cleanly but holds no non-empty file."
+                echo "  This is NOT necessarily a restore failure. Check whether the"
+                echo "  SOURCE volume is empty too before assuming data loss:"
+                echo "    kubectl -n <source-ns> exec <pod> -- ls -la <mountPath>"
+                echo "  If the source is empty, drop that namespace from"
+                echo "  TARGET_NAMESPACES — it cannot validate anything."
                 exit 1
               fi
               echo "reading: \$f"
@@ -252,7 +266,9 @@ data:
     kubectl -n "$SCRATCH_NS" logs restore-verify 2>&1 || say "(no logs available)"
     say "--- end verify pod output ---"
 
-    [ "$POD_PHASE" = "Succeeded" ] || fail "verify pod ended in phase ${POD_PHASE:-timeout} — restored data unreadable"
+    # The pod log above says which of the two it was: an empty volume or an
+    # unreadable one. Do not collapse them here — they have different causes.
+    [ "$POD_PHASE" = "Succeeded" ] || fail "verify pod ended in phase ${POD_PHASE:-timeout} — see its output above"
 
     cleanup
     say "PASS — backup $BACKUP restored from $TARGET_NS and its data is readable"
@@ -322,7 +338,7 @@ spec:
                 # Rotates by month index. zot and default are omitted on
                 # purpose — see the header comment.
                 - name: TARGET_NAMESPACES
-                  value: "uptime-kuma falco trivy-system loki"
+                  value: "uptime-kuma trivy-system loki"
                 - name: RESTORE_TIMEOUT
                   value: "600"
                 - name: BIND_TIMEOUT
