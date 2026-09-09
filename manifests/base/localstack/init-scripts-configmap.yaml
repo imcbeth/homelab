@@ -1,0 +1,61 @@
+---
+# LocalStack init hooks — recreate S3 buckets on EVERY start.
+#
+# THE PROBLEM
+#
+# LocalStack here is `edition: community`, `is_license_activated: false`.
+# Persistence is a licensed feature: `PERSISTENCE=1` is set in the Deployment
+# but is a NO-OP. Proven 2026-09-09 — created a bucket, then found
+# /var/lib/localstack/state still contained 0 files. The 2Gi PVC holds cache
+# and logs only; no service state survives a restart.
+#
+# The `argo-workflows` bucket was created ONCE by a Job at install time. When
+# LocalStack restarted, the bucket vanished and nothing recreated it. Argo
+# Workflows then failed every build at the artifact-upload step:
+#
+#   lifeonabike-build-zmgqg  Failed
+#   wait: Error (exit code 64): failed to put file:
+#     The specified bucket does not exist
+#
+# Confirmed by hand: GET /argo-workflows returned HTTP 404.
+#
+# THE FIX
+#
+# Scripts in /etc/localstack/init/ready.d/ run every time LocalStack reaches
+# the ready state, so bucket creation follows the container's lifecycle
+# instead of being a one-time install step. This replaces the one-shot Job
+# (manifests/base/argo-workflows/localstack-setup-job.yaml), which could never
+# recover from a restart.
+#
+# Keep every script here IDEMPOTENT — it runs on each start, not just once.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: localstack-init-scripts
+  namespace: localstack
+  labels:
+    app.kubernetes.io/name: localstack
+data:
+  10-create-buckets.sh: |
+    #!/bin/bash
+    # Buckets required by other cluster components. Add to this list rather
+    # than creating buckets out of band — anything created by hand disappears
+    # at the next restart and takes a while to diagnose.
+    set -uo pipefail
+
+    BUCKETS="argo-workflows"
+
+    for b in $BUCKETS; do
+      # `mb` on an existing bucket returns non-zero with BucketAlreadyOwnedByYou.
+      # That is a success for our purposes, so check existence rather than
+      # relying on the exit code.
+      if awslocal s3api head-bucket --bucket "$b" >/dev/null 2>&1; then
+        echo "[init] bucket s3://$b already present"
+      elif awslocal s3 mb "s3://$b" >/dev/null 2>&1; then
+        echo "[init] created bucket s3://$b"
+      else
+        # Do not exit non-zero: a failure here must not stop LocalStack from
+        # starting, or one bad bucket takes the whole emulator down.
+        echo "[init] WARN failed to create bucket s3://$b" >&2
+      fi
+    done
