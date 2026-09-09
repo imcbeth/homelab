@@ -265,3 +265,31 @@ Storage: Backblaze B2 (tested and validated)
 3. **Reference Line Numbers:** When discussing code, use `file_path:line_number` format for clarity
 4. **Check Existing PRs:** Before creating new PR, verify previous PRs merged successfully
 5. **Session Continuity:** Read `.claude/notes/CURRENT.md` at session start
+
+### `kubectl auth can-i` is blind to aggregated API servers
+
+`auth can-i` evaluates **Kubernetes RBAC only**. For any resource served by an
+aggregated API server, that answer can be wrong in the permissive direction —
+the extension apiserver applies its own authorization afterwards, and `can-i`
+cannot see it.
+
+Calico is the live example here. `calico-tiered-policy-passthrough` grants
+`system:authenticated` full CRUD on `networkpolicies`/`globalnetworkpolicies`
+in `projectcalico.org`, so `can-i delete` says **yes** for every identity in
+the cluster. The actual request is refused:
+
+    Forbidden: cannot delete globalnetworkpolicies.projectcalico.org
+    in tier "default" (user cannot get tier)
+
+The name says it: it is a *passthrough*. Real authorization is enforced on the
+`tiers` resource by the Calico API server. This was mis-reported as a critical
+cluster-wide RBAC hole on 2026-09-08 and retracted on 2026-09-09.
+
+**Test authorization by attempting the operation, not by asking `can-i`.** A
+safe probe is to target a NON-EXISTENT object and read the error:
+
+    Forbidden  -> genuinely denied
+    NotFound   -> authorized; the object simply does not exist
+
+Always run the same probe as a known-authorized identity as a control —
+without it you cannot tell a real denial from a malformed probe.
