@@ -234,7 +234,9 @@ Two bugs only running it could find: the verify pod was rejected by `restricted`
 
 **Bookkeeping:** F5 and F8 closed, F15 corrected (PR #911) — its row had claimed Velero covered the uptime-kuma PVC, which was false and is part of why the gap survived. Tally: 13 closed, 0 waiting, 1 open. Docs updated (k8s-docs-n37 #112); docs repo also gained a CI build gate (#110) now enforced as a required check.
 
-**Next session, in order:** (1) the Calico RBAC grant, (2) falco's empty PVC, (3) F15 — now unblocked because 2.5.3 has the monitor REST API 1.x lacked.
+**CORRECTION 2026-09-09 — F15 is NOT unblocked.** I claimed repeatedly that 2.5.3 added a monitor REST API. It did not. Probing the running instance: `/api/monitors` and `/api/v1/monitors` return `text/html` (the SPA fallback), byte-identical to a deliberately made-up control endpoint; only `/api/entry-page` returns JSON. Uptime Kuma's programmatic interface is still **socket.io**. Full GitOps reconciliation is therefore much harder than assumed; **drift detection** (export from SQLite, diff against a committed list, alert) is the cheaper 80% and is the better next step.
+
+**Next session, in order:** (1) the Calico RBAC grant, (2) falco's empty PVC, (3) F15 — **still blocked; see correction below.**
 
 ---
 
