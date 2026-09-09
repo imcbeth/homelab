@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-09 (RO remediator fixed after a live outage; two of my own claims retracted)
+**Last Updated:** 2026-09-09 (remediator fixed + verified; LocalStack bucket durability; trivy-operator OOM loop stopped)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,28 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-09 (afternoon): LocalStack bucket durability + trivy-operator OOM loop
+
+**Argo Workflows had been failing every build** (PR #922). `lifeonabike-build` failed at artifact upload with `The specified bucket does not exist`; `GET /argo-workflows` returned HTTP 404.
+
+Two things compounded:
+1. **`PERSISTENCE=1` is a NO-OP here.** Persistence is a licensed feature and this install reports `edition: community`, `is_license_activated: false`. Proven: created a bucket, then found `/var/lib/localstack/state` holding **0 files**. The 2Gi PVC stores cache and logs, not service state — so every restart loses all buckets.
+2. The `argo-workflows` bucket was created **once** by a Job at install time. Nothing recreated it after a restart.
+
+Fix: a ConfigMap mounted at `/etc/localstack/init/ready.d`, which LocalStack runs on **every** ready event. Idempotent (checks `head-bucket`; never exits non-zero, so a bad bucket cannot stop LocalStack booting). Replaced the one-shot Job, which could never recover from a restart. Verified live — the hook ran twice in one boot: `created bucket` then `already present`. A re-run of the failed build **Succeeded**.
+
+`PERSISTENCE=1` kept but commented as ineffective, so it starts working if a licence is ever added and nobody trusts it meanwhile.
+
+**trivy-operator was in an OOMKill loop** (PR #923) — **29 restarts in 2 days**, starved on both axes at once:
+- memory limit 300Mi while `max_over_time([24h])` repeatedly returned **296-300 MiB**. Not spiking past a sane ceiling; living AT it. ~1% headroom.
+- cpu limit 300m against measured **301m** — pegged, permanently throttled. This is the real case `CPUThrottlingHighSaturated` was written for in F9: high throttling AND high utilization together.
+
+Raised to 512Mi / 500m (requests 256Mi / 100m — the old 100Mi request was so far below reality the scheduler could not place it sensibly). After the change: **0 restarts**, settled ~259 MiB, but observed briefly at **303-305 MiB** — above the old limit, which is direct proof the limit was the cause.
+
+**Also cleared:** two stale `KubeJobFailed` alerts from remediator jobs that failed during the morning outage with `timed out waiting for the condition` — the exact symptom of the missing `pods watch` verb fixed in #919. Firing alerts 5 -> 4.
+
+---
 
 ### 2026-09-09: RO remediator fixed after a live outage + two retractions
 
