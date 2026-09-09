@@ -23,7 +23,13 @@ spec:
     spec:
       containers:
         - name: localstack
-          image: localstack/localstack:4.14.0
+          # LocalStack moved from semver to CalVer. 4.14.0 is not even in the
+          # 100 most recently updated tags any more; the current line is
+          # 2026.8.x. Renovate could not see this — it parsed 4.14.0 as semver
+          # and no CalVer tag compares as "newer", so it never opened a PR
+          # despite localstack being explicitly configured for updates.
+          # See renovate.json for the versioning override that fixes that.
+          image: localstack/localstack:2026.8.2
           ports:
             - containerPort: 4566 # Default LocalStack port
           # Right-sized resources (actual usage ~89Mi)
