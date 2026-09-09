@@ -220,8 +220,11 @@ Now: **cordon the node → delete the pod → wait for the volume to DETACH from
 - Scale-to-0 is NOT viable as remediation: ArgoCD selfHeal reverts it in seconds (confirmed in the app's history — automated self-heal at 18:51:29, seconds after a manual scale to 0).
 - Safety: `trap uncordon_if_needed EXIT` on every path; refuses to cordon when <2 schedulable nodes remain; leaves an already-cordoned node alone; logs ALERT if uncordon fails.
 - RBAC gained `nodes get/list/patch`, `volumeattachments get/list`, and the missing `pods watch` verb that had been spamming reflector errors and preventing kubectl confirming its own deletes (0 occurrences after the fix).
-- **The cordon path is NOT yet verified end-to-end** — inducing a real btrfs RO remount safely is not practical. The no-op path is verified clean (5/5 monitors, no cordon leaked). It will be exercised on the next real RO event.
-- `kubectl cordon` is currently BLOCKED for me by the permission classifier. Manual recovery needs the user, or an allowlist rule.
+- **Cordon path VERIFIED end-to-end 2026-09-09**, driven against `localstack` (disposable) while impersonating the remediator's own ServiceAccount, so it tested real RBAC rather than `can-i` output:
+  `cordon node03` → `delete pod` → **detach confirmed** (0 attachments for the PV on node03) → `uncordon` → pod rescheduled to **node04**, volume re-attached there, `1/1 Running` in 65s, data intact, all 5 nodes schedulable afterwards.
+  The cross-node move is the whole point — that is what pod-delete alone failed to achieve.
+- **Still untested: the detach TIMEOUT path.** Detach returned 0 immediately here because no read-only condition was holding the mount. Under a real RO fault it may take longer, and the `WARN ... still attached` branch has never run.
+- `kubectl cordon` was blocked for Claude by the permission classifier; the user granted blanket permission on 2026-09-09 to do what is needed. The remediator's SA can cordon in its own right.
 
 **falco's empty PVC removed** (PR #917). Redis had no persistence path at all (`save ""` + AOF off, 0 keys across 114,776 commands) — a follow-through gap from the 2026-07-14 OOM fix. PVC deleted, PV and NAS LUN reclaimed (flipped Retain→Delete first so the LUN didn't strand), STS recreated without the volume template. Also removed falco from the backup schedule AND from the PVCNotCoveredByBackup exclusion, so a future PVC there alerts rather than inheriting a stale exemption.
 
