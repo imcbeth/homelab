@@ -137,7 +137,7 @@ spec:
     - alert: PVCNotCoveredByBackup
       expr: |
         kube_persistentvolumeclaim_info{
-          namespace!~"default|loki|trivy-system|falco|uptime-kuma|localstack|tempo|zot"
+          namespace!~"default|loki|trivy-system|uptime-kuma|localstack|tempo|zot"
         }
       for: 6h
       labels:
@@ -161,6 +161,12 @@ spec:
           Deliberately unprotected today: localstack (test S3 emulator,
           disposable) and tempo (short-TTL traces, regenerable). Everything
           else in the exclusion list is excluded because it IS backed up.
+
+          falco was REMOVED from this list on 2026-09-09 when its Redis PVC
+          was deleted (it had no persistence configured and was permanently
+          empty). If a PVC ever appears in falco again it will now alert,
+          which is the intent — a namespace losing its storage should not
+          silently keep a backup exemption it no longer needs.
 
           `for: 6h` so short-lived PVCs from restore tests and CI do not fire.
 

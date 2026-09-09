@@ -254,7 +254,6 @@ schedules:
         - default      # Prometheus, Grafana
         - loki         # Loki
         - trivy-system # Trivy vulnerability DB
-        - falco        # Falco Sidekick Redis
         - uptime-kuma  # Uptime Kuma SQLite DB (monitors + heartbeat history)
         # zot is 50Gi and mostly pull-through cache that would repopulate from
         # upstream on its own. It is included anyway because it is ALSO the
