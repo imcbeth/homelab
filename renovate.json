@@ -115,13 +115,6 @@
         "major-update"
       ],
       "prPriority": -1
-    },
-    {
-      "description": "LocalStack switched from semver (4.x) to CalVer (2026.8.x) in 2026. Renovate's default docker versioning treats CalVer tags as older than 4.14.0 and silently stopped proposing updates, leaving the image ~13 months stale with fixable CRITICAL CVEs. 'loose' versioning compares them correctly.",
-      "matchPackageNames": [
-        "localstack/localstack"
-      ],
-      "versioning": "loose"
     }
   ],
   "customManagers": [
@@ -154,7 +147,8 @@
     "synology/synology-csi",
     "registry.k8s.io/ingress-nginx/kube-webhook-certgen",
     "golift/unifi-poller",
-    "velero/velero-plugin-for-aws"
+    "velero/velero-plugin-for-aws",
+    "localstack/localstack"
   ],
   "vulnerabilityAlerts": {
     "enabled": true,

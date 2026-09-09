@@ -23,13 +23,27 @@ spec:
     spec:
       containers:
         - name: localstack
-          # LocalStack moved from semver to CalVer. 4.14.0 is not even in the
-          # 100 most recently updated tags any more; the current line is
-          # 2026.8.x. Renovate could not see this — it parsed 4.14.0 as semver
-          # and no CalVer tag compares as "newer", so it never opened a PR
-          # despite localstack being explicitly configured for updates.
-          # See renovate.json for the versioning override that fixes that.
-          image: localstack/localstack:2026.8.2
+          # PINNED to 4.14.0 — the last COMMUNITY release under the semver
+          # line. DO NOT bump to a CalVer tag (2026.8.x) without checking the
+          # edition first.
+          #
+          # Tried 2026.8.2 on 2026-09-09 and it CrashLooped immediately:
+          #
+          #   Localstack returning with exit code 55.
+          #   License activation failed!
+          #   No credentials were found in the environment. Please make sure
+          #   to either set the LOCALSTACK_AUTH_TOKEN variable...
+          #
+          # The CalVer tags on this repository require a licence to start at
+          # all — they are not a drop-in continuation of the community line.
+          # The tag existing and being newer is NOT sufficient evidence that
+          # it is the same distribution.
+          #
+          # Consequence: this image cannot be updated without a LocalStack
+          # licence, so its CVEs are frozen at whatever 4.14.0 ships. That is
+          # tolerable only because this is a disposable test emulator on a
+          # private network with no untrusted input.
+          image: localstack/localstack:4.14.0
           ports:
             - containerPort: 4566 # Default LocalStack port
           # Right-sized resources (actual usage ~89Mi)
