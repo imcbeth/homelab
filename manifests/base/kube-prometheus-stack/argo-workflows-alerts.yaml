@@ -15,7 +15,7 @@ spec:
     interval: 60s
     rules:
     - alert: ArgoWorkflowFailed
-      expr: increase(argo_workflows_gauge{status="Failed"}[1h]) > 0
+      expr: argo_workflows_gauge{phase="Failed"} > 0
       for: 1m
       labels:
         severity: warning
@@ -31,7 +31,7 @@ spec:
           3. argo logs -n argo-workflows <workflow-name>
 
     - alert: ArgoWorkflowError
-      expr: increase(argo_workflows_gauge{status="Error"}[1h]) > 0
+      expr: argo_workflows_gauge{phase="Error"} > 0
       for: 1m
       labels:
         severity: critical
@@ -64,7 +64,7 @@ spec:
           2. kubectl get events -n argo-workflows --sort-by='.lastTimestamp'
 
     - alert: ArgoWorkflowStuck
-      expr: argo_workflows_gauge{status="Running"} > 0 and argo_workflows_queue_longest_running > 3600
+      expr: argo_workflows_gauge{phase="Running"} > 0 and argo_workflows_queue_longest_running > 3600
       for: 10m
       labels:
         severity: warning
@@ -131,17 +131,19 @@ spec:
           2. kubectl logs -n argo-workflows -l app.kubernetes.io/name=argo-workflows-workflow-controller
           3. kubectl get servicemonitor -n argo-workflows
 
+    # Rewritten 2026-09-09. The previous version computed a 24h failure RATIO
+    # from increase() over argo_workflows_gauge. Unsound twice over:
+    # increase() is a counter function applied to a gauge, and the gauge
+    # counts workflows CURRENTLY PRESENT — completed workflows are TTL'd away
+    # within hours, so any 24h rate derived from it is fiction.
+    #
+    # A gauge can honestly answer "how many are failed right now", so that is
+    # what this asks. Several failed at once means something systemic; a
+    # single bad run is already covered by ArgoWorkflowFailed.
     - alert: ArgoWorkflowHighFailureRate
       expr: |
-        (
-          increase(argo_workflows_gauge{status="Failed"}[24h]) +
-          increase(argo_workflows_gauge{status="Error"}[24h])
-        ) / (
-          increase(argo_workflows_gauge{status="Succeeded"}[24h]) +
-          increase(argo_workflows_gauge{status="Failed"}[24h]) +
-          increase(argo_workflows_gauge{status="Error"}[24h]) + 1
-        ) > 0.3
-      for: 30m
+        sum(argo_workflows_gauge{phase=~"Failed|Error"}) > 3
+      for: 15m
       labels:
         severity: warning
         component: workflows

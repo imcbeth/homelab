@@ -36,15 +36,27 @@ spec:
         app.kubernetes.io/name: velero-backup-validation
 
     # Default resource limits for all steps (Gatekeeper require-resource-limits)
+    #
+    # memory RAISED 128Mi -> 256Mi on 2026-09-09. Every step runs
+    # bitnami/kubectl, a Debian-based image that does not fit in 128Mi: the
+    # `create-test-resources` step was OOMKilled (exit 137) and the whole
+    # workflow failed.
+    #
+    # This had been failing silently. It is scheduled monthly, its Workflow
+    # objects are TTL'd away within 8h of failing, and the header's claim that
+    # failures surface via the Velero PrometheusRule does not hold —
+    # VeleroBackupFailed watches velero_backup_failure_total, which a failed
+    # verify step never increments. So a monthly job could fail indefinitely
+    # with nothing to show for it. Found only by running it by hand.
     templateDefaults:
       container:
         resources:
           requests:
             cpu: 50m
-            memory: 64Mi
+            memory: 96Mi
           limits:
             cpu: 200m
-            memory: 128Mi
+            memory: 256Mi
 
     # TTL: keep completed workflows 2h (success) or 8h (failure) for log review
     ttlStrategy:
