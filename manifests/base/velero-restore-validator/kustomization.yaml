@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# NOTE: deliberately NO `namespace:` transformer.
+#
+# manifests/base/velero/kustomization.yaml sets `namespace: velero`, which
+# rewrites every namespaced resource it renders. These manifests span TWO
+# namespaces — the validator itself in `velero`, and a Role/RoleBinding in
+# `velero-restore-test` — so being rendered under that transformer would
+# silently move the scratch-namespace RBAC into `velero`, where it grants
+# nothing useful. The job would then fail with a permissions error at the
+# point where it tries to create the verify pod.
+#
+# Keeping this as its own kustomization is what allows namespaced Roles
+# instead of a cluster-wide ClusterRole for pod create/delete.
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - cronjob.yaml

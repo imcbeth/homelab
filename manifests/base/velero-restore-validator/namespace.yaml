@@ -1,0 +1,21 @@
+---
+# Scratch namespace the monthly restore validation restores INTO.
+#
+# Declared in git rather than created at runtime so the validator's
+# ServiceAccount never needs namespace create/delete rights. The namespace is
+# expected to be empty between runs; anything lingering here is either a run in
+# progress or the debris of a failed one, and is worth looking at.
+#
+# Nothing else may be deployed here. A restore into a namespace that already
+# holds objects of the same name is a merge, not a clean test, and would make
+# the result meaningless.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: velero-restore-test
+  labels:
+    app.kubernetes.io/name: velero-restore-test
+    app.kubernetes.io/part-of: velero-restore-validator
+    # Restored workloads are never actually run here — only mounted and read —
+    # but the verify pod itself must satisfy the cluster's restricted baseline.
+    pod-security.kubernetes.io/enforce: restricted

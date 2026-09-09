@@ -164,6 +164,68 @@ spec:
 
           `for: 6h` so short-lived PVCs from restore tests and CI do not fire.
 
+    # Restore VALIDATION, as distinct from backup success and from backup
+    # coverage. The alerts above answer "did the backups run?" and
+    # PVCNotCoveredByBackup answers "are they pointed at everything?". Neither
+    # answers "would a restore actually work?" — which was never tested on
+    # this cluster until 2026-09-07, and then only by hand.
+    #
+    # velero-restore-validator (monthly) restores a real scheduled backup into
+    # a scratch namespace, mounts the volume and reads bytes off it. It exits
+    # non-zero on any failure, so a failed Job IS the signal.
+    - alert: VeleroRestoreValidationFailed
+      expr: |
+        kube_job_status_failed{job_name=~"velero-restore-validator.*"} > 0
+      for: 15m
+      labels:
+        severity: critical
+        component: backup
+      annotations:
+        summary: "Monthly Velero restore validation FAILED"
+        description: |
+          The velero-restore-validator Job failed. A backup that cannot be
+          restored is not a backup, and every other Velero alert will keep
+          reporting success while this is broken.
+
+          Read the job log first — it names the exact step that failed:
+            kubectl -n velero logs job/{{ $labels.job_name }}
+
+          Likely causes, roughly in order:
+            - the target namespace is not in the backup (coverage gap)
+            - restore Completed but no PVC reached Bound (missing snapshot)
+            - the restored volume mounted but held no readable data
+            - RBAC or Gatekeeper rejected the verify pod
+
+          Scratch namespace state, if the run left debris behind:
+            kubectl -n velero-restore-test get pvc,pod
+            kubectl -n velero get restore
+
+    # The watcher must itself be watched. A monthly job that silently stops
+    # running looks exactly like one that keeps passing — which is the whole
+    # failure class this validator exists to catch, so leaving it unguarded
+    # would be self-defeating. 40d allows one missed run plus slack.
+    - alert: VeleroRestoreValidationStale
+      expr: |
+        time() - kube_cronjob_status_last_successful_time{cronjob="velero-restore-validator"} > 3456000
+      for: 1h
+      labels:
+        severity: warning
+        component: backup
+      annotations:
+        summary: "Velero restore validation has not passed in over 40 days"
+        description: |
+          velero-restore-validator last SUCCEEDED more than 40 days ago. It is
+          scheduled monthly, so at least one run has been missed or has been
+          failing without completing.
+
+          Restorability is therefore currently unproven — not known-broken,
+          but not known-good either.
+
+            kubectl -n velero get cronjob velero-restore-validator
+            kubectl -n velero get jobs -l app.kubernetes.io/name=velero-restore-validator
+
+          If the CronJob is suspended or missing, that is the answer.
+
     - alert: VeleroBackupDurationHigh
       expr: velero_backup_duration_seconds > 1800
       for: 5m
