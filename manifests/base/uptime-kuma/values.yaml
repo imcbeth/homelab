@@ -57,16 +57,17 @@ volume:
 # Mount path /app/data per chart default.
 livenessProbe:
   enabled: true
-  # RAISED 180 -> 900 FOR THE 2.x MIGRATION (2026-09-07). Uptime Kuma runs its
-  # schema migration on first start, against 1.95M heartbeat rows on an iSCSI
-  # PVC. At the old 180s + 3x30s the kubelet would kill the container roughly
-  # 270s in — mid-migration, on a half-rewritten SQLite file. That is the one
-  # way this upgrade turns into actual data loss rather than a failed start.
+  # Restored to 180 on 2026-09-08, the 2.x migration having completed
+  # ("Aggregate Table Migration Completed", 2026-09-07T21:10:37Z, 0 restarts).
   #
-  # Lower this back to 180 once the migration has completed and the pod has
-  # been stable through a restart; 900s is too slow to catch a wedged pod as a
-  # steady-state setting.
-  initialDelaySeconds: 900
+  # It was temporarily raised to 900 for that migration: Uptime Kuma rewrites
+  # its schema on first start, and here also re-aggregated 1.95M heartbeat
+  # rows over ~58 minutes. At 180s + 3x30s the kubelet would have killed the
+  # container ~270s in, mid-write, and gone on doing so every restart.
+  #
+  # Raise it again before any future major upgrade of this app. 900s is the
+  # wrong steady-state value — a wedged pod would go uncaught for 15 minutes.
+  initialDelaySeconds: 180
   periodSeconds: 30
   failureThreshold: 3
   timeoutSeconds: 5
