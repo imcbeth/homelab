@@ -203,7 +203,27 @@ falcosidekick:
         cpu: 100m
         memory: 128Mi
     redis:
-      storageSize: "2Gi"
+      # storageEnabled: false — the PVC was pointless (2026-09-09).
+      #
+      # `save ""` below disables RDB, and redis-stack has AOF off by default,
+      # so this Redis has NO persistence path at all. The 2Gi iSCSI PVC could
+      # therefore never contain anything, and did not: verified on both the
+      # live volume and a Velero restore of it — only `.` and `..`, and
+      # redis reported 0 keys with 0 keyspace hits/misses across 114,776
+      # commands in 2 days.
+      #
+      # It was a leftover. `save ""` was added 2026-07-14 to stop BGSAVE fork
+      # spikes OOMKilling the container; the storage that only existed to
+      # serve BGSAVE was never removed to match.
+      #
+      # Cost of keeping it: a nightly Velero snapshot of an empty volume, a
+      # NAS LUN, and one more iSCSI PVC that can go read-only and drag the
+      # RO-remediation machinery in for nothing.
+      #
+      # NOTE: volumeClaimTemplates are immutable, so flipping this requires
+      # deleting the StatefulSet so ArgoCD recreates it. Safe here precisely
+      # because there is no data to lose.
+      storageEnabled: false
       resources:
         requests:
           cpu: 50m
