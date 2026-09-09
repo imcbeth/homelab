@@ -41,6 +41,15 @@ spec:
               value: "1"
             - name: EXTRA_CORS_ALLOWED_ORIGINS
               value: "https://localstack.k8s.n37.ca"
+            # NO-OP ON THIS INSTALL — kept only so it starts working if a
+            # licence is ever added. Persistence is a LICENSED feature and
+            # this is `edition: community`, `is_license_activated: false`.
+            # Verified 2026-09-09: created a bucket, then found
+            # /var/lib/localstack/state still holding 0 files. The PVC stores
+            # cache and logs, not service state.
+            #
+            # Bucket durability is handled by the init hooks mounted at
+            # /etc/localstack/init/ready.d instead. Do not rely on this.
             - name: PERSISTENCE
               value: "1"
           # Liveness probe — combined health-check + write-test on the PVC.
@@ -70,7 +79,17 @@ spec:
           volumeMounts:
             - name: localstack-data
               mountPath: /var/lib/localstack
+            # Init hooks run on every start. This is what recreates the
+            # argo-workflows S3 bucket, which does NOT survive a restart
+            # because persistence is a licensed feature (see PERSISTENCE).
+            - name: init-scripts
+              mountPath: /etc/localstack/init/ready.d
+              readOnly: true
       volumes:
         - name: localstack-data
           persistentVolumeClaim:
             claimName: localstack-data
+        - name: init-scripts
+          configMap:
+            name: localstack-init-scripts
+            defaultMode: 0555
