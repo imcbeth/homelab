@@ -158,9 +158,9 @@ spec:
           2. The data is disposable/regenerable → add the namespace to this
              alert's exclusion list with a comment saying why.
 
-          Deliberately excluded today: localstack (test S3 emulator,
-          disposable), tempo (short-TTL traces, regenerable), zot (50Gi,
-          mostly pull-through cache that repopulates from upstream).
+          Deliberately unprotected today: localstack (test S3 emulator,
+          disposable) and tempo (short-TTL traces, regenerable). Everything
+          else in the exclusion list is excluded because it IS backed up.
 
           `for: 6h` so short-lived PVCs from restore tests and CI do not fire.
 
