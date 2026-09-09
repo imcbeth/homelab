@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-07 (follow-up list worked to completion: 12 closed, 2 need you, 1 new)
+**Last Updated:** 2026-09-08 (Uptime Kuma 2.5.3 migration + automated restore validation built and proven)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -30,7 +30,11 @@
 - Daily critical PVC backup (2:00 AM)
 - Weekly full cluster backup (3:00 AM Sunday)
 - Backblaze B2 restore tested and validated
-- Monthly DR validation CronWorkflow (1st of month 6am MT) — full backup/restore cycle, ✅ validated 2026-03-25
+- **Coverage (2026-09-07/08):** `default, loki, trivy-system, falco, uptime-kuma, zot`. uptime-kuma added in PR #907 after being found in NO schedule for 135 days; zot added in PR #910. Deliberately unprotected: `localstack` (disposable emulator), `tempo` (short-TTL traces). `PVCNotCoveredByBackup` alerts on any PVC outside this set.
+- **Two validators, and they test different things — do not confuse them:**
+  - `velero-backup-validation` CronWorkflow (argo-workflows, 1st @ 06:00 MT, exists 167d). **SYNTHETIC ONLY** — it creates its own namespace + marker ConfigMap, backs that up, restores it, and checks the marker. Header says "no volume snapshots needed". It never touches a PVC, never reads real data, and never looks at the nightly backups. This is why it coexisted happily with 135 days of an unprotected volume. `lastScheduledTime: 2026-09-01` but **0 workflow objects exist**, so whether it actually passes is unverified. Its claim to alert via `VeleroBackupFailed` is also doubtful — that rule watches `velero_backup_failure_total`, which a failed verify step would not increment.
+  - `velero-restore-validator` CronJob (velero ns, 1st @ 04:00, **new 2026-09-08**, PR #912/#913/#914). **REAL** — takes the newest Completed nightly backup, restores a real namespace into `velero-restore-test`, mounts the volume and reads bytes off it. Rotates `uptime-kuma / trivy-system / loki` by month index. Proven end-to-end 2026-09-08.
+- Backblaze B2 restore tested and validated
 - **✅ Velero v1.18.1 running** — Plugin pinned to v1.13.2 (PR #681, 2026-06-01): v1.14.x sends `x-amz-tagging` on every PutObject; Backblaze B2 rejects it. v1.13.2 predates object tagging. Backup verified working end-to-end ✅.
 
 **Monitoring:** Operational — Retention bumped to 30 days (PR #661, 2026-05-31)
@@ -204,6 +208,35 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-08: Uptime Kuma 2.x migration + automated restore validation
+
+**Uptime Kuma 1.23.17 → 2.5.3** (PR #908, #909). ~58 min, 0 restarts, 14 monitors intact.
+
+Two pre-flight findings, both of which would have broken it:
+- **2.x DROPPED the `-debian` tag suffix.** The unsuffixed tag IS the Debian build. `2.5.3-debian` does not exist → ImagePullBackOff. `-rootless` variants run as uid 1000 and cannot write the root-owned PVC.
+- **The liveness probe would have killed the migration.** `initialDelaySeconds: 180` + 3×30s = container killed ~270s in, on a half-rewritten SQLite DB, on every restart. Measured migration rate was ~2%/min → ~58 min. Raised to 900 for the run, reverted to 180 after (PR #909). **Raise it again before any future major upgrade of this app.**
+
+`Ready` does NOT mean migrated: the schema pass finishes in ~90s and the pod goes Ready while a `[DON'T STOP]` aggregate pass runs for another hour. Raw `heartbeat` rows fell 1,950,590 → 31,957 — by design; history moves to `stat_daily`/`stat_hourly`/`stat_minutely`, back to 2026-06-02.
+
+**Backup coverage fixed** (PR #907, #910). Preparing the migration's rollback exposed that `uptime-kuma` held a 135-day-old 5Gi PVC **in no backup schedule at all**, on a Delete-reclaim StorageClass. Every nightly backup had reported `Completed` throughout. Added it, plus `zot`, plus `PVCNotCoveredByBackup`.
+
+**Automated restore validation** (PR #912, #913, #914) — closes the long-standing TODO item. Monthly CronJob: newest Completed nightly backup → restore a real namespace → mount → read bytes → clean up. Proven both ways on 2026-09-08:
+- PASS in 45s on uptime-kuma: restore Completed 11s, PVC Bound 11s later, read 256KB off the real `kuma.db`.
+- FAIL in 2s on `tempo` (not in the backup): *"does not include namespace tempo — it is NOT being backed up"* — the exact message that would have caught the 135-day gap.
+
+Two bugs only running it could find: the verify pod was rejected by `restricted` PodSecurity (relaxed to `baseline`; it runs root with a read-only mount so the test measures DATA, not file modes), and `set -e` skipped cleanup on failure, leaving a bound PVC that would have made the next run a merge (`trap cleanup EXIT`).
+
+**Three findings not about the validator:**
+1. **falco's 2Gi redis PVC is completely empty** — verified on both the restored copy and the live volume (only `.`/`..`, same Jul 15 mtime). Dropped from the rotation; it cannot validate anything. **Still being snapshotted nightly for nothing** — worth checking falco's persistence config.
+2. **Every ServiceAccount in the cluster can delete Calico network policies.** `kubectl auth can-i delete globalnetworkpolicies.projectcalico.org --as=system:serviceaccount:default:default` → **yes**. Pre-existing, unrelated to this work. Most serious thing found; needs its own session.
+3. The pre-existing `velero-backup-validation` CronWorkflow is **synthetic only** — see Backup Strategy above. It does not test real backups or any PVC.
+
+**Bookkeeping:** F5 and F8 closed, F15 corrected (PR #911) — its row had claimed Velero covered the uptime-kuma PVC, which was false and is part of why the gap survived. Tally: 13 closed, 0 waiting, 1 open. Docs updated (k8s-docs-n37 #112); docs repo also gained a CI build gate (#110) now enforced as a required check.
+
+**Next session, in order:** (1) the Calico RBAC grant, (2) falco's empty PVC, (3) F15 — now unblocked because 2.5.3 has the monitor REST API 1.x lacked.
+
+---
 
 ### 2026-09-07 (later): Alert-noise triage — Velero + Trivy
 
