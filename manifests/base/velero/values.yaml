@@ -256,6 +256,14 @@ schedules:
         - trivy-system # Trivy vulnerability DB
         - falco        # Falco Sidekick Redis
         - uptime-kuma  # Uptime Kuma SQLite DB (monitors + heartbeat history)
+        # zot is 50Gi and mostly pull-through cache that would repopulate from
+        # upstream on its own. It is included anyway because it is ALSO the
+        # local push target: images built here and pushed to
+        # registry.k8s.n37.ca may exist nowhere else, and telling the two
+        # apart after the fact is not practical. CSI snapshots are
+        # copy-on-write on the NAS, so the incremental cost is the delta
+        # rather than 50Gi per night.
+        - zot          # OCI registry — locally-pushed images are not reproducible
       includeClusterResources: false
       defaultVolumesToFsBackup: false  # Disabled: Use CSI snapshots only (faster, more efficient)
       snapshotVolumes: true            # Use CSI volume snapshots via Synology CSI
