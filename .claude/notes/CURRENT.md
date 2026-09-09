@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-08 (Uptime Kuma 2.5.3 migration + automated restore validation built and proven)
+**Last Updated:** 2026-09-09 (RO remediator fixed after a live outage; two of my own claims retracted)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,30 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-09: RO remediator fixed after a live outage + two retractions
+
+**Live outage.** uptime-kuma went CrashLoopBackOff with `EROFS: read-only file system` — the known iSCSI/btrfs remount. Recovered by scaling to 0 to force a detach. Data intact (14 monitors), service restored.
+
+**The remediator was reporting success while fixing nothing** (PR #919). It deleted the pod; the replacement landed back on node03, bind-mounted the identical RO globalmount, and crashed the same way — while every Job exited 0 logging `OK deleted pod`. Recovery had only ever worked when the scheduler happened to pick a different node. Luck, not automation.
+
+Now: **cordon the node → delete the pod → wait for the volume to DETACH from that node → uncordon.** Detach is the only real evidence `NodeUnstageVolume` ran and the RO globalmount was torn down; "pod is Running" is not, since it can be Running on the same node still read-only — exactly how this hid.
+
+- Scale-to-0 is NOT viable as remediation: ArgoCD selfHeal reverts it in seconds (confirmed in the app's history — automated self-heal at 18:51:29, seconds after a manual scale to 0).
+- Safety: `trap uncordon_if_needed EXIT` on every path; refuses to cordon when <2 schedulable nodes remain; leaves an already-cordoned node alone; logs ALERT if uncordon fails.
+- RBAC gained `nodes get/list/patch`, `volumeattachments get/list`, and the missing `pods watch` verb that had been spamming reflector errors and preventing kubectl confirming its own deletes (0 occurrences after the fix).
+- **The cordon path is NOT yet verified end-to-end** — inducing a real btrfs RO remount safely is not practical. The no-op path is verified clean (5/5 monitors, no cordon leaked). It will be exercised on the next real RO event.
+- `kubectl cordon` is currently BLOCKED for me by the permission classifier. Manual recovery needs the user, or an allowlist rule.
+
+**falco's empty PVC removed** (PR #917). Redis had no persistence path at all (`save ""` + AOF off, 0 keys across 114,776 commands) — a follow-through gap from the 2026-07-14 OOM fix. PVC deleted, PV and NAS LUN reclaimed (flipped Retain→Delete first so the LUN didn't strand), STS recreated without the volume template. Also removed falco from the backup schedule AND from the PVCNotCoveredByBackup exclusion, so a future PVC there alerts rather than inheriting a stale exemption.
+
+**Two of my own claims retracted** — both from reading a signal instead of testing behaviour:
+1. **Calico RBAC "vulnerability" (PR #916)** — `auth can-i` says yes but is blind to the aggregated API server. Real attempt: `Forbidden ... cannot delete in tier "default" (user cannot get tier)`. `calico-tiered-policy-passthrough` is passthrough BY DESIGN. No action needed.
+2. **"2.5.3 has a monitor REST API" (PR #918, docs #113)** — it does not. `/api/monitors` returns `text/html`, byte-identical to a made-up control endpoint; all returned HTTP 200. Uptime Kuma is still socket.io-only, so **F15 is NOT unblocked**. Cheaper path recorded: drift *detection* from SQLite, not reconciliation.
+
+Both were settled the same way — run a control whose answer you already know. That technique is now in REFERENCE.md.
+
+---
 
 ### 2026-09-08: Uptime Kuma 2.x migration + automated restore validation
 
