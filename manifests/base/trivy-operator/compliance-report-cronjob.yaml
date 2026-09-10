@@ -9,6 +9,11 @@ metadata:
     app.kubernetes.io/part-of: trivy-operator
 spec:
   schedule: "0 8 * * 1"  # Monday 8 AM
+  # The comment above always said "Monday 8 AM" and the CronJob always ran at
+  # 02:00 local, because without spec.timeZone the schedule is UTC. Set
+  # 2026-09-10, matching pvc-ro-remediator, vsc-orphan-janitor,
+  # uptime-kuma-monitor-drift and velero-restore-validator.
+  timeZone: "America/Edmonton"
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   concurrencyPolicy: Forbid
