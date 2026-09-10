@@ -52,6 +52,86 @@
 
 ---
 
+## 🧭 **Next Up** — reviewed 2026-09-10
+
+Ordered by value, not by section. The reasoning matters more than the order,
+so it is written down rather than implied.
+
+### Tier 1 — before building anything else
+
+- [ ] **Let the new machinery prove itself unattended.** Three components shipped
+      on 2026-09-10 and **none has completed an unsupervised scheduled run**:
+      `uptime-kuma-monitor-drift` (first real run 06:40 on the 11th),
+      `velero-restore-validator` (1 Oct), `pvc-writability-prober` (running
+      continuously). Every one of them needed 2-4 corrections that only appeared
+      when run. Stacking more on top before they have run once repeats the
+      pattern with components that delete pods. **Cost: nothing. Just wait.**
+
+- [ ] **Roadmap hygiene — this list is misleading in two places.** Both look
+      open and are substantially done:
+      - *"Automated testing pipelines for infrastructure changes"* — `.github/workflows/validate.yml`
+        runs 14 pre-commit hooks on every PR (kubeconform, kustomize-build,
+        prometheusrule-label, gitleaks, yamllint) and was exercised ~20 times today.
+      - *"ARM64 container image build workflows"* / *"Build and deployment
+        automation for ARM64 custom containers"* — `lifeonabike-build` does
+        git-clone → kaniko-build → rollout-restart on ARM64 today.
+      Both sit under the Argo Workflows phase list, so the *workflow form* may
+      still be wanted — but leaving them unqualified invites rebuilding what
+      already runs. Same trap as the Trivy items, already annotated.
+
+- [ ] **On-call procedures and escalation paths** *(already on the list under
+      Operational Improvements)*. This got materially more valuable on
+      2026-09-10: until then 72% of alert rules were discarded at AlertManager's
+      null receiver, so "what do I do when this alerts" was a hypothetical.
+      Warnings now deliver. Worth writing while the alert semantics are fresh —
+      particularly which alerts are actionable vs standing-posture, since that
+      distinction was just made explicit in the routing config.
+
+### Tier 2 — the substantive build
+
+- [ ] **Auto-remount backstop controller** *(already on the list, now unblocked)*.
+      `pvc_writable` exists as of PRs #940-943. **Decide the coverage question
+      first:** driven off `pvc_writable == 0` it silently will not cover grafana,
+      loki or zot — distroless, unprobeable — which are exactly the third-party
+      charts whose probe specs cannot be edited, i.e. the ones a backstop is most
+      needed for. Either close that gap first (ephemeral debug containers with
+      volume mounts, a materially larger build) or accept partial coverage
+      explicitly and say so in the manifest.
+
+- [ ] **Decide the fate of `velero-backup-validation`.** The CronWorkflow is
+      SYNTHETIC — it round-trips a ConfigMap it creates itself and never touches
+      a PVC, which is how it coexisted with a 135-day unbacked-up volume. Its
+      OOMKill was fixed on 2026-09-09 but it has not run since
+      (`lastScheduledTime: 2026-09-01`). `velero-restore-validator` now covers
+      the real case. Options: keep it as a cheap control-plane check, or delete
+      it as redundant. Leaving an unverified validator running is the worst of
+      the three.
+
+### Tier 3 — worth an explicit decision, probably "no"
+
+These have sat on the roadmap without motion. For a 5-node homelab they look
+like aspiration rather than need, and saying so is more useful than carrying
+them indefinitely:
+
+- **Multi-cluster ArgoCD / multi-cluster workflow support** — no dev/staging
+  cluster exists, and the items are conditional on one appearing.
+- **Evaluate Tekton** — the entry itself notes higher resource usage; Argo
+  Workflows already covers the need.
+- **Evaluate Gitea vs GitLab** — GitHub is working and is not a bottleneck.
+- **Load testing framework / performance regression testing** — no workload
+  here has a performance SLO that anyone is defending.
+- **The four DNS items** — vague, and one is already annotated *"covered in the
+  new guide"*. Either sharpen into something concrete or drop.
+
+### Recurring, not planned
+
+- **Renovate batch lands Saturday** (weekend schedule).
+- `CriticalClusterRoleRBACIssues` is `severity: warning`, so it now emails
+  daily. It is inherent operator grants, not an incident. If it becomes
+  tiresome the honest fix is demoting it to `info` — it is standing posture.
+
+---
+
 ## 🎯 **High Priority**
 
 ### 1. **Blackbox Exporter** ✅ Complete
