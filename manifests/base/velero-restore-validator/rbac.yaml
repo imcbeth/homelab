@@ -36,6 +36,45 @@ rules:
     resources: ["restores"]
     verbs: ["get", "list", "create", "delete"]
 ---
+# PersistentVolumes are cluster-scoped, so reclaiming them needs a
+# ClusterRole. Deliberately get/list/PATCH only — never delete.
+#
+# A restored PVC inherits the SOURCE volume's reclaim policy, and most
+# volumes here use synology-iscsi-RETAIN, so deleting the PVC leaves the PV
+# Released and its NAS LUN allocated. This job leaked two 2Gi LUNs that way
+# on 2026-09-09, found by cluster-healthcheck the next day.
+#
+# Patch is sufficient and delete is not needed: a Released PV whose policy is
+# flipped to Delete is torn down by the PV controller, LUN included. Verified
+# 2026-09-10 — an orphan disappeared 20 seconds after the patch. Granting
+# cluster-wide delete on persistentvolumes would let a bug in this script
+# destroy production data; patch cannot.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: velero-restore-validator-pv
+  labels:
+    app.kubernetes.io/name: velero-restore-validator
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: velero-restore-validator-pv
+  labels:
+    app.kubernetes.io/name: velero-restore-validator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: velero-restore-validator-pv
+subjects:
+  - kind: ServiceAccount
+    name: velero-restore-validator
+    namespace: velero
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:

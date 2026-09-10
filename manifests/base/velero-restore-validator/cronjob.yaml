@@ -80,10 +80,42 @@ data:
       say "cleanup: removing verify pod, PVCs and restore"
       kubectl -n "$SCRATCH_NS" delete pod -l app.kubernetes.io/name=restore-verify \
         --ignore-not-found --wait=false >/dev/null 2>&1 || true
-      # Deleting the PVC releases the PV; the storage class is Delete-reclaim,
-      # so the LUN goes with it. Leaving these behind would slowly fill the NAS.
+      # Deleting the PVC alone is NOT enough. A restored PVC inherits the
+      # SOURCE volume's reclaim policy, and most volumes here use
+      # synology-iscsi-RETAIN — so the PV survives in Released state and its
+      # NAS LUN with it. Found 2026-09-10 by the cluster-healthcheck workflow:
+      # two 2Gi LUNs left orphaned by this job's own test runs on 2026-09-09.
+      # Monthly, that leaks a LUN per run.
+      #
+      # Flip each PV to Delete BEFORE removing the claim, so the CSI driver
+      # reclaims the LUN as part of the normal teardown.
+      for pv in $(kubectl -n "$SCRATCH_NS" get pvc -o jsonpath='{.items[*].spec.volumeName}' 2>/dev/null); do
+        [ -n "$pv" ] || continue
+        kubectl patch pv "$pv" -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}' \
+          >/dev/null 2>&1 && echo "[$(ts)] cleanup: $pv reclaim -> Delete"
+      done
       kubectl -n "$SCRATCH_NS" delete pvc --all \
         --ignore-not-found --wait=false >/dev/null 2>&1 || true
+
+      # Belt and braces: sweep any PV already stranded in Released state that
+      # was claimed by the scratch namespace, including debris from a run that
+      # died before reaching this point.
+      kubectl get pv -o json 2>/dev/null \
+        | jq -r --arg ns "$SCRATCH_NS" '.items[]
+            | select(.status.phase=="Released")
+            | select(.spec.claimRef.namespace==$ns)
+            | .metadata.name' 2>/dev/null \
+        | while read -r pv; do
+            [ -n "$pv" ] || continue
+            # Patch only — no delete permission required. A Released PV with
+            # reclaimPolicy=Delete is torn down by the PV controller, LUN and
+            # all. Verified 2026-09-10: an orphan disappeared 20s after the
+            # patch. That is why this ServiceAccount is NOT granted delete on
+            # persistentvolumes, which is cluster-scoped and would let a bug
+            # here destroy production volumes.
+            kubectl patch pv "$pv" -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}' >/dev/null 2>&1 \
+              && echo "[$(ts)] cleanup: orphaned PV $pv reclaim -> Delete (controller will remove it)"
+          done
       if [ -n "$RESTORE_NAME" ]; then
         kubectl -n "$VELERO_NS" delete restore "$RESTORE_NAME" \
           --ignore-not-found --wait=false >/dev/null 2>&1 || true
