@@ -284,6 +284,54 @@ spec:
               to force a fresh iSCSI session + RW remount. The auto-remount
               controller (when deployed) will do this automatically.
 
+        # Writability is a STRONGER claim than mount flags. PVCMountReadOnly
+        # above catches btrfs remounting ro, which is what has actually
+        # happened here. This catches a mount that still advertises rw while
+        # the storage underneath refuses writes — the case where the flag
+        # lies and the app is the first to find out.
+        - alert: PVCNotWritable
+          expr: pvc_writable == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: storage
+          annotations:
+            summary: "PVC {{ $labels.namespace }}/{{ $labels.claim }} is not writable"
+            description: |
+              A write test from inside {{ $labels.pod }} at {{ $labels.mountpath }}
+              failed for 5+ minutes. The probe does touch+rm as the workload's
+              own uid, so this is the application's real view of the volume.
+
+              Check whether the mount also reports read-only:
+                pvc_mount_readonly{pvc=~".+"} == 1
+
+              If BOTH fire, it is the familiar btrfs ro-remount and
+              pvc-ro-remediator should already be acting. If only THIS fires,
+              the mount flags look fine and the storage itself is refusing
+              writes — that is the case the flag-based monitor cannot see.
+
+              Prober log names the exact error:
+                kubectl -n synology-csi logs deploy/pvc-writability-prober
+
+        # The prober going quiet must not look like "all volumes healthy".
+        - alert: PVCWritabilityProberStale
+          expr: |
+            time() - pvc_writability_last_success_timestamp_seconds > 1800
+          for: 15m
+          labels:
+            severity: warning
+            component: storage
+          annotations:
+            summary: "PVC writability prober has not completed a cycle in 30+ minutes"
+            description: |
+              The prober runs every 5 minutes. No completed cycle in 30+
+              minutes means writability is currently UNKNOWN, not known-good.
+
+              A stale prober and a healthy cluster produce the same empty
+              alert list, which is exactly the failure this cluster keeps
+              re-learning. Check the deployment and its RBAC:
+                kubectl -n synology-csi logs deploy/pvc-writability-prober
+
         - alert: PVCMountMonitorDown
           expr: |
             absent(pvc_mount_monitor_scrapes_total) == 1

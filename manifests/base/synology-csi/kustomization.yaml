@@ -15,6 +15,7 @@ resources:
   - orphan-vsc-janitor.yaml
   - pvc-mount-monitor.yaml
   - pvc-ro-remediator.yaml
+  - pvc-writability-prober.yaml
 patches:
   - path: patches/snapshot-controller-resources.yaml
 # secretGenerator:
