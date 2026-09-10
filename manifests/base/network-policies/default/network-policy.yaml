@@ -196,6 +196,8 @@ spec:
           port: 7777   # Argo Events controller + NATS exporter metrics
         - protocol: TCP
           port: 9300   # pvc-mount-monitor DaemonSet (synology-csi ns, PR #734)
+        - protocol: TCP
+          port: 9310   # pvc-writability-prober (synology-csi ns, PR #940)
 
     # Intra-namespace communication (alertmanager, grafana, prometheus, etc.)
     - to:
