@@ -183,6 +183,11 @@ spec:
   # much: a day's delay in noticing a monitor change is acceptable, whereas a
   # month's is not.
   schedule: "40 6 * * *"
+  # Without this, "40 6" means 06:40 UTC — 00:40 local — which is not what
+  # the bare number reads as to anyone maintaining it. Set 2026-09-10 after
+  # exactly that confusion. pvc-ro-remediator and vsc-orphan-janitor already
+  # set it; this brings the newer CronJobs in line.
+  timeZone: "America/Edmonton"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 10

@@ -317,6 +317,11 @@ spec:
   # 1st of the month at 04:00 — after the 02:00 nightly backup has finished,
   # so the newest Completed backup is genuinely fresh.
   schedule: "0 4 1 * *"
+  # 04:00 America/Edmonton on the 1st. Previously 04:00 UTC, i.e. 22:00 local
+  # on the LAST day of the previous month — a monthly job that did not run in
+  # the month it appeared to. Still comfortably after the 02:00 UTC nightly
+  # backup it restores from.
+  timeZone: "America/Edmonton"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 6
   # Deeper than usual on purpose: a monthly job leaves very little forensic
