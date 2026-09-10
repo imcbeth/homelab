@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-10 (72% of alerting was routed to /dev/null; healthcheck workflow repaired)
+**Last Updated:** 2026-09-10 (F15 closed as drift detection; alert routing fixed; warning volume verified)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,24 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-10 (later): F15 closed as drift detection + warning volume verified
+
+**F15 built and verified** (PRs #935, #936). Monitor definitions live only in Uptime Kuma's SQLite DB and cannot be managed declaratively — 2.5.3 has no monitor REST API (`/api/monitors` returns the SPA's HTML, byte-identical to a made-up control endpoint). So this is **detection, not reconciliation**: a daily CronJob diffs the live monitor set against a committed baseline ConfigMap and fails the Job on divergence. `UptimeKumaMonitorDrift` carries that to email — deliverable only because warnings stopped being dropped earlier the same day.
+
+Verified **both directions**: clean run passes (14 live = 14 declared, 2s), and injected drift is caught, naming both sides and exiting non-zero.
+
+Two things the testing exposed:
+- **The namespace NetworkPolicy blocked the API server.** `podSelector: {}` covers every pod and allows only DNS plus the probe ports — correct for the app, wrong for a job that must exec. Fixed with a policy scoped to the drift pods; widening the namespace-wide one would have handed API access to Uptime Kuma itself.
+- **My own error handling hid it.** `2>/dev/null || echo ""` turned a 2.5-minute connection timeout into "no pod found", sending me after a phantom missing pod while the app had been up 20h. stderr is captured now, and "query failed" is reported distinctly from "query returned nothing".
+
+**ArgoCD selfHeal defeats in-cluster test perturbation.** The first negative test patched the baseline ConfigMap directly and ArgoCD reverted it before the job ran, so the check reported OK. Same mechanism that defeated the localstack scale-to-0. The working pattern is a throwaway object ArgoCD does not manage. Worth remembering for any future negative test.
+
+**Warning email volume measured, not assumed.** After the routing fix, steady state is **2 groups ≈ 2 emails/day** — `group_by: [namespace, alertname]` collapses the 4× `ImageCriticalVulnerabilitiesHigh` into one. Nothing chronic needs demoting. Two warnings that were firing (`HighErrorLogRate`, `PersistentPodRestarts`) resolved on their own — churn from the 2026-09-09 RO outage.
+
+**Docs updated** (k8s-docs-n37 #115): the null-receiver trap with the commands that detect it, `templateDefaults` merging by template TYPE including the disproof of my own precedence theory, and PV reclaim inheritance on restore. Also corrected backup coverage tables that still listed falco as backed up.
+
+---
 
 ### 2026-09-10: 72% of alerting went to /dev/null + healthcheck workflow repaired
 
