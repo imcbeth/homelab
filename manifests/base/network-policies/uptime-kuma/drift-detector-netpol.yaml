@@ -1,0 +1,50 @@
+---
+# API-server egress for the monitor drift detector ONLY.
+#
+# The existing `uptime-kuma` NetworkPolicy uses podSelector: {} — it applies to
+# every pod in the namespace — and its egress allows DNS plus the HTTP ports
+# the app probes. It does not allow 6443, which is correct for Uptime Kuma
+# itself: a monitoring app has no business talking to the Kubernetes API.
+#
+# The drift detector does, because it must exec into the app pod to read the
+# SQLite database. Without this its kubectl calls simply hang and time out —
+# which is exactly how it first failed on 2026-09-10, reporting "no Running
+# uptime-kuma pod found" because a swallowed connection timeout looked
+# identical to an empty result.
+#
+# NetworkPolicies are additive, so this grants API access to the drift pods and
+# leaves the app's egress untouched. Scoping by podSelector rather than
+# widening the namespace-wide policy is the whole point.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: uptime-kuma-monitor-drift-api
+  namespace: uptime-kuma
+  labels:
+    app.kubernetes.io/name: uptime-kuma-monitor-drift
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: uptime-kuma-monitor-drift
+  policyTypes:
+    - Egress
+  egress:
+    # DNS, to resolve the API server and the in-cluster service.
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # kube-apiserver, both via the ClusterIP service and the node endpoint.
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 6443
