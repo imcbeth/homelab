@@ -133,6 +133,29 @@ spec:
         script:
           image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [bash]
+          # Set HERE, at template level, NOT in templateDefaults.
+          #
+          # The workflow-controller ConfigMap's `mainContainer.resources`
+          # (100m / 128Mi) OVERRIDES templateDefaults. Verified 2026-09-10 by
+          # reading limits off the running step pods: they showed 128Mi even
+          # after templateDefaults was raised to 256Mi. Only template-level
+          # resources actually win.
+          #
+          # 128Mi is too tight for this step specifically. It runs TWO
+          # full-cluster queries back to back in one container: a filtered
+          # `get pods -A -o json` piped to jq, then an unfiltered
+          # `get pods -A -o jsonpath` across all 153 pods (~2.9 MiB of JSON).
+          # Measured in isolation the peaks were 51 MiB and 83 MiB — both
+          # under 128Mi — but Go does not return freed heap to the OS, so
+          # cumulative RSS across the pair exceeds the limit and the container
+          # is OOMKilled (exit 137).
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 384Mi
           source: |
             set -uo pipefail
             # Flag non-Running/Succeeded pods with phase-specific rules:
