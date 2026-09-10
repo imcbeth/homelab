@@ -192,9 +192,18 @@ data:
             return "unprobeable", "exec timed out"
         if r.returncode == 0:
             return "writable", ""
-        detail = (r.stderr or r.stdout).strip().replace("\n", " ")[:200]
-        if any(m in detail for m in UNPROBEABLE_MARKERS):
-            return "unprobeable", detail
+        # Classify against the FULL message, truncate only for display.
+        #
+        # The first attempt truncated first and matched second, and the fix
+        # was inert: kubectl's exec error puts the useful part LAST, after a
+        # 64-char container id. The marker sat at offset 298 of a 332-char
+        # message and the check only ever saw the first 200 characters —
+        # so three distroless volumes kept being reported as unwritable.
+        full = (r.stderr or r.stdout).strip().replace("\n", " ")
+        detail = full[:200]
+        if any(m in full for m in UNPROBEABLE_MARKERS):
+            # Surface the tail, which is where the actual reason lives.
+            return "unprobeable", full[-160:]
         return "failed", detail
 
 
