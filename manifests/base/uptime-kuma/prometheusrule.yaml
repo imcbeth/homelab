@@ -53,6 +53,41 @@ spec:
               diff is the audit trail these monitors otherwise do not have.
               If it was not, monitoring was changed without a record.
 
+        # The drift check going quiet must not look like "no drift".
+        #
+        # UptimeKumaMonitorDrift above fires on job FAILURE. If the CronJob is
+        # suspended, deleted, or never schedules, no Job exists to fail and
+        # that alert stays silent forever — indistinguishable from a clean
+        # run. Same gap already closed for velero-restore-validator and
+        # pvc-writability-prober; missed here when the detector shipped.
+        #
+        # 30h allows one missed daily run plus slack, so a single late
+        # schedule does not page while a genuinely stopped check does.
+        - alert: UptimeKumaMonitorDriftStale
+          expr: |
+            time() - kube_cronjob_status_last_successful_time{cronjob="uptime-kuma-monitor-drift"} > 108000
+          for: 1h
+          labels:
+            severity: warning
+            component: monitoring
+          annotations:
+            summary: "Uptime Kuma drift check has not passed in over 30 hours"
+            description: |
+              uptime-kuma-monitor-drift last SUCCEEDED more than 30 hours ago.
+              It is scheduled daily, so a run has been missed or has been
+              failing without completing.
+
+              Monitor drift is therefore currently UNKNOWN — not known-absent.
+
+                kubectl -n uptime-kuma get cronjob uptime-kuma-monitor-drift
+                kubectl -n uptime-kuma get jobs -l app.kubernetes.io/name=uptime-kuma-monitor-drift
+
+              If the CronJob is suspended or missing, that is the answer.
+
+              NOTE: the schedule is 06:40 UTC with no spec.timeZone, i.e.
+              00:40 America/Edmonton — not 06:40 local. Worth remembering
+              when reasoning about when the last run should have happened.
+
         - alert: UptimeKumaMonitorCertExpirySoon
           expr: monitor_cert_days_remaining > 0 and monitor_cert_days_remaining < 14
           for: 1h
