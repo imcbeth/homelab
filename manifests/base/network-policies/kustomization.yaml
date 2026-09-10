@@ -44,6 +44,7 @@ resources:
   - oauth2-proxy/network-policy.yaml
   # Status monitoring
   - uptime-kuma/network-policy.yaml
+  - uptime-kuma/drift-detector-netpol.yaml
   # Distributed tracing
   - tempo/namespace.yaml
   - tempo/network-policy.yaml

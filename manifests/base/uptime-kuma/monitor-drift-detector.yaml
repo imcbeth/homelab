@@ -84,13 +84,23 @@ data:
 
     [ -f "$BASELINE" ] || { say "FAIL: baseline file $BASELINE not found"; exit 1; }
 
-    POD=$(kubectl -n "$NS" get pod -l app.kubernetes.io/name=uptime-kuma \
+    # Capture stderr rather than discarding it. The first version used
+    # `2>/dev/null || echo ""`, which made a NetworkPolicy-blocked API call —
+    # a 2.5 minute connection timeout — look identical to "the pod isn't
+    # there". Chasing a phantom missing pod cost a diagnostic round-trip on
+    # 2026-09-10. An error you cannot see is worse than one that fails loudly.
+    if ! POD_OUT=$(kubectl -n "$NS" get pod -l app.kubernetes.io/name=uptime-kuma \
             --field-selector=status.phase=Running \
-            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            -o jsonpath='{.items[0].metadata.name}' 2>&1); then
+      say "FAIL: could not query pods in $NS — API unreachable or RBAC denied"
+      say "  kubectl said: $POD_OUT"
+      exit 1
+    fi
+    POD="$POD_OUT"
     if [ -z "$POD" ]; then
-      # Not finding the pod is itself worth failing on: it means either the app
-      # is down or its labels changed, and in both cases this check is blind.
-      say "FAIL: no Running uptime-kuma pod found in $NS"
+      # A genuinely empty result: the app is down or its labels changed. Either
+      # way this check is blind, so say so rather than passing quietly.
+      say "FAIL: no Running uptime-kuma pod found in $NS (query succeeded, returned nothing)"
       exit 1
     fi
     say "reading monitors from $NS/$POD"
