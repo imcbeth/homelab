@@ -354,6 +354,32 @@ alertmanager:
             - severity = "warning"
           continue: false
           repeat_interval: 24h
+        # INFO IS DROPPED ON PURPOSE — reviewed and decided 2026-09-10.
+        #
+        # This route is functionally identical to falling through to the
+        # default receiver, and exists solely so the choice is EXPLICIT.
+        # Warnings were dropped for months because nobody had decided that;
+        # they simply matched no route. "Correct by accident" and "correct by
+        # decision" look identical from the outside, and the only way to tell
+        # them apart is to write the decision down.
+        #
+        # The 13 info rules are standing-posture and capacity signals, all
+        # better read on a dashboard than delivered as mail:
+        #   CIS/NSA/PSS compliance counters, HighClusterRoleRBACIssues,
+        #   HighVulnerabilityCount, IstioDuplicateClusters, KubeQuota*,
+        #   KubeletTooManyPods, KubeNodePressure, KubeNodeEviction,
+        #   NodeCPUHighUsage, FalcoNoEvents
+        #
+        # WORTH RECONSIDERING: FalcoNoEvents. It fires when Falco stops
+        # producing events, which is the "the watcher went silent" shape that
+        # cost this cluster a 198-day dormant PrometheusRule and a 135-day
+        # unbacked-up PVC. It is info only because that is the upstream
+        # default. If Falco is load-bearing for you, promote it to warning in
+        # the rule rather than special-casing it here.
+        - receiver: 'null'
+          matchers:
+            - severity = "info"
+          continue: false
     receivers:
       - name: 'email-critical'
         email_configs:
