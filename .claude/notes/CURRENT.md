@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-09 (remediator fixed + verified; LocalStack bucket durability; trivy-operator OOM loop stopped)
+**Last Updated:** 2026-09-10 (72% of alerting was routed to /dev/null; healthcheck workflow repaired)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,38 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-10: 72% of alerting went to /dev/null + healthcheck workflow repaired
+
+**THE BIG ONE (PR #933). 174 of 260 alert rules — 72% of all alerting — were being silently discarded.** AlertManager's default receiver is `'null'` and the only other route matched `severity="critical"`. Every warning fell through to `null` with no trace.
+
+That included **six of the ten alerts built this week**, all of which looked done and delivered nothing:
+
+| Alert | Why it existed |
+|---|---|
+| `PVCNotCoveredByBackup` | written after a PVC sat unbacked-up 135 days |
+| `VeleroRestoreValidationStale` | the watcher-being-watched rule |
+| `ArgoWorkflowFailed` | surfaced two live bugs the day it was repaired |
+| `CPUThrottlingHighSaturated` | the F9 saturation rule |
+| `CriticalVulnerabilitiesIncreased` / `ImageCriticalVulnerabilitiesHigh` | CVE detection |
+
+Found by asking why `ClusterHealthDegraded` never produced an email. First assumption — that the one-shot POST expires after 5 minutes — was **wrong**. It posts `severity="warning"`, so it matched no route at all. AlertManager's metrics showed the delivery path was healthy the whole time: 62 sent, 0 failed, every one a critical.
+
+Added an `email-warning` receiver, `repeat_interval: 24h`. **Verified end to end** by POSTing a synthetic warning: notifications 66 → 67 within 30 seconds.
+
+This only became safe because of the 2026-09-07 noise work (66 firing → ~8). Routing 174 warning rules before that would have been unusable — very likely why it was left this way.
+
+**cluster-healthcheck had never run a successful check** (PRs #929, #930, #932). Its `check-pods` step was OOMKilled daily.
+
+The instructive part was the false trail. Raising `templateDefaults` did nothing, and I concluded the controller's `mainContainer` was overriding it. **Wrong.** `templateDefaults` merges into the MATCHING field only: this workflow declares `templateDefaults.container` but all six of its templates are `script:` templates, so the block merged into nothing and every step silently used the controller default of 128Mi. Proof it is not precedence: `backup-validation-workflow.yaml` uses container templates and its pods measure 256Mi from its own `templateDefaults.container`.
+
+Fixed by switching the key to `templateDefaults.script`, plus explicit 384Mi on `check-pods` (two full-cluster queries in one container; Go does not return freed heap, so cumulative RSS exceeds the limit even though each command peaks at 51 and 83 MiB in isolation). All six steps now pass.
+
+**The restore validator I shipped 48h earlier was leaking a NAS LUN per run** (PR #931). Restored PVCs inherit the SOURCE volume's `Retain` policy, so deleting the PVC left the PV and its LUN allocated. My cleanup comment claimed the opposite. Three orphans reclaimed, 24Gi recovered. RBAC is `patch` only, never `delete` — verified a Released PV flipped to `Delete` is reclaimed by the controller in 20s, so cluster-wide delete on PVs was unnecessary.
+
+**Recurring lesson, now three days running:** measure, do not infer. Today alone I guessed a memory limit twice before reading `/sys/fs/cgroup/memory.peak`, blamed the wrong Argo mechanism, and assumed an alert expiry problem that was actually a routing one. Each was settled in minutes by running the thing.
+
+---
 
 ### 2026-09-09 (late): Argo DR workflow fixed + 4 alerts that could never fire
 
