@@ -36,6 +36,15 @@ rules:
   - apiGroups: ["discovery.k8s.io"]
     resources: ["endpointslices"]
     verbs: ["get", "watch", "list"]
+  # DNSEndpoint CRs — the `crd` source. Without these external-dns starts
+  # cleanly, logs a permissions error once, and silently publishes nothing.
+  - apiGroups: ["externaldns.k8s.io"]
+    resources: ["dnsendpoints"]
+    verbs: ["get", "watch", "list"]
+  # external-dns writes back to .status on each DNSEndpoint it processes.
+  - apiGroups: ["externaldns.k8s.io"]
+    resources: ["dnsendpoints/status"]
+    verbs: ["get", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
