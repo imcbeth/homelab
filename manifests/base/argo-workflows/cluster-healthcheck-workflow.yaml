@@ -53,8 +53,19 @@ spec:
     # A Failed workflow here is therefore ambiguous — it means either "checks
     # found issues" or "a step broke". Read the node that failed before
     # concluding anything.
+    # `script:`, NOT `container:` — every template in this workflow is a
+    # script template, and templateDefaults only merges into the matching
+    # field. A `templateDefaults.container` block here merged into nothing at
+    # all, so all six steps silently fell back to the workflow-controller
+    # ConfigMap's mainContainer default of 100m/128Mi.
+    #
+    # That is what caused the check-pods OOMKill, and why raising the numbers
+    # under `container:` on 2026-09-10 changed nothing — verified by reading
+    # limits off the running pods, which still showed 128Mi. By contrast
+    # backup-validation-workflow.yaml uses container templates, so its
+    # templateDefaults.container DOES apply (its pods measured 256Mi).
     templateDefaults:
-      container:
+      script:
         resources:
           requests:
             cpu: 50m
@@ -133,13 +144,14 @@ spec:
         script:
           image: registry.k8s.n37.ca/bitnami/kubectl:latest
           command: [bash]
-          # Set HERE, at template level, NOT in templateDefaults.
+          # Kept at template level because this step needs MORE than the
+          # workflow default, not because templateDefaults is broken.
           #
-          # The workflow-controller ConfigMap's `mainContainer.resources`
-          # (100m / 128Mi) OVERRIDES templateDefaults. Verified 2026-09-10 by
-          # reading limits off the running step pods: they showed 128Mi even
-          # after templateDefaults was raised to 256Mi. Only template-level
-          # resources actually win.
+          # CORRECTION to an earlier comment here: mainContainer does not
+          # override templateDefaults. The real cause was that
+          # templateDefaults declared `container:` while every template in
+          # this workflow is `script:`, so it merged into nothing and the
+          # controller default (128Mi) applied. That is fixed above.
           #
           # 128Mi is too tight for this step specifically. It runs TWO
           # full-cluster queries back to back in one container: a filtered
