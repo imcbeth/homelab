@@ -258,12 +258,12 @@
 **Phase 2: Workflow Integration**
 - [ ] ARM64 container image build workflows
 - [ ] Automated testing pipelines for infrastructure changes
-- [ ] Monthly backup validation workflows (Velero restore tests)
-- [ ] Security vulnerability scanning workflows (Trivy integration)
-- [ ] Infrastructure compliance scan workflows
+- [x] Monthly backup validation workflows (Velero restore tests) ✅ **Delivered 2026-09-08 (PR #912), though NOT as an Argo Workflow.** `velero-restore-validator` is a CronJob in the `velero` namespace: it restores the newest real nightly backup into a scratch namespace, mounts the volume and reads bytes off it. Verified passing and failing. A separate `velero-backup-validation` CronWorkflow already existed and is SYNTHETIC only — it round-trips a ConfigMap it creates itself and never touches a PVC, which is why it coexisted with a 135-day unbacked-up volume. Both now run monthly; the CronJob is the one that proves restorability.
+- [ ] Security vulnerability scanning workflows (Trivy integration) — **note:** continuous scanning is already operational via trivy-operator (VulnerabilityReports, ExposedSecretReports, delta alerting reworked 2026-09-07). This item is specifically about driving it from an Argo Workflow. Decide whether that form is still wanted before building it.
+- [ ] Infrastructure compliance scan workflows — **note:** 4 ClusterComplianceReports (CIS, NSA, PSS baseline/restricted) are already produced by trivy-operator. As above, this item is about the Argo Workflow form specifically.
 
 **Phase 3: Advanced Features**
-- [ ] SSO integration via oauth2-proxy
+- [x] SSO integration via oauth2-proxy ✅ **Done.** The argo-workflows Ingress carries `nginx.ingress.kubernetes.io/auth-url` pointing at `oauth2-proxy.oauth2-proxy.svc.cluster.local` — verified on the live Ingress 2026-09-10.
 - [ ] Workflow templates library
 - [ ] Automated dependency updates (Renovate integration)
 - [ ] Multi-cluster workflow support (if dev/staging clusters added)
