@@ -1,0 +1,243 @@
+---
+# Uptime Kuma monitor drift detection (TODO F15).
+#
+# Compares the live monitor set against the declared baseline in
+# uptime-kuma-monitor-baseline and fails the Job when they diverge.
+#
+# WHY IT EXECS
+#
+# The monitor set lives in SQLite on the uptime-kuma PVC. That PVC is RWO and
+# already mounted by the app, so a second pod cannot mount it to read the file.
+# `kubectl exec` into the running pod is the only way to read the database
+# without stopping the service. The Role below is therefore scoped to exactly
+# one namespace and grants create on pods/exec and nothing else that can write.
+#
+# WHAT IT CANNOT DO
+#
+# It cannot fix drift. Uptime Kuma 2.5.3 exposes no REST API for monitor CRUD
+# (verified 2026-09-09: /api/monitors returns the SPA's HTML, identical to a
+# made-up control endpoint), so reconciliation would mean speaking its
+# unofficial socket.io protocol. This detects and reports; a human applies the
+# change in the UI and refreshes the baseline via PR.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: uptime-kuma-monitor-drift
+  namespace: uptime-kuma
+  labels:
+    app.kubernetes.io/name: uptime-kuma-monitor-drift
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: uptime-kuma-monitor-drift
+  namespace: uptime-kuma
+  labels:
+    app.kubernetes.io/name: uptime-kuma-monitor-drift
+rules:
+  # Find the app pod to exec into.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  # Read the SQLite DB in place. This is the privileged bit and it is the
+  # reason the Role is namespaced rather than cluster-wide: exec into the
+  # uptime-kuma pod only.
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: uptime-kuma-monitor-drift
+  namespace: uptime-kuma
+  labels:
+    app.kubernetes.io/name: uptime-kuma-monitor-drift
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: uptime-kuma-monitor-drift
+subjects:
+  - kind: ServiceAccount
+    name: uptime-kuma-monitor-drift
+    namespace: uptime-kuma
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: uptime-kuma-monitor-drift-script
+  namespace: uptime-kuma
+  labels:
+    app.kubernetes.io/name: uptime-kuma-monitor-drift
+data:
+  drift.sh: |
+    #!/bin/sh
+    set -eu
+
+    NS="${TARGET_NS:-uptime-kuma}"
+    BASELINE="${BASELINE_FILE:-/baseline/monitors.txt}"
+
+    ts() { date -u +%FT%TZ; }
+    say() { echo "[$(ts)] $*"; }
+
+    say "uptime-kuma monitor drift check starting"
+
+    [ -f "$BASELINE" ] || { say "FAIL: baseline file $BASELINE not found"; exit 1; }
+
+    POD=$(kubectl -n "$NS" get pod -l app.kubernetes.io/name=uptime-kuma \
+            --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    if [ -z "$POD" ]; then
+      # Not finding the pod is itself worth failing on: it means either the app
+      # is down or its labels changed, and in both cases this check is blind.
+      say "FAIL: no Running uptime-kuma pod found in $NS"
+      exit 1
+    fi
+    say "reading monitors from $NS/$POD"
+
+    # Read-only query. Normalised to a stable one-line-per-monitor form so the
+    # diff is about MEANING, not about SQLite's column ordering or JSON spacing.
+    # Deliberately a small subset of the ~120 columns: name, type, target,
+    # enabled, interval. Those are what a human would notice changing; tracking
+    # every column would make this alert on noise like a retry counter.
+    if ! LIVE=$(kubectl -n "$NS" exec "$POD" -- sqlite3 -json /app/data/kuma.db \
+          "select name,type,coalesce(url,'') as url,coalesce(hostname,'') as hostname,coalesce(port,0) as port,active,interval from monitor order by name;" 2>&1); then
+      say "FAIL: could not read the monitor table: $LIVE"
+      exit 1
+    fi
+
+    echo "$LIVE" | jq -r '.[] |
+      (.name) + "|" + (.type) + "|" +
+      (if .url != "" then .url
+       elif .hostname != "" then (.hostname + ":" + (.port|tostring))
+       else "" end) + "|" +
+      "active=" + (.active|tostring) + "|" +
+      "interval=" + (.interval|tostring)' | sort > /tmp/live.txt
+
+    sort "$BASELINE" | grep -v '^[[:space:]]*$' > /tmp/want.txt
+
+    LIVE_N=$(wc -l < /tmp/live.txt | tr -d ' ')
+    WANT_N=$(wc -l < /tmp/want.txt | tr -d ' ')
+    say "live=$LIVE_N declared=$WANT_N"
+
+    # A live count of zero almost certainly means the query or the schema
+    # changed rather than that every monitor was deleted. Say so rather than
+    # reporting 14 spurious deletions.
+    if [ "$LIVE_N" = "0" ] && [ "$WANT_N" != "0" ]; then
+      say "FAIL: read 0 monitors but $WANT_N are declared — suspect a query or schema problem, not mass deletion"
+      exit 1
+    fi
+
+    ADDED=$(comm -13 /tmp/want.txt /tmp/live.txt || true)
+    REMOVED=$(comm -23 /tmp/want.txt /tmp/live.txt || true)
+
+    if [ -z "$ADDED" ] && [ -z "$REMOVED" ]; then
+      say "OK — all $LIVE_N monitors match the declared baseline"
+      exit 0
+    fi
+
+    say "DRIFT DETECTED"
+    if [ -n "$REMOVED" ]; then
+      echo ""
+      echo "  In git but NOT live (deleted or changed):"
+      echo "$REMOVED" | sed 's/^/    - /'
+    fi
+    if [ -n "$ADDED" ]; then
+      echo ""
+      echo "  Live but NOT in git (added or changed):"
+      echo "$ADDED" | sed 's/^/    + /'
+    fi
+    cat <<'EOM'
+
+    A monitor edited in the UI appears once in each list — once as the old
+    definition and once as the new one. That is expected, not a double fault.
+
+    If the change was intentional, refresh the baseline ConfigMap
+    (manifests/base/uptime-kuma/monitor-baseline-configmap.yaml) via a PR. The
+    diff in that PR is the audit trail these monitors otherwise do not have.
+
+    If it was not intentional, someone changed monitoring without saying so —
+    which is the entire reason this check exists.
+    EOM
+    exit 1
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: uptime-kuma-monitor-drift
+  namespace: uptime-kuma
+  labels:
+    app.kubernetes.io/name: uptime-kuma-monitor-drift
+spec:
+  # Daily. Drift is a human action, so hourly would add noise without adding
+  # much: a day's delay in noticing a monitor change is acceptable, whereas a
+  # month's is not.
+  schedule: "40 6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 10
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      # No retries. Drift is a stable condition — retrying re-reports the same
+      # difference and buries the first, clearest message.
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: uptime-kuma-monitor-drift
+        spec:
+          serviceAccountName: uptime-kuma-monitor-drift
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: drift
+              image: docker.io/alpine/k8s:1.37.0
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "/scripts/drift.sh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 192Mi
+              env:
+                - name: TARGET_NS
+                  value: "uptime-kuma"
+                - name: BASELINE_FILE
+                  value: "/baseline/monitors.txt"
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+                - name: baseline
+                  mountPath: /baseline
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+                - name: kube
+                  mountPath: /.kube
+          volumes:
+            - name: scripts
+              configMap:
+                name: uptime-kuma-monitor-drift-script
+                defaultMode: 0555
+            - name: baseline
+              configMap:
+                name: uptime-kuma-monitor-baseline
+            - name: tmp
+              emptyDir: {}
+            - name: kube
+              emptyDir: {}

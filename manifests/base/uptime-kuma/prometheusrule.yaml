@@ -21,6 +21,38 @@ spec:
               Uptime Kuma monitor '{{ $labels.monitor_name }}' ({{ $labels.monitor_type }}:
               {{ $labels.monitor_url }}) has been reporting DOWN for more than 2 minutes.
 
+        # Monitor definitions are NOT in git — they live in Uptime Kuma's
+        # SQLite DB, and 2.5.3 has no REST API to manage them declaratively.
+        # The uptime-kuma-monitor-drift CronJob compares the live set against
+        # a committed baseline daily and fails when they diverge, so this
+        # alert is how that divergence reaches a human.
+        #
+        # severity=warning is deliverable as of 2026-09-10: before that,
+        # warnings were routed to AlertManager's null receiver and dropped.
+        - alert: UptimeKumaMonitorDrift
+          expr: |
+            kube_job_status_failed{job_name=~"uptime-kuma-monitor-drift.*"} > 0
+          for: 15m
+          labels:
+            severity: warning
+            component: monitoring
+          annotations:
+            summary: "Uptime Kuma monitors no longer match the declared baseline"
+            description: |
+              The monitor drift check failed. Either the live monitor set
+              diverged from manifests/base/uptime-kuma/monitor-baseline-configmap.yaml,
+              or the check itself could not run.
+
+              The job log names the exact monitors, added and removed:
+                kubectl -n uptime-kuma logs job/{{ $labels.job_name }}
+
+              A monitor edited in the UI shows up in BOTH lists — old
+              definition removed, new one added. That is one change, not two.
+
+              If the change was intentional, refresh the baseline via PR. That
+              diff is the audit trail these monitors otherwise do not have.
+              If it was not, monitoring was changed without a record.
+
         - alert: UptimeKumaMonitorCertExpirySoon
           expr: monitor_cert_days_remaining > 0 and monitor_cert_days_remaining < 14
           for: 1h

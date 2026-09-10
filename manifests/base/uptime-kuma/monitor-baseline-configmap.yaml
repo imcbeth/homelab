@@ -1,0 +1,58 @@
+---
+# Declared monitor set for Uptime Kuma — the git-side half of drift detection.
+#
+# WHY THIS EXISTS (TODO F15)
+#
+# Monitor definitions live only in Uptime Kuma's SQLite database on an iSCSI
+# PVC. They are the one significant piece of cluster configuration NOT in git:
+# they cannot be code-reviewed, drift is invisible, and a monitor deleted by
+# accident leaves no trace.
+#
+# Declarative management is not available. Uptime Kuma 2.5.3 has NO REST API
+# for monitor CRUD — verified 2026-09-09 by probing the running instance,
+# where /api/monitors returns the SPA's HTML, byte-identical to a made-up
+# control endpoint. Its programmatic interface is socket.io, and reimplementing
+# that unofficial protocol is a far larger commitment than this problem earns.
+#
+# So this is DETECTION, not reconciliation. It cannot create or repair a
+# monitor; it can only tell you the live set stopped matching the declared one.
+# That covers the failure that actually happened — a monitor going missing or
+# being silently retargeted without anyone noticing.
+#
+# UPDATING THIS FILE
+#
+# After deliberately adding, removing or changing a monitor in the UI, refresh
+# this baseline so the next run is clean:
+#
+#   kubectl -n uptime-kuma exec deploy/uptime-kuma -- sqlite3 -json /app/data/kuma.db \
+#     "select name,type,coalesce(url,'')as url,coalesce(hostname,'')as hostname,
+#             coalesce(port,0)as port,active,interval from monitor order by name;"
+#
+# then reformat to the `name|type|target|active=N|interval=N` shape below. The
+# diff in the resulting PR IS the audit trail this whole thing exists to
+# provide — that is the point, so do not skip the PR and edit in place.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: uptime-kuma-monitor-baseline
+  namespace: uptime-kuma
+  labels:
+    app.kubernetes.io/name: uptime-kuma-monitor-drift
+data:
+  # Generated from the live database on 2026-09-10.
+  # Format: name|type|target|active=N|interval=N   (sorted by name)
+  monitors.txt: |
+    Argo Workflows|http|http://argo-workflows-server.argo-workflows:2746|active=1|interval=60
+    ArgoCD|http|https://argocd-server.argocd:443/healthz|active=1|interval=60
+    Falco UI|http|http://falco-falcosidekick-ui.falco:2802|active=1|interval=60
+    Grafana|http|http://kube-prometheus-stack-grafana.default:80/api/health|active=1|interval=60
+    LocalStack|http|http://localstack.localstack:4566/_localstack/health|active=1|interval=60
+    Loki|http|http://loki.loki:3100/ready|active=1|interval=60
+    Prometheus|http|http://kube-prometheus-stack-prometheus.default:9090/-/healthy|active=1|interval=60
+    Tempo|http|http://tempo.tempo:3200/ready|active=1|interval=60
+    UNVR (UniFi Protect)|http|https://10.0.20.131/|active=1|interval=60
+    UniFi Controller|http|https://10.0.1.1|active=1|interval=60
+    Uptime Kuma|http|http://uptime-kuma.uptime-kuma:3001|active=1|interval=60
+    Zot Registry|http|http://zot.zot:5000/v2/|active=1|interval=60
+    lifeonabike.ca|http|http://web.lifeonabike:80|active=1|interval=60
+    www.lifeonabike.ca|http|http://web.lifeonabike:80|active=1|interval=60
