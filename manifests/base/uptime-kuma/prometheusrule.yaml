@@ -84,9 +84,8 @@ spec:
 
               If the CronJob is suspended or missing, that is the answer.
 
-              NOTE: the schedule is 06:40 UTC with no spec.timeZone, i.e.
-              00:40 America/Edmonton — not 06:40 local. Worth remembering
-              when reasoning about when the last run should have happened.
+              The schedule is 06:40 America/Edmonton (spec.timeZone is set),
+              so the last run should be this morning local time.
 
         - alert: UptimeKumaMonitorCertExpirySoon
           expr: monitor_cert_days_remaining > 0 and monitor_cert_days_remaining < 14
