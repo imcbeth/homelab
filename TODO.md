@@ -79,13 +79,12 @@ so it is written down rather than implied.
       still be wanted — but leaving them unqualified invites rebuilding what
       already runs. Same trap as the Trivy items, already annotated.
 
-- [ ] **On-call procedures and escalation paths** *(already on the list under
-      Operational Improvements)*. This got materially more valuable on
-      2026-09-10: until then 72% of alert rules were discarded at AlertManager's
-      null receiver, so "what do I do when this alerts" was a hypothetical.
-      Warnings now deliver. Worth writing while the alert semantics are fresh —
-      particularly which alerts are actionable vs standing-posture, since that
-      distinction was just made explicit in the routing config.
+- [x] ~~**On-call procedures and escalation paths**~~ — **DROPPED 2026-09-10.**
+      The owner is the only on-call, 24/7, and no application here has an
+      urgency that an escalation path would serve. Escalation procedures for a
+      single-operator homelab are ceremony. The alert annotations already carry
+      the "what do I do about this" detail where it matters, which is the part
+      that had real value.
 
 ### Tier 2 — the substantive build
 
@@ -113,15 +112,28 @@ These have sat on the roadmap without motion. For a 5-node homelab they look
 like aspiration rather than need, and saying so is more useful than carrying
 them indefinitely:
 
-- **Multi-cluster ArgoCD / multi-cluster workflow support** — no dev/staging
-  cluster exists, and the items are conditional on one appearing.
+- ~~**Multi-cluster ArgoCD / multi-cluster workflow support**~~ — **DECIDED: no
+  (2026-09-10).** Nice to have, but this is a homelab; there is no dev/staging
+  cluster and no plan for one. Both items were conditional on a cluster that is
+  not coming.
 - **Evaluate Tekton** — the entry itself notes higher resource usage; Argo
   Workflows already covers the need.
 - **Evaluate Gitea vs GitLab** — GitHub is working and is not a bottleneck.
-- **Load testing framework / performance regression testing** — no workload
-  here has a performance SLO that anyone is defending.
-- **The four DNS items** — vague, and one is already annotated *"covered in the
-  new guide"*. Either sharpen into something concrete or drop.
+- ~~**Load testing framework / performance regression testing**~~ — **DECIDED:
+  no (2026-09-10).** This is a learning/test cluster. No workload has a
+  performance SLO anyone is defending, so a regression suite would measure
+  nothing that matters and add maintenance.
+- **The four DNS items** — expanded 2026-09-10 so they can be decided
+  individually rather than as a block. Current state: external-dns runs three
+  providers (cloudflare, unifi, unifi-webhook), manages 10 Ingress hostnames,
+  and there are **0 DNSEndpoint CRs**. CoreDNS is 2/2.
+
+  | Item | Assessment |
+  |---|---|
+  | *Custom DNS records for internal services* | **The only one with substance.** external-dns supports the `DNSEndpoint` CRD, and none are in use — every record today is derived from an Ingress. This would let arbitrary A/CNAME records be declared in git (e.g. the NAS at `10.0.1.204`, the UDR, PDUs) instead of living in UniFi's UI as unmanaged state. That is the same class of gap as the Uptime Kuma monitors. |
+  | *DNS-based service discovery patterns* | CoreDNS already does in-cluster service discovery natively. This reads as a topic to read about, not a task with a deliverable. **Drop or rewrite as a concrete goal.** |
+  | *DNS monitoring and troubleshooting tools* | Already annotated *"covered in the new guide"*, and `docs/networking/coredns.md` exists. **Effectively done — close it.** |
+  | *Consider DNS caching optimizations* | CoreDNS caches by default. 5 nodes, 10 ingresses, no observed resolution latency problem. Micro-optimisation with no symptom driving it. **Drop unless something starts failing.** |
 
 ### Recurring, not planned
 
