@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-10 (F15 closed as drift detection; alert routing fixed; warning volume verified)
+**Last Updated:** 2026-09-10 (PVC writability prober shipped after 4 corrections; F15 closed; alert routing fixed)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,29 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-10 (evening): PVC writability prober — shipped, after four corrections
+
+**Built** (PRs #940-943). `pvc-mount-monitor` reads mount FLAGS from `/host/proc/1/mounts`, which catches btrfs remounting read-only — the failure this cluster keeps hitting. It cannot catch a mount that still advertises `rw` while the storage underneath refuses writes. The prober closes that by actually writing: `touch`+`rm` inside each workload's own pod, at its own mount, as its own uid. Exports `pvc_writable{namespace,claim,pod,mountpath}`.
+
+**Approach was a decision, not a default.** Extending the DaemonSet would have meant root + a read-write hostPath on `/var/lib/kubelet` across all five nodes — read/write on every PVC in the cluster, reversing that component's deliberate hardening. Exec-based was chosen instead: no host access, no root, ClusterRole is read + exec only. Exec is still powerful (can exec into any pod) and that tradeoff was made explicitly with the owner.
+
+**Live state: 5 PVCs `writable=1`, 3 `unprobeable`, target up, 2.7ms scrapes.**
+
+**COVERAGE LIMIT, inherent to the approach:** grafana, loki and zot run **distroless images with no shell**, so `kubectl exec ... -- sh` cannot start. 3 of 8 PVCs can never be probed this way. Surfaced as `PVCWritabilityUnprobeable` at `info` — a visible, accepted gap rather than a hidden one. Closing it would need ephemeral debug containers with volume mounts.
+
+**Four corrections, each worth remembering:**
+
+1. **False criticals on first run.** Distroless exec failure was classified as "not writable" — would have paged on three healthy volumes. Now three states: `writable` / `failed` / `unprobeable`, and only the first two emit `pvc_writable`. An untestable volume is neither healthy nor broken and gets its own series.
+2. **That fix was INERT.** I matched the error markers against a string already truncated to 200 chars, and kubectl puts the reason LAST — marker at offset 298 of a 332-char message. Deployed, present in the ConfigMap, doing nothing. Classify on the full string; truncate only for display.
+3. **The metric never reached Prometheus.** Added 9310 to the destination namespace's INGRESS and stopped. The `default` namespace runs its own egress allowlist which had 9300 but not 9310. **A scrape needs BOTH sides.** Everything checked said healthy — target discovered, endpoint present, kubelet probe passing, same-namespace scrape working. Only comparing against the working 9300 exporter and then reading the SOURCE egress found it. Same shape as the argocd 8082→8084 port drift.
+4. **Committed to `main` directly** — a `git checkout main` in a compound command ran before the PR existed. Moved to a branch and reset; caught by checking `rev-list --left-right`.
+
+**The user received a TargetDown email for this**, 16:09→16:47 UTC. That is the alert-routing fix from earlier the same day working: `TargetDown` is `severity: warning`, and until that afternoon warnings were discarded at the null receiver. Two days earlier this self-inflicted 38-minute outage would have been silent.
+
+**Lesson, stated plainly:** verify the scrape path end to end before walking away from a deploy. Target discovered ≠ target scraped.
+
+---
 
 ### 2026-09-10 (later): F15 closed as drift detection + warning volume verified
 
