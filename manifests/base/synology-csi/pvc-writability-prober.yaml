@@ -1,0 +1,367 @@
+---
+# PVC writability prober.
+#
+# Complements pvc-mount-monitor rather than replacing it. That DaemonSet reads
+# mount FLAGS from /host/proc/1/mounts and catches btrfs remounting a volume
+# read-only — the failure this cluster has actually hit, repeatedly. It cannot
+# catch a mount that still advertises rw while the storage underneath refuses
+# writes; the app finds that out first.
+#
+# WHY EXEC AND NOT A HOST MOUNT
+#
+# Reviewed 2026-09-10. Extending pvc-mount-monitor would have meant giving a
+# DaemonSet on all five nodes root plus a read-write hostPath on
+# /var/lib/kubelet — read/write access to every PVC in the cluster, reversing
+# that component's deliberate hardening (runAsNonRoot, all caps dropped,
+# read-only rootfs, /proc mounted read-only).
+#
+# Exec is not free — this ServiceAccount can exec into any pod — but it buys
+# the same signal without host access or root, and each write happens as the
+# workload's own uid into its own mount.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pvc-writability-prober
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: pvc-writability-prober
+---
+# Cluster-scoped by necessity: PVCs live in many namespaces and the point is
+# to cover all of them. Read + exec only; nothing here can create, modify or
+# delete a workload.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pvc-writability-prober
+  labels:
+    app.kubernetes.io/name: pvc-writability-prober
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pvc-writability-prober
+  labels:
+    app.kubernetes.io/name: pvc-writability-prober
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pvc-writability-prober
+subjects:
+  - kind: ServiceAccount
+    name: pvc-writability-prober
+    namespace: synology-csi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pvc-writability-prober-script
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: pvc-writability-prober
+data:
+  probe.py: |
+    #!/usr/bin/env python3
+    """Export pvc_writable by actually writing to each PVC.
+
+    WHY THIS EXISTS
+
+    pvc-mount-monitor reads mount FLAGS from /host/proc/1/mounts. That catches
+    btrfs remounting a volume read-only, which is the failure this cluster has
+    actually hit. It does NOT catch a mount that still advertises rw while the
+    underlying storage refuses writes -- you find that out when the app fails.
+
+    HOW IT PROBES, AND WHY NOT FROM THE HOST
+
+    It execs into each workload's own pod and does touch/rm on that pod's own
+    mount, as that pod's own uid. The alternative -- a DaemonSet with root and a
+    read-write hostPath on /var/lib/kubelet -- would give a component on all five
+    nodes read/write access to every PVC in the cluster, reversing a deliberate
+    hardening choice. Exec is not free either (this ServiceAccount can exec into
+    any pod), but it buys the same signal without host or root access.
+
+    KNOWN BLIND SPOT
+
+    A PVC whose pod is not Running cannot be probed, and is reported as absent
+    rather than as broken. A crashlooping workload is visible by other means; a
+    silently-unwritable one is not, and that is the gap being closed.
+    """
+    import json
+    import os
+    import subprocess
+    import threading
+    import time
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    PROBE_FILE = os.environ.get("PROBE_FILE", ".pvc-writability-probe")
+    INTERVAL = int(os.environ.get("PROBE_INTERVAL", "300"))
+    EXEC_TIMEOUT = int(os.environ.get("EXEC_TIMEOUT", "20"))
+    PORT = int(os.environ.get("PORT", "9310"))
+
+    STATE = {"results": [], "last_success": 0.0, "cycles": 0, "errors": 0}
+    LOCK = threading.Lock()
+
+
+    def log(msg):
+        print(f"[{time.strftime('%FT%TZ', time.gmtime())}] {msg}", flush=True)
+
+
+    def kubectl(args, timeout):
+        return subprocess.run(
+            ["kubectl", *args], capture_output=True, text=True, timeout=timeout
+        )
+
+
+    def discover():
+        """Running pods that mount a PVC read-write, with the container and path."""
+        out = kubectl(["get", "pods", "-A", "-o", "json"], 60)
+        if out.returncode != 0:
+            raise RuntimeError(f"list pods failed: {out.stderr.strip()[:200]}")
+        targets = []
+        for pod in json.loads(out.stdout).get("items", []):
+            if pod.get("status", {}).get("phase") != "Running":
+                continue
+            spec = pod["spec"]
+            claims = {
+                v["name"]: v["persistentVolumeClaim"]["claimName"]
+                for v in spec.get("volumes") or []
+                if v.get("persistentVolumeClaim")
+            }
+            if not claims:
+                continue
+            for c in spec.get("containers", []):
+                for m in c.get("volumeMounts") or []:
+                    claim = claims.get(m["name"])
+                    # A readOnly mount SHOULD fail the write. Probing it would
+                    # report a fault that is really a deliberate config choice.
+                    if not claim or m.get("readOnly"):
+                        continue
+                    targets.append(
+                        {
+                            "namespace": pod["metadata"]["namespace"],
+                            "pod": pod["metadata"]["name"],
+                            "container": c["name"],
+                            "claim": claim,
+                            "path": m["mountPath"],
+                        }
+                    )
+                    break
+        return targets
+
+
+    def probe(t):
+        """touch + rm inside the pod. Returns (writable, detail)."""
+        f = f"{t['path'].rstrip('/')}/{PROBE_FILE}"
+        # Single shell invocation so a half-written probe file cannot be left
+        # behind if the exec is interrupted between two calls.
+        script = f"touch '{f}' && rm -f '{f}'"
+        try:
+            r = kubectl(
+                ["exec", "-n", t["namespace"], t["pod"], "-c", t["container"],
+                 "--", "sh", "-c", script],
+                EXEC_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            return 0, "exec timed out"
+        if r.returncode == 0:
+            return 1, ""
+        return 0, (r.stderr or r.stdout).strip().replace("\n", " ")[:160]
+
+
+    def cycle():
+        targets = discover()
+        results = []
+        for t in targets:
+            ok, detail = probe(t)
+            results.append({**t, "writable": ok, "detail": detail})
+            if not ok:
+                log(f"NOT WRITABLE {t['namespace']}/{t['claim']} via {t['pod']}: {detail}")
+        with LOCK:
+            STATE["results"] = results
+            STATE["last_success"] = time.time()
+            STATE["cycles"] += 1
+        log(f"probed {len(results)} PVC(s); {sum(1 for r in results if not r['writable'])} not writable")
+
+
+    def loop():
+        while True:
+            try:
+                cycle()
+            except Exception as e:  # never let one bad cycle kill the exporter
+                with LOCK:
+                    STATE["errors"] += 1
+                log(f"cycle error: {e}")
+            time.sleep(INTERVAL)
+
+
+    def esc(s):
+        return str(s).replace("\\", "\\\\").replace('"', '\\"')
+
+
+    def render():
+        with LOCK:
+            results = list(STATE["results"])
+            last = STATE["last_success"]
+            cycles = STATE["cycles"]
+            errors = STATE["errors"]
+        out = [
+            "# HELP pvc_writable 1 if a write to the PVC succeeded from inside its own pod",
+            "# TYPE pvc_writable gauge",
+        ]
+        for r in results:
+            labels = (
+                f'namespace="{esc(r["namespace"])}",claim="{esc(r["claim"])}",'
+                f'pod="{esc(r["pod"])}",mountpath="{esc(r["path"])}"'
+            )
+            out.append(f"pvc_writable{{{labels}}} {r['writable']}")
+        out += [
+            "# HELP pvc_writability_last_success_timestamp_seconds unix time of the last completed probe cycle",
+            "# TYPE pvc_writability_last_success_timestamp_seconds gauge",
+            f"pvc_writability_last_success_timestamp_seconds {last:.0f}",
+            "# HELP pvc_writability_cycles_total completed probe cycles",
+            "# TYPE pvc_writability_cycles_total counter",
+            f"pvc_writability_cycles_total {cycles}",
+            "# HELP pvc_writability_cycle_errors_total probe cycles that raised",
+            "# TYPE pvc_writability_cycle_errors_total counter",
+            f"pvc_writability_cycle_errors_total {errors}",
+        ]
+        return "\n".join(out) + "\n"
+
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path != "/metrics":
+                self.send_response(404)
+                self.end_headers()
+                return
+            body = render().encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+
+    if __name__ == "__main__":
+        log(f"pvc-writability-prober starting: interval={INTERVAL}s port={PORT}")
+        threading.Thread(target=loop, daemon=True).start()
+        HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pvc-writability-prober
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: pvc-writability-prober
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pvc-writability-prober
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pvc-writability-prober
+    spec:
+      serviceAccountName: pvc-writability-prober
+      # A long-running exporter rather than a CronJob because the deliverable
+      # is a GAUGE — "which PVC is broken right now" on a dashboard. A CronJob
+      # can only signal via job failure, which loses the per-claim detail.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: prober
+          image: docker.io/alpine/k8s:1.37.0
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "/scripts/probe.py"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: metrics
+              containerPort: 9310
+          env:
+            # 5 minutes. The volumes being watched fail on the order of hours
+            # to days, not seconds, and every cycle execs into every stateful
+            # pod — probing harder would cost more than it detects sooner.
+            - name: PROBE_INTERVAL
+              value: "300"
+            - name: EXEC_TIMEOUT
+              value: "20"
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 192Mi
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: kube
+              mountPath: /.kube
+      volumes:
+        - name: scripts
+          configMap:
+            name: pvc-writability-prober-script
+            defaultMode: 0555
+        - name: tmp
+          emptyDir: {}
+        - name: kube
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pvc-writability-prober
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: pvc-writability-prober
+spec:
+  selector:
+    app.kubernetes.io/name: pvc-writability-prober
+  ports:
+    - name: metrics
+      port: 9310
+      targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pvc-writability-prober
+  namespace: synology-csi
+  labels:
+    app.kubernetes.io/name: pvc-writability-prober
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pvc-writability-prober
+  endpoints:
+    - port: metrics
+      interval: 60s
