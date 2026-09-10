@@ -1,0 +1,62 @@
+---
+# Internal infrastructure DNS, declared in git.
+#
+# WHY
+#
+# The NAS, UDR and UNVR are referenced by raw IP throughout this repo — 17
+# references to 10.0.1.204 and 16 to 10.0.1.1 at the time of writing. Those
+# records lived only in the UniFi UI, so they were unmanaged state: not
+# reviewable, not diffable, and invisible when they changed.
+#
+# That is not hypothetical. On 2026-09-08 the UNVR moved from 10.0.20.130 to
+# 10.0.20.131 and the only signal was an Uptime Kuma monitor going red for an
+# unknown period. A name would have absorbed the move.
+#
+# WHY .k8s.n37.ca AND NOT .n37.ca
+#
+# external-dns-unifi filters on `k8s.n37.ca` and `lifeonabike.ca`. Putting
+# these under k8s.n37.ca means no domain-filter change, so nothing about which
+# zones external-dns manages changes — only the source of records. Widening
+# the filter to n37.ca would have been a larger blast radius for no gain.
+#
+# The names read as "this host, as far as the cluster is concerned", which is
+# accurate: these are the cluster's dependencies, not general-purpose records.
+#
+# WHY THIS CANNOT LEAK RFC1918 ADDRESSES TO PUBLIC DNS
+#
+# external-dns-cloudflare also filters n37.ca, but its sources are `ingress`
+# and `service` ONLY — it has no `--source=crd`, so it cannot see these
+# objects. Verified before writing. Do NOT add --source=crd to the cloudflare
+# deployment without moving these records somewhere it does not match, or
+# 10.0.x addresses will be published to public DNS.
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: internal-infrastructure
+  namespace: external-dns
+  labels:
+    app.kubernetes.io/name: external-dns
+spec:
+  endpoints:
+    # Synology DS925+. Backing store for every iSCSI PVC in the cluster, and
+    # the SNMP target for storage alerting.
+    - dnsName: nas.k8s.n37.ca
+      recordType: A
+      recordTTL: 300
+      targets:
+        - 10.0.1.204
+
+    # UniFi Dream Router — network controller, and the unipoller scrape target.
+    - dnsName: udr.k8s.n37.ca
+      recordType: A
+      recordTTL: 300
+      targets:
+        - 10.0.1.1
+
+    # UniFi Protect NVR. Moved from .130 to .131 on 2026-09-08, which is the
+    # incident that motivated this file.
+    - dnsName: unvr.k8s.n37.ca
+      recordType: A
+      recordTTL: 300
+      targets:
+        - 10.0.20.131

@@ -116,8 +116,12 @@ them indefinitely:
   (2026-09-10).** Nice to have, but this is a homelab; there is no dev/staging
   cluster and no plan for one. Both items were conditional on a cluster that is
   not coming.
-- **Evaluate Tekton** — the entry itself notes higher resource usage; Argo
-  Workflows already covers the need.
+- ~~**Evaluate Tekton**~~ — **DECIDED: no (2026-09-10).** Argo Workflows already
+  covers the need — `lifeonabike-build` runs git-clone → kaniko-build →
+  rollout-restart on ARM64 today. Tekton would be a second CI engine on Pi
+  hardware, and the roadmap entry itself noted its higher resource usage. The
+  only argument was learning an alternative model, which is thin against a
+  permanent resource cost when the Argo model is already understood.
 - **Evaluate Gitea vs GitLab** — GitHub is working and is not a bottleneck.
 - ~~**Load testing framework / performance regression testing**~~ — **DECIDED:
   no (2026-09-10).** This is a learning/test cluster. No workload has a

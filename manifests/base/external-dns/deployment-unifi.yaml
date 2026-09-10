@@ -38,6 +38,13 @@ spec:
         # Source configuration - watch both Ingress and LoadBalancer services
         - --source=ingress
         - --source=service
+        # DNSEndpoint CRs — internal infrastructure records declared in git
+        # (see internal-records.yaml). Deliberately NOT added to
+        # deployment-cloudflare.yaml: that instance publishes to public DNS
+        # and must never see RFC1918 targets.
+        - --source=crd
+        - --crd-source-apiversion=externaldns.k8s.io/v1alpha1
+        - --crd-source-kind=DNSEndpoint
 
         # Domain filtering - internal domains (split-horizon)
         - --domain-filter=k8s.n37.ca
