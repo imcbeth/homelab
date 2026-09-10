@@ -155,8 +155,26 @@ data:
         return targets
 
 
+    # Substrings that mean "the probe could not run", NOT "the volume is
+    # broken". Distroless images have no shell, so `sh -c` never starts.
+    # Conflating the two reported grafana, loki and zot as unwritable on the
+    # first live run — a false CRITICAL on three healthy volumes.
+    UNPROBEABLE_MARKERS = (
+        "executable file not found",
+        "OCI runtime exec failed",
+        "container not found",
+        "unable to start container process",
+    )
+
+
     def probe(t):
-        """touch + rm inside the pod. Returns (writable, detail)."""
+        """touch + rm inside the pod.
+
+        Returns (state, detail) where state is:
+          "writable"    the write succeeded
+          "failed"      the write ran and did not succeed  <- the real signal
+          "unprobeable" the probe could not run at all (no shell, etc.)
+        """
         f = f"{t['path'].rstrip('/')}/{PROBE_FILE}"
         # Single shell invocation so a half-written probe file cannot be left
         # behind if the exec is interrupted between two calls.
@@ -168,25 +186,35 @@ data:
                 EXEC_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
-            return 0, "exec timed out"
+            # A timeout is genuinely ambiguous. Treat it as unprobeable rather
+            # than as a fault: a hung exec is not evidence the volume is bad,
+            # and a false critical is worse than a gap you can see.
+            return "unprobeable", "exec timed out"
         if r.returncode == 0:
-            return 1, ""
-        return 0, (r.stderr or r.stdout).strip().replace("\n", " ")[:160]
+            return "writable", ""
+        detail = (r.stderr or r.stdout).strip().replace("\n", " ")[:200]
+        if any(m in detail for m in UNPROBEABLE_MARKERS):
+            return "unprobeable", detail
+        return "failed", detail
 
 
     def cycle():
         targets = discover()
         results = []
         for t in targets:
-            ok, detail = probe(t)
-            results.append({**t, "writable": ok, "detail": detail})
-            if not ok:
+            state, detail = probe(t)
+            results.append({**t, "state": state, "detail": detail})
+            if state == "failed":
                 log(f"NOT WRITABLE {t['namespace']}/{t['claim']} via {t['pod']}: {detail}")
+            elif state == "unprobeable":
+                log(f"unprobeable {t['namespace']}/{t['claim']} via {t['pod']}: {detail}")
         with LOCK:
             STATE["results"] = results
             STATE["last_success"] = time.time()
             STATE["cycles"] += 1
-        log(f"probed {len(results)} PVC(s); {sum(1 for r in results if not r['writable'])} not writable")
+        bad = sum(1 for r in results if r["state"] == "failed")
+        skipped = sum(1 for r in results if r["state"] == "unprobeable")
+        log(f"probed {len(results)} PVC(s); {bad} not writable, {skipped} unprobeable")
 
 
     def loop():
@@ -214,12 +242,28 @@ data:
             "# HELP pvc_writable 1 if a write to the PVC succeeded from inside its own pod",
             "# TYPE pvc_writable gauge",
         ]
+        unprobeable = []
         for r in results:
             labels = (
                 f'namespace="{esc(r["namespace"])}",claim="{esc(r["claim"])}",'
                 f'pod="{esc(r["pod"])}",mountpath="{esc(r["path"])}"'
             )
-            out.append(f"pvc_writable{{{labels}}} {r['writable']}")
+            # Only emit pvc_writable for targets actually probed. A volume we
+            # could not test is NOT a volume known to be healthy, and it is
+            # not a volume known to be broken either — so it gets its own
+            # series rather than a misleading 0 or 1.
+            if r["state"] == "writable":
+                out.append(f"pvc_writable{{{labels}}} 1")
+            elif r["state"] == "failed":
+                out.append(f"pvc_writable{{{labels}}} 0")
+            else:
+                unprobeable.append(labels)
+        out += [
+            "# HELP pvc_writability_unprobeable 1 if the write test could not run (e.g. distroless image with no shell)",
+            "# TYPE pvc_writability_unprobeable gauge",
+        ]
+        for labels in unprobeable:
+            out.append(f"pvc_writability_unprobeable{{{labels}}} 1")
         out += [
             "# HELP pvc_writability_last_success_timestamp_seconds unix time of the last completed probe cycle",
             "# TYPE pvc_writability_last_success_timestamp_seconds gauge",

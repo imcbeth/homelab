@@ -313,6 +313,34 @@ spec:
               Prober log names the exact error:
                 kubectl -n synology-csi logs deploy/pvc-writability-prober
 
+        # Coverage, not just health. A PVC that cannot be probed is neither
+        # healthy nor broken — it is untested, and untested volumes silently
+        # accumulate. Distroless images (grafana, loki, zot as of 2026-09-10)
+        # have no shell, so the exec-based write test cannot run there at all.
+        #
+        # Deliberately `info`: this is a known, accepted coverage gap, not an
+        # incident. It is here so the gap stays visible on a dashboard rather
+        # than being forgotten. Promote it if the uncovered set grows.
+        - alert: PVCWritabilityUnprobeable
+          expr: pvc_writability_unprobeable == 1
+          for: 1h
+          labels:
+            severity: info
+            component: storage
+          annotations:
+            summary: "PVC {{ $labels.namespace }}/{{ $labels.claim }} cannot be write-tested"
+            description: |
+              The write probe could not run against {{ $labels.pod }}. Almost
+              always a distroless image with no shell, in which case
+              `kubectl exec ... -- sh` fails before touching the volume.
+
+              This volume's writability is UNKNOWN — not bad. It is excluded
+              from pvc_writable entirely rather than reported as 0, because a
+              false critical on a healthy volume is worse than a visible gap.
+
+              Reason recorded in the prober log:
+                kubectl -n synology-csi logs deploy/pvc-writability-prober
+
         # The prober going quiet must not look like "all volumes healthy".
         - alert: PVCWritabilityProberStale
           expr: |
