@@ -35,15 +35,33 @@ spec:
       labels:
         app.kubernetes.io/name: cluster-healthcheck
 
+    # memory RAISED 128Mi -> 256Mi on 2026-09-10. All six steps run
+    # bitnami/kubectl, a Debian-based image that does not fit in 128Mi. The
+    # `check-pods` step was OOMKilled (exit 137), which failed the whole
+    # workflow — so the DAILY health check has not actually been checking
+    # anything.
+    #
+    # Identical to the bug fixed in backup-validation-workflow.yaml on
+    # 2026-09-09 (PR #925). That fix was applied to the one workflow being
+    # investigated and not to its siblings, which is why this survived
+    # another day. lifeonabike-build-workflow.yaml uses the same 64Mi/128Mi
+    # defaults but has not OOMKilled — its steps do less — so it is left
+    # alone rather than changed speculatively.
+    #
+    # NOTE ON FAILURE SEMANTICS: the `evaluate` step exits 1 BY DESIGN when
+    # it finds problems, after POSTing ClusterHealthDegraded to AlertManager.
+    # A Failed workflow here is therefore ambiguous — it means either "checks
+    # found issues" or "a step broke". Read the node that failed before
+    # concluding anything.
     templateDefaults:
       container:
         resources:
           requests:
             cpu: 50m
-            memory: 64Mi
+            memory: 96Mi
           limits:
             cpu: 200m
-            memory: 128Mi
+            memory: 256Mi
 
     ttlStrategy:
       secondsAfterSuccess: 7200    # 2h
