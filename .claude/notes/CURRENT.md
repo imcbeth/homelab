@@ -221,7 +221,19 @@ Diagnosis note: `error: timed out waiting for the condition` was **my own `kubec
 
 **Internal DNS is now declared in git** (PRs #950, #951). `nas`/`udr`/`unvr.k8s.n37.ca` as DNSEndpoint CRs via external-dns-unifi's `crd` source. Motivation: 17 raw-IP references to the NAS, 16 to the UDR, and the UNVR silently moved .130→.131 on 09-08.
 
-Also stopped publishing RFC1918 to public DNS — every k8s.n37.ca Ingress hostname resolved publicly to 10.0.10.10. Fixed with `--exclude-target-net=10.0.0.0/8` on the Cloudflare instance. `upsert-only` means **the nine existing records remain and need manual removal**.
+Also stopped publishing RFC1918 to public DNS — every k8s.n37.ca Ingress hostname resolved publicly to 10.0.10.10. Fixed with `--exclude-target-net=10.0.0.0/8` on the Cloudflare instance. `upsert-only` meant the already-published records stayed until removed by hand.
+
+**Those records are now deleted (2026-09-10).** Enumerating the zone found **13** RFC1918 A records, not the nine I had originally reported — the earlier count came from probing known Ingress hostnames rather than reading the zone, and missed `build-webhook.k8s.n37.ca` plus three records external-dns never created. Deleted the **10 external-dns-owned** A records together with their 10 `external-dns-a-*` TXT registry companions (44 records → 24). Verified against the Cloudflare API, not a resolver: 0 owned records and 0 orphan TXT remain, all 11 `_acme-challenge` TXT, both `MX`, `_dmarc`, and the `build-webhook.n37.ca` tunnel CNAME untouched. Public resolution confirmed gone for all 10 via DoH; internal resolution and HTTPS still work through UniFi split-horizon; all 11 certificates still `Ready`.
+
+Three RFC1918 A records were **deliberately left** — they have no external-dns TXT, so they were hand-created and deleting them is a separate decision:
+
+| Record | Target | Note |
+|---|---|---|
+| `k8s.n37.ca` | 10.0.10.10 | zone apex |
+| `da-nas.home-net.n37.ca` | 10.0.1.204 | different subdomain; NAS |
+| `pihole.k8s.n37.ca` | 10.0.10.10 | **stale — no `pihole` namespace exists** |
+
+Deletion order matters in general: remove the A record *before* its TXT registry companion, or an external-dns instance without `--exclude-target-net` would see an unowned record and recreate it.
 
 :::VERIFICATION TRAP — DNS on this network:::
 `dig @1.1.1.1` does NOT leave the network. The UDR intercepts outbound DNS — `dig @192.0.2.1`, an unroutable TEST-NET address, still answers. A dig-based leak test produced a **convincing false positive**, showing internal records as "public" when they were not. Use `https://cloudflare-dns.com/dns-query` and always include a known-public control.
