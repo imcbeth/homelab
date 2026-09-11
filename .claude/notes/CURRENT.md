@@ -221,7 +221,28 @@ Diagnosis note: `error: timed out waiting for the condition` was **my own `kubec
 
 **Internal DNS is now declared in git** (PRs #950, #951). `nas`/`udr`/`unvr.k8s.n37.ca` as DNSEndpoint CRs via external-dns-unifi's `crd` source. Motivation: 17 raw-IP references to the NAS, 16 to the UDR, and the UNVR silently moved .130→.131 on 09-08.
 
-Also stopped publishing RFC1918 to public DNS — every k8s.n37.ca Ingress hostname resolved publicly to 10.0.10.10. Fixed with `--exclude-target-net=10.0.0.0/8` on the Cloudflare instance. `upsert-only` means **the nine existing records remain and need manual removal**.
+Also stopped publishing RFC1918 to public DNS — every k8s.n37.ca Ingress hostname resolved publicly to 10.0.10.10. Fixed with `--exclude-target-net=10.0.0.0/8` on the Cloudflare instance. `upsert-only` meant the already-published records stayed until removed by hand.
+
+**All RFC1918 records are now deleted (2026-09-10).** Enumerating the zone found **13** RFC1918 A records, not the nine I had originally reported — the earlier count came from probing known Ingress hostnames rather than reading the zone, and missed `build-webhook.k8s.n37.ca` plus three records external-dns never created.
+
+Removed in two passes, **44 records → 21**, leaving the zone with no A records at all (only CNAME, MX, TXT):
+
+1. The **10 external-dns-owned** A records plus their 10 `external-dns-a-*` TXT registry companions.
+2. The **3 hand-created** ones (no TXT, so external-dns never managed them): `k8s.n37.ca` (apex), `da-nas.home-net.n37.ca`, `pihole.k8s.n37.ca`.
+
+Checked before deleting the second group, since these had no git counterpart:
+
+- `da-nas.home-net.n37.ca` was a **duplicate** — `nas.k8s.n37.ca` (declared in git, PR #950) already resolves to the same 10.0.1.204. The `da-nas` strings in `runbooks/iscsi-synology.md` are iSCSI IQNs (`iqn.2000-01.com.synology:da-nas.pvc-…`), which embed the NAS hostname but never perform a DNS lookup.
+- **synology-csi dials the NAS by raw IP** (`host: 10.0.1.204` in `client-info-secret`), not by hostname, so storage was never at risk.
+- `pihole.k8s.n37.ca` was stale — no `pihole` namespace exists.
+- None of the three was an Ingress host, and cluster ConfigMaps/Secrets contained zero references to them.
+
+Verified against the Cloudflare API rather than a resolver: **0 RFC1918 A records remain**, 11 `_acme-challenge` TXT, both `MX`, `_dmarc` and the `build-webhook.n37.ca` tunnel CNAME untouched. All 11 certificates `Ready`, all 8 PVCs `Bound`, NAS DSM reachable, no unhealthy pods, Ingress hosts still serving.
+
+:::CACHE, NOT SURVIVAL:::
+Immediately after each delete, DoH still returned the old answers — resolver cache at TTL 300, not surviving records, and it read exactly like a failed deletion. Querying a name *just before* deleting it guarantees this, by repopulating the cache. Confirm deletions against the zone API; treat DoH as a propagation check only, after the TTL.
+
+Deletion order matters in general: remove the A record *before* its TXT registry companion, or an external-dns instance without `--exclude-target-net` would see an unowned record and recreate it.
 
 :::VERIFICATION TRAP — DNS on this network:::
 `dig @1.1.1.1` does NOT leave the network. The UDR intercepts outbound DNS — `dig @192.0.2.1`, an unroutable TEST-NET address, still answers. A dig-based leak test produced a **convincing false positive**, showing internal records as "public" when they were not. Use `https://cloudflare-dns.com/dns-query` and always include a known-public control.
