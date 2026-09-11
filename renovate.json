@@ -38,6 +38,17 @@
       ]
     },
     {
+      "description": "argo-events on its own, outside the weekend batch. v1.9.11 carries 4 CRITICAL CVEs in vendored Go dependencies (stdlib, grpc, pgx x2) with no fixed release available as of 2026-09-11 \u2014 scanning the 31 Aug `latest` rebuild confirmed it fixes none of them and adds one. The fix can only come from upstream, so the release should surface the day it ships rather than waiting up to a week. Placed AFTER the ArgoCD ecosystem rule so it overrides the grouping, and BEFORE the major-update rule so major bumps are still held for review. vulnerabilityAlerts does not cover this: it keys off GitHub advisories for the chart, which will not fire for CVEs vendored inside the container image.",
+      "matchPackageNames": [
+        "argo-events"
+      ],
+      "groupName": "argo-events",
+      "schedule": [
+        "at any time"
+      ],
+      "prPriority": 5
+    },
+    {
       "description": "Group monitoring stack updates",
       "matchPackageNames": [
         "kube-prometheus-stack",
