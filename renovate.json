@@ -6,7 +6,7 @@
     ":semanticCommits",
     ":separatePatchReleases"
   ],
-  "timezone": "America/Vancouver",
+  "timezone": "America/Edmonton",
   "schedule": [
     "after 6am and before 9pm on saturday and sunday"
   ],
