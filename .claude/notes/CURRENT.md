@@ -223,15 +223,24 @@ Diagnosis note: `error: timed out waiting for the condition` was **my own `kubec
 
 Also stopped publishing RFC1918 to public DNS — every k8s.n37.ca Ingress hostname resolved publicly to 10.0.10.10. Fixed with `--exclude-target-net=10.0.0.0/8` on the Cloudflare instance. `upsert-only` meant the already-published records stayed until removed by hand.
 
-**Those records are now deleted (2026-09-10).** Enumerating the zone found **13** RFC1918 A records, not the nine I had originally reported — the earlier count came from probing known Ingress hostnames rather than reading the zone, and missed `build-webhook.k8s.n37.ca` plus three records external-dns never created. Deleted the **10 external-dns-owned** A records together with their 10 `external-dns-a-*` TXT registry companions (44 records → 24). Verified against the Cloudflare API, not a resolver: 0 owned records and 0 orphan TXT remain, all 11 `_acme-challenge` TXT, both `MX`, `_dmarc`, and the `build-webhook.n37.ca` tunnel CNAME untouched. Public resolution confirmed gone for all 10 via DoH; internal resolution and HTTPS still work through UniFi split-horizon; all 11 certificates still `Ready`.
+**All RFC1918 records are now deleted (2026-09-10).** Enumerating the zone found **13** RFC1918 A records, not the nine I had originally reported — the earlier count came from probing known Ingress hostnames rather than reading the zone, and missed `build-webhook.k8s.n37.ca` plus three records external-dns never created.
 
-Three RFC1918 A records were **deliberately left** — they have no external-dns TXT, so they were hand-created and deleting them is a separate decision:
+Removed in two passes, **44 records → 21**, leaving the zone with no A records at all (only CNAME, MX, TXT):
 
-| Record | Target | Note |
-|---|---|---|
-| `k8s.n37.ca` | 10.0.10.10 | zone apex |
-| `da-nas.home-net.n37.ca` | 10.0.1.204 | different subdomain; NAS |
-| `pihole.k8s.n37.ca` | 10.0.10.10 | **stale — no `pihole` namespace exists** |
+1. The **10 external-dns-owned** A records plus their 10 `external-dns-a-*` TXT registry companions.
+2. The **3 hand-created** ones (no TXT, so external-dns never managed them): `k8s.n37.ca` (apex), `da-nas.home-net.n37.ca`, `pihole.k8s.n37.ca`.
+
+Checked before deleting the second group, since these had no git counterpart:
+
+- `da-nas.home-net.n37.ca` was a **duplicate** — `nas.k8s.n37.ca` (declared in git, PR #950) already resolves to the same 10.0.1.204. The `da-nas` strings in `runbooks/iscsi-synology.md` are iSCSI IQNs (`iqn.2000-01.com.synology:da-nas.pvc-…`), which embed the NAS hostname but never perform a DNS lookup.
+- **synology-csi dials the NAS by raw IP** (`host: 10.0.1.204` in `client-info-secret`), not by hostname, so storage was never at risk.
+- `pihole.k8s.n37.ca` was stale — no `pihole` namespace exists.
+- None of the three was an Ingress host, and cluster ConfigMaps/Secrets contained zero references to them.
+
+Verified against the Cloudflare API rather than a resolver: **0 RFC1918 A records remain**, 11 `_acme-challenge` TXT, both `MX`, `_dmarc` and the `build-webhook.n37.ca` tunnel CNAME untouched. All 11 certificates `Ready`, all 8 PVCs `Bound`, NAS DSM reachable, no unhealthy pods, Ingress hosts still serving.
+
+:::CACHE, NOT SURVIVAL:::
+Immediately after each delete, DoH still returned the old answers — resolver cache at TTL 300, not surviving records, and it read exactly like a failed deletion. Querying a name *just before* deleting it guarantees this, by repopulating the cache. Confirm deletions against the zone API; treat DoH as a propagation check only, after the TTL.
 
 Deletion order matters in general: remove the A record *before* its TXT registry companion, or an external-dns instance without `--exclude-target-net` would see an unowned record and recreate it.
 
