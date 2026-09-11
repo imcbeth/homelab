@@ -22,7 +22,7 @@
 #   - Velero: uptime-kuma is now in velero-daily-critical-pvcs (PR #907)
 image:
   repository: docker.io/louislam/uptime-kuma
-  tag: "2.5.3"
+  tag: "2.5.4"
 
 # Deployment (not StatefulSet) with Recreate strategy — RWO iSCSI PVC
 useDeploy: true
