@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-10 (PVC writability prober shipped after 4 corrections; F15 closed; alert routing fixed)
+**Last Updated:** 2026-09-11 (DNS in git; Renovate batch applied; compliance reporter OOM fixed; alerting proved itself end-to-end)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,35 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-11: DNS in git, Renovate batch, and the alert chain proving itself
+
+**The alerting built this week worked unprompted, on a real failure.** The compliance reporter failed, ArgoCD marked the app Degraded, `ArgoCDAppDegraded` went pending 21:54 → firing 22:09 → email. Full chain, no intervention. Two days ago that email would have been discarded at the null receiver.
+
+**IMPORTANT CORRECTION to my own reporting:** I told the owner the app had been Degraded for 4 days and that I caught it by luck. Both wrong. The metric shows Degraded only 21:54→22:24 (~30 min). A CronJob only goes Degraded once a FAILED Job exists — before that it was idle since its last run on 09-07, with the next due Monday. Idle is not unhealthy. And the alert caught it independently; I merely happened to be looking at the same time. **No new alert was needed** — verified before building one.
+
+**Compliance reporter OOMKilled** (PR #964). Measured `/sys/fs/cgroup/memory.peak` = **147 MiB against a 128Mi limit**. The script runs `kubectl get vulnerabilityreport -A -o jsonpath` FOUR times over 103 reports, so memory scales with report count — it grew into the ceiling rather than breaking on any change. Raised to 384Mi. **Third instance this week of bitnami/kubectl not fitting in 128Mi** (see also cluster-healthcheck check-pods, Velero DR workflow).
+
+Diagnosis note: `error: timed out waiting for the condition` was **my own `kubectl logs job/...`** waiting on a reaped pod, not the job's error. The real cause only appeared by watching the pod live and seeing `OOMKilled`.
+
+**Internal DNS is now declared in git** (PRs #950, #951). `nas`/`udr`/`unvr.k8s.n37.ca` as DNSEndpoint CRs via external-dns-unifi's `crd` source. Motivation: 17 raw-IP references to the NAS, 16 to the UDR, and the UNVR silently moved .130→.131 on 09-08.
+
+Also stopped publishing RFC1918 to public DNS — every k8s.n37.ca Ingress hostname resolved publicly to 10.0.10.10. Fixed with `--exclude-target-net=10.0.0.0/8` on the Cloudflare instance. `upsert-only` means **the nine existing records remain and need manual removal**.
+
+:::VERIFICATION TRAP — DNS on this network:::
+`dig @1.1.1.1` does NOT leave the network. The UDR intercepts outbound DNS — `dig @192.0.2.1`, an unroutable TEST-NET address, still answers. A dig-based leak test produced a **convincing false positive**, showing internal records as "public" when they were not. Use `https://cloudflare-dns.com/dns-query` and always include a known-public control.
+
+Certificates are unaffected by any of this: both ClusterIssuers use DNS-01 with their own token; A records are never consulted. HTTP-01 could never have worked against an RFC1918 target anyway.
+
+**Timezones aligned** (PRs #946, #947, #954). Every CronJob now sets `America/Edmonton` except `remediator-deadman` (6-hour interval, no effect), and `renovate.json` moved from America/Vancouver to match. `compliance-reporter` carried the comment `# Monday 8 AM` and had been running at 02:00 local for months.
+
+**argo-events CVEs: nothing to do, and `latest` is worse.** v1.9.11 has 4 unique CRITICALs (reported as 16 — four workloads share the image). v1.9.11 IS the latest release and its image has never been rebuilt. Scanned the 31-Aug `latest` digest: **fixes none, adds one** (a pseudo-version false positive). Two of the four are `pgx` — unreachable, the EventBus is JetStream. Added a Renovate rule (#952) so a real fix surfaces the day it ships.
+
+**Renovate batch applied** — 8 PRs. One needed catching: **#955 would have silently downgraded ArgoCD 10.9.0 → 10.8.4.** It was the grouped "argocd ecosystem" PR opened before the standalone #958 merged; the diff still applied cleanly and CI passed. Took the argo-workflows half separately (#963) and closed it. **Rule: merge standalone version PRs BEFORE grouped ones from the same group, then re-read the group's diff.**
+
+CSI sidecars (csi-attacher 4.13.0, node-driver-registrar 2.18.0) verified with live write tests through the CSI path, not just pod status.
+
+---
 
 ### 2026-09-10 (evening): PVC writability prober — shipped, after four corrections
 

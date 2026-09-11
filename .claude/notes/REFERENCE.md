@@ -293,3 +293,47 @@ safe probe is to target a NON-EXISTENT object and read the error:
 
 Always run the same probe as a known-authorized identity as a control —
 without it you cannot tell a real denial from a malformed probe.
+
+### `dig` against a public resolver does not test public DNS here
+
+The UDR intercepts all outbound DNS on this network. Proof: `dig @192.0.2.1`
+— an unroutable TEST-NET address that cannot possibly answer — still returns
+results. Any `dig @1.1.1.1` is therefore answered locally and says nothing
+about what is actually published.
+
+On 2026-09-11 a dig-based leak test produced a convincing FALSE POSITIVE,
+showing newly created internal-only records resolving "publicly" when they
+were not published at all.
+
+Use DNS-over-HTTPS, and always include a control name known to be public so a
+broken query is distinguishable from a genuine NXDOMAIN:
+
+    curl -s -H 'accept: application/dns-json' \
+      "https://cloudflare-dns.com/dns-query?name=<name>&type=A" | jq .
+
+### A grouped Renovate PR can silently downgrade
+
+Merging a standalone version PR first leaves the grouped PR's other hunks
+pointing at versions already superseded — and the diff still applies cleanly
+and CI still passes.
+
+2026-09-11: #958 took argocd to 10.9.0; the grouped "argocd ecosystem" PR
+#955 still proposed 10.8.4. Merging it would have rolled ArgoCD back two
+minor versions with nothing to flag it.
+
+Merge standalone version PRs BEFORE grouped ones from the same group, then
+re-read the group's diff against what is actually on main:
+
+    gh pr diff <PR> | grep -E "^[+-].*targetRevision"
+
+### bitnami/kubectl does not fit in 128Mi
+
+Three separate components hit this in one week — cluster-healthcheck
+`check-pods`, the Velero DR validation workflow, and the trivy compliance
+reporter. The last is instructive: its memory scales with the number of
+VulnerabilityReports, so it passed for months and then began failing as the
+count grew, with no change to blame.
+
+Measure before setting a limit. `/sys/fs/cgroup/memory.peak` from a probe pod
+running the same commands takes two minutes and beats guessing — the
+compliance reporter measured 147 MiB against its 128Mi ceiling.
