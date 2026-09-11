@@ -36,6 +36,24 @@ spec:
         # Domain filtering - managed zones
         - --domain-filter=n37.ca
         - --domain-filter=lifeonabike.ca
+        # Never publish RFC1918 addresses to PUBLIC DNS.
+        #
+        # Every k8s.n37.ca Ingress hostname resolved publicly to 10.0.10.10
+        # (the MetalLB LB) — argocd, grafana, status, workflows, registry,
+        # oauth, falco, localstack, flink. Verified via DNS-over-HTTPS against
+        # Cloudflare on 2026-09-10, which is the only way to check: the UDR
+        # intercepts outbound DNS, so `dig @1.1.1.1` is answered locally and
+        # tells you nothing about what is actually published.
+        #
+        # RFC1918 is unroutable so this was not an exploit path, but it
+        # disclosed the internal addressing scheme and the full list of
+        # services to anyone who asked Cloudflare. Internal names are served
+        # by external-dns-unifi, which is where they belong.
+        #
+        # NOTE: --policy=upsert-only below means external-dns never deletes.
+        # This stops NEW records being published; the records already in
+        # Cloudflare must be removed separately.
+        - --exclude-target-net=10.0.0.0/8
 
         # Policy - upsert-only (safe, won't delete records)
         - --policy=upsert-only
