@@ -36,13 +36,30 @@ spec:
           containers:
           - name: reporter
             image: registry.k8s.n37.ca/bitnami/kubectl:latest
+            # memory RAISED 128Mi -> 384Mi on 2026-09-11 after OOMKills.
+            #
+            # MEASURED, not guessed: /sys/fs/cgroup/memory.peak in a probe pod
+            # running the same queries reported 147 MiB against the 128Mi
+            # limit. The script runs `kubectl get vulnerabilityreport -A -o
+            # jsonpath` FOUR times, each materialising every report — 103 of
+            # them at the time of measurement.
+            #
+            # This is why it passed for months and then started failing:
+            # memory scales with the report count, so it grew into the ceiling
+            # rather than breaking on any particular change. Last success
+            # 2026-09-07, first failure 2026-09-11.
+            #
+            # 384Mi is ~2.6x the current peak. Third instance of this pattern
+            # this week — bitnami/kubectl does not fit in 128Mi. See also
+            # cluster-healthcheck check-pods and the Velero DR validation
+            # workflow.
             resources:
               requests:
                 cpu: 50m
-                memory: 64Mi
+                memory: 192Mi
               limits:
-                cpu: 100m
-                memory: 128Mi
+                cpu: 200m
+                memory: 384Mi
             command:
             - /bin/bash
             - -c
