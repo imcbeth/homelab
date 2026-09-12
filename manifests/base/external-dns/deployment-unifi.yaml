@@ -35,6 +35,34 @@ spec:
         - --provider=webhook
         - --webhook-provider-url=http://external-dns-unifi-webhook:8888
 
+        # Gateway-outage tolerance. external-dns classifies provider failures
+        # two ways, and ONLY one of them is survivable:
+        #   - webhook answers with a non-2xx  -> SoftError, counted, tolerated
+        #   - webhook does not answer in time -> hard error -> log.Fatal -> exit
+        # There is no flag to make a hard error non-fatal (checked --help on
+        # v0.21.0), so the only lever is making sure the webhook's reply lands
+        # inside the window.
+        #
+        # At the 5s default that window was too small. During the 2026-09-12 UDR
+        # outage the webhook was still waiting on the gateway when external-dns
+        # gave up, so the gateway's eventual HTTP 502 -- which WOULD have been
+        # tolerated -- never arrived, and the pod exited instead: 54 restarts in
+        # ~2h. The proof the soft path works is in the same logs, from the runs
+        # where the 502 did come back fast enough:
+        #   "soft error ... (consecutive soft errors: 3)"
+        #   "Reconciliation succeeded after 3 consecutive soft errors"
+        #
+        # 60s is chosen to exceed how long the gateway took to return its own
+        # error under load. This is a reconciler on a 1m interval, so blocking a
+        # full minute on a sick gateway costs nothing.
+        #
+        # This does NOT make it immortal: a gateway that hangs past 60s still
+        # exits, by design. It converts the common case (slow/erroring gateway)
+        # from crashloop into tolerated soft errors. Full tolerance would need a
+        # webhook build with UNIFI_RETRY_* bounds -- absent from v0.8.2.
+        - --webhook-provider-read-timeout=60s
+        - --webhook-provider-write-timeout=60s
+
         # Source configuration - watch both Ingress and LoadBalancer services
         - --source=ingress
         - --source=service
