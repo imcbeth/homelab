@@ -163,6 +163,52 @@ spec:
     #
     # Conclusion: throttle percentage alone is a poor proxy for harm. This
     # rule requires high throttling AND high utilization together.
+    # Added 2026-09-14 after node03 sat cordoned for 36 hours unnoticed.
+    #
+    # The pvc-ro-remediator cordons a node, deletes the stuck pod, waits for
+    # detach, then uncordons. On 2026-09-13 a run hit its 120s
+    # activeDeadlineSeconds, the kubelet SIGTERMed it, and its `trap ... EXIT`
+    # did not fire (busybox ash does not run EXIT traps on signal death). The
+    # node stayed unschedulable.
+    #
+    # KubeJobFailed did fire — and was useless here, because it says a job
+    # failed, not that a node stopped accepting work. Nothing watched the state
+    # that actually mattered. This alert watches the consequence, not the cause,
+    # so it fires no matter what stranded the cordon: a failed remediator, an
+    # interrupted drain, or a human who forgot.
+    - name: node_schedulability
+      rules:
+        - alert: NodeCordonedTooLong
+          # 30m is comfortably longer than any legitimate automated cordon here:
+          # the remediator's whole Job is capped at 120s, and a kernel-cycle
+          # drain/reboot/uncordon runs well under this.
+          expr: kube_node_spec_unschedulable == 1
+          for: 30m
+          labels:
+            severity: warning
+            component: cluster
+          annotations:
+            summary: "Node {{ $labels.node }} has been cordoned for over 30 minutes"
+            description: |
+              {{ $labels.node }} is marked unschedulable and has stayed that way
+              for 30+ minutes. Capacity is silently reduced and nothing else
+              reports it.
+
+              If this is a deliberate maintenance window, ignore it — it clears
+              on uncordon.
+
+              Otherwise something stranded the cordon. Check the remediator
+              first, since it is the only automation here that cordons:
+                kubectl -n synology-csi get jobs | grep pvc-ro-remediator
+                kubectl -n synology-csi logs job/<failed-job> | grep -i cordon
+              A run that failed with DeadlineExceeded is the known signature.
+
+              Confirm nothing is actually wrong with the node, then:
+                kubectl uncordon {{ $labels.node }}
+
+              Note a cordoned node is NOT drained — existing pods keep running,
+              which is why this is easy to miss.
+
     - name: pi_cpu_throttling
       interval: 60s
       rules:
