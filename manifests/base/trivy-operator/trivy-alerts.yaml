@@ -33,7 +33,24 @@ spec:
       expr: sum(trivy_clusterrole_clusterrbacassessments{severity="Critical"}) > 0
       for: 10m
       labels:
-        severity: warning
+        # info, not warning — info routes to the null receiver, so this is
+        # deliberately silent. Demoted 2026-09-14.
+        #
+        # The expression is `> 0` on a steady-state count that is mostly
+        # inherent to operators needing broad grants, so it fires continuously
+        # and never clears. As a warning it emailed every 24h since 2026-09-09
+        # saying the same thing, which trains you to ignore the channel that
+        # also carries real warnings.
+        #
+        # Matches its sibling HighClusterRoleRBACIssues, already info.
+        #
+        # NOTE: this alert's own description says to investigate when the
+        # COUNT CHANGES, not on every evaluation — and nothing implements that
+        # for RBAC. CriticalVulnerabilitiesIncreased is the delta-based
+        # equivalent for vulnerabilities; there is no RBAC counterpart. Until
+        # one exists, RBAC drift is visible only in Grafana and the reports,
+        # not by notification.
+        severity: info
       annotations:
         summary: "Critical RBAC issues detected in ClusterRoles"
         description: |
