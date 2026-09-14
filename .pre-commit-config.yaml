@@ -86,8 +86,13 @@ repos:
         description: 'Run kustomize build on every kustomization.yaml and validate the rendered output with kubeconform. Skips locally if kustomize is not installed; CI always runs it.'
 
   # Secret scanning to prevent accidental commits
+  # Pinned to match the version CI installs in .github/workflows/gitleaks.yml.
+  # These MUST stay in step. They drifted once (hook v8.18.1 vs CI v8.30.1) and
+  # disagreed on identical input: v8.18.1 flagged AWS's documented sample access
+  # key that v8.30.1 allowlists, so a commit could pass CI and fail the hook.
+  # When bumping one, bump the other.
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.1
+    rev: v8.30.1
     hooks:
       - id: gitleaks
         name: Detect secrets and credentials
