@@ -87,13 +87,21 @@ data:
     #!/bin/sh
     set -eu
 
-    # Tracks a node WE cordoned, so the EXIT trap can undo it.
+    # Tracks a node WE cordoned, so the trap can undo it.
     #
     # A cordon that outlives this Job is worse than the fault it was meant to
-    # fix: the node quietly stops accepting work and nothing says why. The
-    # trap fires on every exit path — success, failure, `set -e` abort, or the
-    # Job hitting activeDeadlineSeconds — which is the same lesson the restore
-    # validator learned the hard way on 2026-09-08.
+    # fix: the node quietly stops accepting work and nothing says why.
+    #
+    # THIS EXACT FAILURE HAPPENED — 2026-09-13. This comment used to claim the
+    # trap covered "the Job hitting activeDeadlineSeconds". It did not.
+    # `trap ... EXIT` alone does NOT run when the shell is killed by a signal,
+    # and activeDeadlineSeconds makes the kubelet SIGTERM the container. Job
+    # pvc-ro-remediator-29821360 hit its 120s deadline, was signalled, and the
+    # trap never fired — leaving node03 cordoned for 36 hours while 36 pods
+    # kept running on it. The safety net documented a guarantee it lacked.
+    #
+    # TERM and INT are now trapped explicitly, and re-raised after cleanup so
+    # the exit status stays honest rather than masking a kill as a clean exit.
     #
     # Deliberately empty when the node was ALREADY cordoned by someone else:
     # that state is not ours to clear.
@@ -109,7 +117,12 @@ data:
         CORDONED_NODE=""
       fi
     }
+    # EXIT covers normal and `set -e` paths. TERM and INT cover being signalled,
+    # which is how activeDeadlineSeconds and `kubectl delete job` end this pod.
+    on_signal() { uncordon_if_needed; trap - TERM INT; kill -s "$1" $$; }
     trap uncordon_if_needed EXIT
+    trap 'on_signal TERM' TERM
+    trap 'on_signal INT' INT
 
     # Query the pvc-mount-monitor DaemonSet pods DIRECTLY via the headless
     # Service, bypassing Prometheus + alert evaluation entirely.
