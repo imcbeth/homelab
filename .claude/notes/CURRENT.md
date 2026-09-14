@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-14 (secrets audit across 3 repos — clean; gitleaks CI everywhere; UDR outage traced; 199 stale branches removed)
+**Last Updated:** 2026-09-14 (node03 cordoned 36h by a trap that never fired; secrets audit across 3 repos — clean; gitleaks CI everywhere; UDR outage traced)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,68 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-14: node03 cordoned for 36 hours by a safety trap that never fired
+
+Found by `/cluster-healthcheck`. Everything else was green: 5/5 Ready, 38/38 apps
+Synced+Healthy, 8/8 PVCs Bound, all DaemonSets full, no non-running pods. **node03 was
+`SchedulingDisabled` and had been since 2026-09-13T06:40Z.**
+
+:::A CORDONED NODE IS NOT A DRAINED NODE:::
+This is why it hid for a day and a half. node03 kept running **36 pods, including
+Prometheus and alertmanager** — the remediator only deletes the one stuck pod, it never
+drains. Every conventional health signal stayed green while the cluster was quietly down a
+node of schedulable capacity. Readiness tells you nothing here; check
+`kubectl get nodes` for `SchedulingDisabled`, or the new alert below.
+
+**Root cause — a trap that documented a guarantee it did not have.**
+`pvc-ro-remediator` cordons a node, deletes the stuck pod, waits for detach, then uncordons,
+guarded by `trap uncordon_if_needed EXIT`. **EXIT only.**
+
+busybox `ash` does **not** run an EXIT trap when the shell is killed by a signal, and
+`activeDeadlineSeconds` makes the kubelet SIGTERM the container. Job
+`pvc-ro-remediator-29821360` hit its 120s deadline, was signalled, and the uncordon never
+ran. The comment above that trap claimed it fired on *"the Job hitting
+activeDeadlineSeconds"* — it did not. **Worse than no safety net, because it stopped anyone
+checking.**
+
+Fixed in PR #976: traps `TERM` and `INT` explicitly and re-raises after cleanup so the exit
+status stays honest.
+
+:::DO NOT TEST SHELL TRAPS ON macOS:::
+`/bin/sh` on macOS is **bash**, which *does* run EXIT traps on SIGTERM. A local test showed
+old and new code behaving identically and proved nothing — twice. It only reproduces in
+busybox. Verified by running the **exact shipped code** in-cluster on `alpine/k8s:1.37.0`:
+
+| Code | SIGTERM result |
+|---|---|
+| old (`EXIT` only) | `exit=143`, **no cleanup** |
+| new (`EXIT`+`TERM`+`INT`) | `uncordoned node=n03`, `exit=143` preserved |
+
+The script lives in a ConfigMap at `/scripts/remediate.sh`, not container `args`, so
+Kubernetes variable expansion never touches the `$$` in the re-raise.
+
+:::THE ALERT THAT FIRED WAS USELESS — WATCH THE CONSEQUENCE, NOT THE CAUSE:::
+`KubeJobFailed` **did fire**, at 06:42 on 2026-09-13, and stayed firing for 36 hours. It
+reports that *a job failed* — not that *a node stopped accepting work*. Nothing watched the
+state that actually mattered, so the signal was there and meant nothing to anyone reading it.
+
+New `NodeCordonedTooLong` (PR #976, `pi-cluster-alerts.yaml`, group `node_schedulability`):
+
+```promql
+kube_node_spec_unschedulable == 1
+for: 30m          # remediator's entire Job is capped at 120s
+```
+
+It watches the consequence, so it fires regardless of what stranded the cordon — failed
+automation, an interrupted drain, or a human who forgot. Confirmed **loaded** in Prometheus
+(`health: ok`, `state: inactive`), not merely created: the first check showed NOT LOADED
+because kube-prometheus-stack still had a sync running with `PrometheusRule/pi-cluster-alerts`
+as its only out-of-sync resource. Creation is not loading — verify via
+`/api/v1/rules`.
+
+node03 uncordoned; 0 cordoned nodes, 38/38 apps healthy. Also removed `edns-help-2092`, a
+leftover debug pod of mine from the external-dns investigation.
 
 ### 2026-09-12/14: UDR outage traced, secrets audit across three repos, gitleaks everywhere
 
