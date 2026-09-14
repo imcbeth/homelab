@@ -41,3 +41,12 @@ Thumbs.db
 Ian_McBeth_resume*
 LINKEDIN_SUMMARY.txt
 RESUME.md
+
+# Security audit reports.
+# These enumerate cluster security posture, scanner findings and remediation
+# status. This repo is PUBLIC — an audit report is a roadmap for anyone who
+# reads it, even when every finding in it is already fixed. Keep them local.
+# Ignored rather than merely left untracked, so a `git add .` cannot sweep one in.
+SECRETS-AUDIT-*.md
+SECURITY-AUDIT-*.md
+*-audit-report.md
