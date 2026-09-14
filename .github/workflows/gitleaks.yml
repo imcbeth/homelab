@@ -1,0 +1,66 @@
+name: Gitleaks
+
+# NOTE ON THE FILENAME: this file must NOT contain "secret" in its name.
+# .gitattributes applies `*secret* filter=git-crypt`, which matches basenames,
+# so a workflow called secret-scan.yml is committed as ENCRYPTED BINARY.
+# GitHub then cannot parse it and the run fails at startup in 0s with
+# "This run likely failed because of a workflow file issue" and no logs.
+# That is exactly what happened to the first version of this file.
+
+# Deliberately NO `paths:` filter, unlike validate.yml. A credential can be
+# pasted into a README, a runbook, or a session note just as easily as into a
+# manifest — restricting this job by path would skip exactly those cases.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Weekly full-history sweep: catches rules added to gitleaks after a commit
+    # landed, which a PR-time scan of that commit would already have passed.
+    - cron: '17 9 * * 1'
+
+concurrency:
+  group: gitleaks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history. The runner has no git-crypt key, so every blob it
+          # reads is the same ciphertext a stranger cloning this public repo
+          # gets — which is the only view worth auditing.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          version=8.30.1
+          curl -fsSL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Confirm the checkout is git-crypt LOCKED
+        run: |
+          set -euo pipefail
+          # Guard against the false-positive mode described in .gitleaks.toml.
+          # If a secret-path blob is ever readable as text here, either git-crypt
+          # stopped applying or a key leaked into CI — both are worth failing on.
+          f=manifests/base/synology-csi/configs/client-info-secret.yml
+          if [ -f "$f" ] && ! head -c 9 "$f" | grep -q 'GITCRYPT'; then
+            echo "::error::$f is not git-crypt ciphertext in CI — refusing to scan a decrypted tree"
+            exit 1
+          fi
+          echo "checkout is locked; scanning ciphertext as an outsider would"
+
+      - name: Scan full history
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --verbose --no-banner

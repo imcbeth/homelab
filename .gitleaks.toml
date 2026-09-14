@@ -1,0 +1,35 @@
+# gitleaks configuration
+#
+# IMPORTANT — where this may and may not be run.
+#
+# `.gitattributes` sets `diff=git-crypt`. On a developer machine with git-crypt
+# UNLOCKED, git transparently decrypts blobs when a tool reads them, so a scan
+# run there reports plaintext that DOES NOT EXIST in the repository. A 2026-09-13
+# audit hit exactly this: 68 findings locally, including what appeared to be
+# Cloudflare tokens and an SSH key, none of which were ever committed.
+#
+# A secrets scan against an unlocked git-crypt checkout audits your keyring,
+# not your repo.
+#
+# CI is the correct place to run this: the runner has no git-crypt key, so it
+# sees the same ciphertext an attacker downloading the public repo would see.
+# To reproduce locally, run `git-crypt lock` first.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+SealedSecret ciphertext. These are RSA-encrypted and decryptable only by the
+in-cluster sealed-secrets controller's private key, which is not in this repo.
+They are high-entropy by construction and will always trip generic-api-key.
+Allowlisted so real findings are not buried in 20+ permanent false positives.
+"""
+paths = [
+  '''.*-sealed\.ya?ml$''',
+]
+
+# NOTE: git-crypt paths (secrets/**, *secret*, *.key) are deliberately NOT
+# allowlisted. In CI they are opaque ciphertext and produce no findings — this
+# was verified against a keyless clone. Leaving them in scope means that if
+# git-crypt ever silently stops applying, the resulting plaintext IS caught.
