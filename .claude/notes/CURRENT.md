@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-11 (DNS in git; Renovate batch applied; compliance reporter OOM fixed; alerting proved itself end-to-end)
+**Last Updated:** 2026-09-14 (secrets audit across 3 repos — clean; gitleaks CI everywhere; UDR outage traced; 199 stale branches removed)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,132 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-12/14: UDR outage traced, secrets audit across three repos, gitleaks everywhere
+
+**UniFi gateway outage — root cause was wider than the two alerting services.**
+`external-dns-unifi` crashlooped **54 times in ~2h** while `unpoller` rode the same dead
+API out on retries. Both were hitting `https://10.0.1.1/proxy/network/...`, which returned
+**502 Bad Gateway** — the UDR's nginx was answering but the network application behind it
+was dead.
+
+The part not visible from the alerts: the gateway also took down **upstream DNS at
+`10.0.10.1`**. CoreDNS logged `i/o timeout` and `connection refused` for `github.com`,
+`quay.io`, and in-cluster names, which cascaded into probe failures on
+`argocd-repo-server` (4 restarts), Prometheus, Grafana (HTTP 503) and uptime-kuma. DNS and
+the controller API are different UDR interfaces; both died together, so this was the device.
+Everything self-recovered after the reboot.
+
+:::WHY external-dns CRASHLOOPED AND unpoller DID NOT — PR #969:::
+external-dns classifies provider failures two ways and **only one is survivable**:
+a non-2xx from the webhook becomes a `SoftError` that is counted and tolerated; a webhook
+that does not answer in time is a hard error and calls `log.Fatal`. There is no flag to
+make a hard error non-fatal (checked `--help` on v0.21.0).
+At the **5s** default the webhook was still waiting on the gateway when external-dns gave
+up, so the gateway's eventual 502 — which *would* have been tolerated — never arrived.
+Fix: `--webhook-provider-read-timeout=60s` + `--webhook-provider-write-timeout=60s`.
+Verified in the running pod's own config dump (`WebhookProviderReadTimeout:1m0s`), not just
+the Deployment spec. A gateway hanging past 60s still exits, by design.
+The tempting fix — `UNIFI_RETRY_*` on the webhook — **does not exist in v0.8.2**; those are
+on the project's `main` only. Setting them would have been silently inert.
+
+**Secrets audit — all three repos clean, zero real findings.**
+Scanned full history of `homelab` (1,145 commits, public), `k8s-docs-n37` (227, public) and
+`lifeonabike.ca` (46, private). No credential has ever been committed in plaintext to any
+of them. git-crypt has worked correctly since introduction; all 22 SealedSecrets are
+structurally valid with no plaintext `data:` block.
+
+:::SCANNING A git-crypt REPO — THE TRAP THAT COST TWO WRONG ANSWERS:::
+`.gitattributes` sets `diff=git-crypt`. On an **unlocked** checkout git transparently
+decrypts blobs when a tool reads them, so gitleaks reported **68 findings** locally —
+apparent Cloudflare tokens and an SSH key — none of which were ever committed.
+**A secrets scan against an unlocked git-crypt checkout audits your keyring, not your repo.**
+Redo it against a fresh keyless clone from GitHub, and verify blobs with
+`git cat-file blob <c>:<path> | head -c 9` looking for the `\0GITCRYPT` magic — not by
+trusting a diff. Also: for a deleted file, the newest commit touching it is the *deletion*,
+where `git show` returns empty — an empty result read as "plaintext" produced the second
+wrong answer.
+
+:::A FALSE POSITIVE I REPORTED AS A FINDING — RETRACTED 2026-09-14:::
+The audit claimed a "retired Grafana admin password" in `k8s-docs-n37`. **There was none.**
+Both flagged values decode to `grafana123` — a fake password the document introduces three
+lines earlier (``echo -n "grafana123" | base64``). Two compounding errors:
+1. A placeholder detector keyed on `REPLACE|CHANGEME|YOUR_|placeholder|example` did not
+   recognise `grafana123`, so a plainly fake value was labelled "REAL-LOOKING". The
+   disproof was in the same file.
+2. Worse — comparing it to the live 40-char password produced no match, and that was
+   reported as *"the credential was rotated."* Absence of a match was turned into a
+   history. That is what let a false positive survive as a "LOW finding" instead of
+   being dropped.
+Lesson: when a scanner and the surrounding prose disagree, the prose wins until proven
+otherwise.
+
+**gitleaks in CI on all three repos — adapted per repo, not copied.**
+
+| | homelab | lifeonabike.ca | k8s-docs-n37 |
+|---|---|---|---|
+| PR | #972 | #20 | #118 |
+| Push protection + secret scanning | enabled | **unavailable** (private needs paid GHAS) | already on |
+| git-crypt guard step | yes | n/a — omitted | n/a — omitted |
+| `.gitleaks.toml` | allowlists `*-sealed.yaml` (24 FPs) | none needed | allowlists 2 values |
+| Archive scanning | n/a | yes | n/a |
+| Required status check | no rule exists | no rule exists | **yes** |
+
+- **No `paths:` filter anywhere.** A credential lands in a README as easily as a manifest,
+  and homelab's `Validate` is filtered to `manifests/**`. Proven immediately: PR #973 touched
+  only `.gitignore`, `Validate` correctly skipped it, gitleaks still ran.
+- **homelab's guard step fails the build if the CI checkout is not git-crypt locked**, so the
+  68-false-finding mode cannot recur.
+- **k8s-docs-n37 allowlists by VALUE, not path.** Allowlisting the file would blind the
+  scanner to a real credential pasted into that same troubleshooting page later. Verified
+  narrow: a fabricated PAT appended to that exact file still exits 1.
+- **Required check ordering matters**: merge the workflow to `main` *first*. Making a check
+  required while the workflow lives only in a branch strands every other PR waiting for a
+  check that can never report. Same hazard applies to PR branches that predate the workflow.
+
+:::PROVING A DETECTOR CAN FAIL:::
+First attempt to prove the archive scanner worked planted **AWS's documented sample access
+key** (the `AKIA...EXAMPLE` one from their docs) in a test zip. gitleaks **v8.30.1 allowlists
+it**, so the scan reported clean, the test proved nothing, and the "it works" conclusion was
+nearly published. Re-run with a fabricated `ghp_` PAT: exit 1.
+Never use a vendor's documentation sample as a positive control — scanners deliberately
+ignore them.
+
+:::gitleaks VERSION DRIFT — pre-commit v8.18.1 vs CI v8.30.1:::
+Writing that lesson into this file **failed the pre-commit hook**, which flagged the literal
+sample key as `aws-access-token`. The local binary and the new CI workflow (both v8.30.1)
+scan the same string clean. `.pre-commit-config.yaml` pins `gitleaks rev: v8.18.1`, which
+predates that allowlist.
+So the two layers disagree on the same input: a commit can pass CI and fail pre-commit.
+v8.18.1's behaviour here is the false positive, but the drift itself is the real issue —
+**the local gate and the CI gate should run the same rules.** Bumping the pinned rev to
+match CI is an open follow-up. Until then, do not write literal vendor sample credentials
+into tracked files; describe them instead, as above.
+
+**Other changes**
+- **Cloudflare RFC1918 cleanup finished (#966).** Enumeration found **13** such A records,
+  not the nine reported from probing Ingress hostnames. Deleted 10 external-dns-owned plus
+  their TXT companions, then the 3 hand-created ones. Zone went 44 → 21 records and now has
+  **no A records at all**. `da-nas.home-net.n37.ca` duplicated the git-declared
+  `nas.k8s.n37.ca`; synology-csi dials the NAS by raw IP so storage was never involved.
+  DoH showed deleted names as live for minutes afterwards — **resolver cache, not survival**;
+  querying a name just before deleting it guarantees that. Verify against the zone API.
+- **199 stale remote branches + 160 local deleted**, all with merged PRs. `delete_branch_on_merge`
+  was off and is now on. Two gotchas: `gh pr list --limit 400` silently truncated against 961
+  PRs and misfiled merged branches as "no PR"; and `git push origin --delete $batch` failed
+  because **zsh does not word-split unquoted variables** — use `xargs`. 7 branches kept
+  (4 never-PR'd local-only, 3 closed-unmerged).
+- **`lifeonabike.ca.zip` removed (#21)** — a stale 2026-05-31 snapshot of the repo's own
+  source, opaque to secret scanning. 14 files existed *only* inside it: 8 superseded deploy
+  manifests, plus 4 posts and 2 GPX tracks that were tracked here, deliberately deleted, and
+  404 on the live site. Recoverable from `a1780f7e` / `bb38cd01`. Archive formats now gitignored.
+- **Audit reports gitignored in all three repos (#973 and equivalents).** Untracked is one
+  `git add .` from committed — demonstrated live while testing the rule. Note push protection
+  would *not* catch this: a markdown report contains no recognised credential format.
+- **Privacy checks a secrets scanner never runs** (lifeonabike.ca): 5 published photos carry
+  EXIF but **no GPS**; 3 GPX tracks, shared origin is a Kananaskis trailhead, not a residence.
+  No home address inferable today. Cumulative risk — trim start/end on any ride beginning
+  at home before publishing.
 
 ### 2026-09-11: DNS in git, Renovate batch, and the alert chain proving itself
 
