@@ -48,29 +48,29 @@ data:
         interval: 1m
         rules:
           # ── Why every selector below excludes namespace="loki" ──────────────────
-    #
-    # Loki's ruler logs the full TEXT of each query it evaluates:
-    #
-    #   caller=metrics.go component=ruler ... query="(sum by (namespace,pod)
-    #     (rate({namespace=~\".+\"} |~ \"(?i)(attack|intrusion|exploit...
-    #
-    # Alloy ships those lines straight back into Loki. The next evaluation then
-    # matches its OWN logged query string, so the alert fires forever and can
-    # never clear. Confirmed 2026-09-19: OOMKilledDetected,
-    # CrashLoopBackOffDetected and SuspiciousActivity each matched exactly one
-    # series — loki/loki-0 — and nothing else in the cluster. Three of them are
-    # `critical`, so this was paging on the ruler reading its own logs.
-    #
-    # Excluding the loki namespace is deterministic: the ruler only ever runs
-    # there. Verified against live Loki — the same queries return 0 series with
-    # the exclusion, so no real event is being hidden.
-    #
-    # These are TEXT-matching rules and remain inherently fragile: they detect a
-    # pod that LOGS a phrase, not a pod the phrase is ABOUT. A pod that is
-    # OOMKilled does not log "oomkilled" — the kubelet does. Treat them as a
-    # coarse net; metric-based alerts are authoritative. KubePodCrashLooping is
-    # already loaded. `KubeContainerOOMKilled` is NOT — worth adding.
-    - alert: CrashLoopBackOffDetected
+          #
+          # Loki's ruler logs the full TEXT of each query it evaluates:
+          #
+          #   caller=metrics.go component=ruler ... query="(sum by (namespace,pod)
+          #     (rate({namespace=~\".+\"} |~ \"(?i)(attack|intrusion|exploit...
+          #
+          # Alloy ships those lines straight back into Loki. The next evaluation then
+          # matches its OWN logged query string, so the alert fires forever and can
+          # never clear. Confirmed 2026-09-19: OOMKilledDetected,
+          # CrashLoopBackOffDetected and SuspiciousActivity each matched exactly one
+          # series — loki/loki-0 — and nothing else in the cluster. Three of them are
+          # `critical`, so this was paging on the ruler reading its own logs.
+          #
+          # Excluding the loki namespace is deterministic: the ruler only ever runs
+          # there. Verified against live Loki — the same queries return 0 series with
+          # the exclusion, so no real event is being hidden.
+          #
+          # These are TEXT-matching rules and remain inherently fragile: they detect a
+          # pod that LOGS a phrase, not a pod the phrase is ABOUT. A pod that is
+          # OOMKilled does not log "oomkilled" — the kubelet does. Treat them as a
+          # coarse net; metric-based alerts are authoritative. KubePodCrashLooping is
+          # already loaded. `KubeContainerOOMKilled` is NOT — worth adding.
+          - alert: CrashLoopBackOffDetected
             expr: |
               sum by (namespace, pod) (
                 rate({namespace=~".+", namespace!="loki"} |~ "(?i)(back-off restarting failed container|crashloopbackoff)" [5m])
