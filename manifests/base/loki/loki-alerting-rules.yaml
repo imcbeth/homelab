@@ -47,10 +47,33 @@ data:
       - name: pod_failures
         interval: 1m
         rules:
-          - alert: CrashLoopBackOffDetected
+          # ── Why every selector below excludes namespace="loki" ──────────────────
+    #
+    # Loki's ruler logs the full TEXT of each query it evaluates:
+    #
+    #   caller=metrics.go component=ruler ... query="(sum by (namespace,pod)
+    #     (rate({namespace=~\".+\"} |~ \"(?i)(attack|intrusion|exploit...
+    #
+    # Alloy ships those lines straight back into Loki. The next evaluation then
+    # matches its OWN logged query string, so the alert fires forever and can
+    # never clear. Confirmed 2026-09-19: OOMKilledDetected,
+    # CrashLoopBackOffDetected and SuspiciousActivity each matched exactly one
+    # series — loki/loki-0 — and nothing else in the cluster. Three of them are
+    # `critical`, so this was paging on the ruler reading its own logs.
+    #
+    # Excluding the loki namespace is deterministic: the ruler only ever runs
+    # there. Verified against live Loki — the same queries return 0 series with
+    # the exclusion, so no real event is being hidden.
+    #
+    # These are TEXT-matching rules and remain inherently fragile: they detect a
+    # pod that LOGS a phrase, not a pod the phrase is ABOUT. A pod that is
+    # OOMKilled does not log "oomkilled" — the kubelet does. Treat them as a
+    # coarse net; metric-based alerts are authoritative. KubePodCrashLooping is
+    # already loaded. `KubeContainerOOMKilled` is NOT — worth adding.
+    - alert: CrashLoopBackOffDetected
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+"} |~ "(?i)(back-off restarting failed container|crashloopbackoff)" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(back-off restarting failed container|crashloopbackoff)" [5m])
               ) > 0
             for: 5m
             labels:
@@ -64,7 +87,7 @@ data:
           - alert: OOMKilledDetected
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+"} |~ "(?i)(oomkilled|out of memory|memory cgroup out of memory)" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(oomkilled|out of memory|memory cgroup out of memory)" [5m])
               ) > 0
             for: 1m
             labels:
@@ -77,7 +100,7 @@ data:
 
           - alert: PersistentPodRestarts
             expr: |
-              count_over_time({namespace=~".+"} |~ "(?i)(restarting container|restart count)" [15m]) > 5
+              count_over_time({namespace=~".+", namespace!="loki"} |~ "(?i)(restarting container|restart count)" [15m]) > 5
             for: 10m
             labels:
               severity: warning
@@ -93,7 +116,7 @@ data:
           - alert: HighHTTP5xxErrorRate
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+"} |~ "(?i)(status[= :]5[0-9]{2}|http.*5[0-9]{2})" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(status[= :]5[0-9]{2}|http.*5[0-9]{2})" [5m])
               ) > 1
             for: 5m
             labels:
@@ -107,7 +130,7 @@ data:
           - alert: DatabaseConnectionErrors
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+"} |~ "(?i)(connection.*refused|connection.*timeout|database.*error|sql.*error)" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(connection.*refused|connection.*timeout|database.*error|sql.*error)" [5m])
               ) > 0.5
             for: 5m
             labels:
@@ -124,7 +147,7 @@ data:
           - alert: AuthenticationFailures
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+"} |~ "(?i)(authentication.*failed|auth.*failed|unauthorized|invalid.*credentials)" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(authentication.*failed|auth.*failed|unauthorized|invalid.*credentials)" [5m])
               ) > 5
             for: 5m
             labels:
@@ -138,7 +161,7 @@ data:
           - alert: SuspiciousActivity
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+"} |~ "(?i)(attack|intrusion|exploit|malicious|suspicious)" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(attack|intrusion|exploit|malicious|suspicious)" [5m])
               ) > 0
             for: 2m
             labels:
