@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-14 (node03 cordoned 36h by a trap that never fired; secrets audit across 3 repos — clean; gitleaks CI everywhere; UDR outage traced)
+**Last Updated:** 2026-09-19 (Loki ruler was alerting on its own logs; kube-prometheus-stack 90→91; 8 Renovate PRs applied)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,103 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-19: Loki's ruler alerting on its own logs + Renovate batch (kps 90→91)
+
+**Three CRITICAL alerts were the ruler reading its own query logs.**
+`OOMKilledDetected`, `CrashLoopBackOffDetected` and `SuspiciousActivity` had been firing
+against `loki-0` since 2026-09-13T06:46 — a pod with **0 restarts**, Running for 6 days.
+
+Loki's ruler logs the full TEXT of every query it evaluates:
+
+```
+caller=metrics.go component=ruler ... query="(sum by (namespace,pod)
+  (rate({namespace=~\".+\"} |~ \"(?i)(attack|intrusion|exploit|malicious|suspicious)\"...
+```
+
+Alloy ships those lines back into Loki; the next evaluation matches its own logged query
+string. **The alert fires forever and can never clear.** Proven against live Loki: each
+expression matched exactly ONE series — `loki/loki-0` — and nothing else in the cluster.
+With `namespace!="loki"` all three return 0 series. Fixed in PR #985.
+
+:::THIS WAS ALREADY KNOWN AND ONLY HALF-FIXED:::
+Commit `6643932` — *"exclude loki namespace from CriticalErrorLogs and HighErrorLogRate
+LogQL rules"* — fixed precisely this bug for the two rules whose patterns (`error`,
+`critical`) self-matched loudest. **The other 7 rules had the identical flaw and were left
+alone**; three of them page at `critical`. When a fix addresses a class of bug, apply it to
+the class, not to the instance that happened to be noticy.
+
+:::I BROKE THE RULES FILE FIXING IT — AND EVERY CHECK PASSED:::
+PR #985 left `/rules/fake/log-alerts.yaml` unparseable, so **Loki's ruler ran with ZERO
+rules loaded for ~20 minutes** — worse than the false positives. Cause: I anchored a comment
+insertion on `"    - alert: ..."` (4 spaces); the real line is indented **10**, so the
+4-space string matched as a **SUBSTRING** of it and spliced the comment into the middle of
+the indentation.
+
+**yamllint, kubeconform and the full pre-commit suite all passed on the broken file.** The
+rules are an opaque string inside a ConfigMap `data:` key, so those tools validate the OUTER
+document and never parse the embedded YAML. Fixed in PR #986. Validate embedded rule blobs
+like this:
+
+```python
+outer = yaml.safe_load(open('...loki-alerting-rules.yaml'))
+yaml.safe_load(list(outer['data'].values())[0])   # the check that was missing
+```
+
+**Open gap:** nothing in pre-commit parses YAML embedded in ConfigMap `data:` keys, and this
+repo ships both Loki rules and Grafana dashboards that way.
+
+:::ALERTMANAGER IS THE AUTHORITY, NOT PROMETHEUS:::
+Earlier the same day I reported cluster health as "4 warnings, all
+ImageCriticalVulnerabilitiesHigh" from Prometheus `/api/v1/alerts`. **That was incomplete** —
+Loki's ruler dispatches straight to AlertManager, so three CRITICALs never appeared in
+Prometheus's view. AlertManager had 20 active. For a true picture query
+`alertmanager:9093/api/v2/alerts`.
+
+**Loki itself was never broken.** 170 lines/sec ingesting, chunks flushing normally. Alloy
+drops ~818 lines/24h as `greater_than_max_sample_age` — entries older than the 168h
+`reject_old_samples_max_age`, re-read from long-lived DaemonSet log files. ~0.006% of volume;
+no action needed. That is the "unable to write" noise in alloy's logs.
+
+**Renovate batch — 8 applied, 2 closed.**
+
+| PR | Change | Notes |
+|---|---|---|
+| #967 | cert-manager 1.21.1 → 1.21.2 | |
+| #979 | argocd 10.9.0→10.9.2, argo-workflows 2.0.6→2.0.7 | |
+| #984 | velero 12.1.0 → 12.2.0 | |
+| #981 | zot 0.1.124 → 0.1.125 | |
+| #980 | uptime-kuma 2.5.4 → 2.5.5 | |
+| #983 | flink-operator 1.15.0 → 1.16.0 | |
+| #982 + #971 | **kube-prometheus-stack 90.1.0 → 91.4.1** | applied together, both touch kps |
+| #968, #970 | kps 90.1.2 / 90.2.0 | **closed — superseded by #971** |
+
+:::THE CHART README DOCUMENTS NOTHING — CHECK UPGRADE.md UPSTREAM:::
+`helm show readme kube-prometheus-stack --version 91.4.1` contains **zero** upgrade sections,
+so the absence of a 90→91 note proves nothing. The real requirements live in the chart repo's
+`UPGRADE.md`, which documents two for 90→91:
+1. **CRDs must be updated BEFORE the chart** — satisfied here by `crds.upgradeJob.enabled`
+   (added in PR #816), exactly the automated path upstream names.
+2. prometheus-operator **v0.94.0 removes wildcard verbs** from the operator ClusterRole.
+Verified after: CRDs at `0.94.0`, operator `v0.94.0`, and wildcard-verb rules went **3 → 0**.
+
+:::TWO STALE-READ TRAPS DURING THE APPLY:::
+- ArgoCD reported `Synced/Healthy/Succeeded` immediately after `kubectl apply -f
+  manifests/applications/kube-prometheus-stack.yaml`. That status was **from 2026-09-14** —
+  five days stale. The App had not re-evaluated. Check `.status.operationState.startedAt`, or
+  better, check the deployed image. A hard refresh started the real sync.
+- A version spot-check right after sync showed cert-manager and uptime-kuma still on the old
+  images. Nothing had failed — the rollouts simply had not finished. uptime-kuma uses
+  `Recreate` with a 180s liveness `initialDelaySeconds`, so it takes minutes.
+
+**Final state:** 38/38 apps Synced+Healthy, 98/98 scrape targets up, 366 Prometheus rules
+with 0 unhealthy, Loki ruler loaded with 9/9 guarded selectors, **0 critical alerts**
+(was 3). Remaining warnings: 1 `HighErrorLogRate` (genuine, kube-apiserver) and 3
+`ImageCriticalVulnerabilitiesHigh` (steady-state noise).
+
+**Open:** PR #987 (vpa v5.1.0), opened mid-session. `KubeContainerOOMKilled` is still NOT
+loaded — after #985 nothing metric-based covers OOM kills, and the text-matching rule never
+really did (a pod that is OOMKilled does not log "oomkilled"; the kubelet does).
 
 ### 2026-09-14: node03 cordoned for 36 hours by a safety trap that never fired
 
