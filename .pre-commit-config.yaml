@@ -75,6 +75,21 @@ repos:
         files: ^manifests/.*\.(yaml|yml)$
         pass_filenames: true
 
+      # Parses YAML/JSON that lives INSIDE ConfigMap data: keys.
+      #
+      # yamllint and kubeconform validate the OUTER document, where a data:
+      # value is just an opaque scalar. Nothing else in this chain ever parses
+      # it. On 2026-09-19 a comment inserted at the wrong indentation left the
+      # Loki alerting rules unparseable; the ruler ran with ZERO rules loaded
+      # and every hook here passed. Grafana dashboards ship the same way.
+      - id: configmap-embedded
+        name: Validate YAML/JSON inside ConfigMaps
+        entry: scripts/validate-configmap-embedded.py
+        language: system
+        files: '^manifests/.*\.ya?ml$'
+        exclude: '(^secrets/|.*secret.*|.*\.key$|.*-sealed\.ya?ml$)'
+        pass_filenames: true
+
       - id: kustomize-build
         name: Validate kustomizations build
         entry: scripts/validate-kustomizations.sh
