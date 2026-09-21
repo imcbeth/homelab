@@ -30,6 +30,25 @@ loki:
 
   limits_config:
     retention_period: 720h  # 30 days
+    # Must match retention_period. Loki's default is 168h (7 days), which is
+    # INCONSISTENT with keeping logs for 30: data well inside the retention
+    # window could not be written at all.
+    #
+    # The cost of that mismatch is not the stale lines themselves. Loki rejects
+    # an entire BATCH with 400 when ONE entry is too old, and alloy then drops
+    # the whole batch -- so current log lines are lost alongside the stale one.
+    # Measured 2026-09-21: Loki counted 1,852 discarded samples in 24h while
+    # alloy dropped 72,008 entries, roughly 0.5% of a 14.3M-line day. The extra
+    # ~70k were current lines that shared a batch with a stale one.
+    #
+    # The stale entries all date to 2026-09-13T06:40, when loki-0 restarted;
+    # long-lived DaemonSet pods (synology-csi-node, csi-node-driver,
+    # calico-typha) still hold those lines in their log files and alloy has been
+    # retrying them ever since. Raising the window lets that backlog finally
+    # drain instead of being re-rejected forever as it ages.
+    #
+    # Loki 3.6.11 accepts out-of-order writes, so late arrivals are fine.
+    reject_old_samples_max_age: 720h
     max_query_series: 500
     max_query_parallelism: 32
     # Memory limits for ingester (aligned with 768Mi pod limit)
