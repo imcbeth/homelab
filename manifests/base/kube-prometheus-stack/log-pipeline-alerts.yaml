@@ -39,8 +39,12 @@ spec:
       interval: 30s
       rules:
         # Any sustained ingester-error drops means writes aren't completing.
-        # The "ingester_error" reason specifically rules out client-side
-        # issues (line_too_long, queue_is_full, rate_limited, stream_limited).
+        # The "ingester_error" reason rules out the OTHER client-side buckets
+        # (line_too_long, queue_is_full, rate_limited, stream_limited) — but it
+        # does NOT mean the ingester is unhealthy. It is also where a plain
+        # HTTP 400 lands, which is how a config mismatch
+        # (reject_old_samples_max_age < retention_period) shows up here looking
+        # like an ingester fault. See the description for how to tell them apart.
         - alert: AlloyLokiWriteFailures
           expr: |
             sum by (pod) (
@@ -54,10 +58,28 @@ spec:
             summary: "Alloy {{ $labels.pod }} dropping entries on Loki ingester errors"
             description: |
               Alloy is dropping log entries with reason="ingester_error" at
-              {{ $value | humanize }}/s sustained over 5 minutes. The Loki
-              ingester is rejecting writes — common causes: Loki PVC remounted
-              read-only (iSCSI), Loki down, or Loki rate limits exceeded.
-              Check `kubectl logs -n loki loki-0 -c loki | grep -i "read-only\|error"`.
+              {{ $value | humanize }}/s sustained over 5 minutes.
+
+              READ THE ACTUAL HTTP ERROR FIRST. "ingester_error" covers every
+              non-retryable rejection, and the most common one here is not in the
+              list below:
+
+                kubectl logs -n loki ds/alloy -c alloy --since=30m \
+                  | grep "dropping data" | tail -2
+
+              Causes, most common first:
+                - status=400 "timestamp too old" — entries older than
+                  reject_old_samples_max_age. Loki rejects the WHOLE BATCH, so
+                  current lines are lost alongside the stale one. On 2026-09-21
+                  this was ~0.5% of a 14.3M-line day. The fix is config, not the
+                  ingester.
+                - Loki PVC remounted read-only (iSCSI) — grep loki-0 for "read-only"
+                - Loki down, or rate limits exceeded (reason=rate_limited would
+                  normally fire instead)
+
+              Do NOT infer ingester health from this alert alone. A healthy Loki
+              keeps ingesting while alloy drops batches — confirm with
+              loki_distributor_lines_received_total.
 
         # Critical: pipeline is completely broken (zero successful bytes sent
         # AND drops happening). The exact pattern we hit in the 2026-06-04
