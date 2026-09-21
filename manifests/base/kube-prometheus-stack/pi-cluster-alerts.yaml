@@ -209,6 +209,56 @@ spec:
               Note a cordoned node is NOT drained — existing pods keep running,
               which is why this is easy to miss.
 
+    # Added 2026-09-21. Nothing metric-based covered OOM kills.
+    #
+    # Loki's OOMKilledDetected looked like coverage and was not: it greps log
+    # TEXT for "oomkilled", and a container that is OOM-killed does not log
+    # anything — the kernel kills it and the kubelet records the reason. That
+    # rule only ever matched things that happened to WRITE the word, which in
+    # practice was Loki's own ruler logging its query (see #985).
+    - name: container_oom
+      rules:
+        - alert: KubeContainerOOMKilled
+          # The `and on(...) increase(restarts)` guard is load-bearing.
+          #
+          # kube_pod_container_status_last_terminated_reason LATCHES: it stays
+          # at 1 for as long as the container's last termination was that
+          # reason, which can be days. Verified 2026-09-21: a bare `== 1` over
+          # reason=~"Error|Unknown" matched 52 series from terminations days
+          # old, while the same query guarded by recent restarts matched 0.
+          # Without the guard this alert would fire once and never clear —
+          # the same defect that made CriticalClusterRoleRBACIssues useless.
+          expr: |
+            (kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1)
+            and on (namespace, pod, container)
+            (increase(kube_pod_container_status_restarts_total[15m]) > 0)
+          # No `for:` — an OOM kill is a discrete event that already happened.
+          # Waiting to see if it persists would just delay the signal.
+          labels:
+            severity: warning
+            component: workload
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} was OOMKilled"
+            description: |
+              Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }}
+              hit its memory limit and was killed by the kernel, then restarted.
+
+              This clears on its own once the container stops restarting — it is
+              reporting a recent event, not an ongoing state.
+
+              Check what it actually used against its limit:
+                kubectl -n {{ $labels.namespace }} top pod {{ $labels.pod }} --containers
+                kubectl -n {{ $labels.namespace }} get pod {{ $labels.pod }} \
+                  -o jsonpath='{.spec.containers[*].resources}'
+
+              Peak usage is visible inside the container at
+              /sys/fs/cgroup/memory.peak, which is more useful than `top` for a
+              workload that spikes.
+
+              Gatekeeper caps limits at 2Gi on this cluster. If a workload
+              genuinely needs more, that constraint has to change first.
+
+
     - name: pi_cpu_throttling
       interval: 60s
       rules:
