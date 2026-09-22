@@ -11,7 +11,7 @@ spec:
     # Fairwinds VPA Helm chart (installs CRDs + Recommender)
     - repoURL: https://charts.fairwinds.com/stable
       chart: vpa
-      targetRevision: 5.0.1
+      targetRevision: 5.1.0
       helm:
         releaseName: vpa
         valueFiles:
