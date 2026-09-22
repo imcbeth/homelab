@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-19 (Loki ruler was alerting on its own logs; kube-prometheus-stack 90→91; 8 Renovate PRs applied)
+**Last Updated:** 2026-09-22 (alloy was losing 0.5% of logs to a config mismatch; OOM alerting added; falco 0.45.0; 4 Renovate PRs)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,99 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-21/22: 0.5% of logs being dropped, OOM coverage added, 4 Renovate PRs
+
+**`AlloyLokiWriteFailures` was real, and I had called it benign two days earlier.**
+
+`reject_old_samples_max_age` was Loki's **168h** default while `retention_period` is
+explicitly **720h** — so log data well inside the retention window could not be written at
+all. Fixed in PR #989 by setting them equal.
+
+:::THE TWO DROP COUNTERS DISAGREE BY 40x — READ THE ALLOY ONE:::
+On 2026-09-19 I reported this as "818 lines/24h, 0.006%, no action needed". **That was
+wrong.** I read `loki_discarded_samples_total`, which only counts entries Loki got far
+enough to *examine*. Loki rejects an entire **BATCH** with 400 when ONE entry is too old, and
+alloy drops the whole batch — so current lines are lost alongside the stale one.
+
+| Counter | 24h | Meaning |
+|---|---|---|
+| `loki_discarded_samples_total` | 1,852 | entries Loki examined |
+| `loki_write_dropped_entries_total` | **72,008** | entries **alloy actually lost** |
+| `loki_distributor_lines_received_total` | 14,293,553 | ingested |
+
+**~0.5% of the day's logs**, and the ~70k gap is current data that merely shared a batch with
+a stale entry.
+
+Every stale entry dated to `2026-09-13T06:40` (the `loki-0` restart). Long-lived DaemonSet
+pods still held those lines and alloy retried them indefinitely, failing harder each day as
+the window slid. After the fix drops went to **zero within minutes** and the alert cleared.
+
+The alert's own description listed causes as *"PVC read-only, Loki down, or rate limits"* —
+none of which was happening; Loki ingested 331 lines/s throughout. Rewritten in #989 to say
+read the actual HTTP status first, and not to infer ingester health from this alert alone.
+
+**ConfigMap embedded YAML/JSON validation (PR #990).** Closes the gap that let #985 ship an
+unparseable Loki rules file with every check green. `scripts/validate-configmap-embedded.py`
+parses each `data:` key by extension. 31 blobs across Loki rules and Grafana dashboards.
+
+:::DO NOT SKIP VALUES CONTAINING `{{ }}`:::
+My instinct was to treat them as templated and skip. Wrong — Grafana legend formats
+(`{{pod}}`) and Loki annotations (`{{ $labels.namespace }}`) sit inside quoted strings and
+parse fine. Skipping would blind the check to **exactly the files it protects**. All 31 parse
+with no skip logic. Proven both ways: passes on the repo, exits 1 when the #985 splice is
+replayed into the real rules file.
+
+**`KubeContainerOOMKilled` (PR #991).** The only metric-based OOM coverage on this cluster.
+Loki's `OOMKilledDetected` looked like coverage and was not — it greps log TEXT, and a
+container that is OOM-killed does not log anything; the kernel kills it.
+
+:::`last_terminated_reason` LATCHES — THE RESTART GUARD IS LOAD-BEARING:::
+It stays at 1 for as long as that was the container's last termination reason, which can be
+days. Measured here: a bare `== 1` over `reason=~"Error|Unknown"` matched **52 series** from
+terminations days old; the same query guarded by `increase(restarts[15m]) > 0` matched **0**.
+Without the guard the alert fires once and never clears — the defect that got
+`CriticalClusterRoleRBACIssues` demoted. Proven by creating a pod with a 32Mi limit
+allocating 200MB, confirming OOMKilled, and watching the expression match it live.
+
+**Renovate: 4 applied.**
+
+| PR | Change | Note |
+|---|---|---|
+| #987 | vpa chart 5.0.1 → 5.1.0 | appVersion unchanged (1.7.1) — chart-only, no workload churn |
+| #992 | argo-workflows 2.0.7 → 2.0.8 | server v4.1.4 |
+| #993 | velero image → v1.18.3 | |
+| #994 | falco 9.1.0 → 9.2.0 | **engine 0.44.1 → 0.45.0** — applied last, watched through the roll |
+
+:::FALCO PRE-FLIGHT — THREE FALSE ALARMS WORTH KNOWING:::
+1. **`priorityClassName` vanished from chart 9.2.0's values.** We set it to `""`, which
+   renders **0 occurrences in both 9.1.0 and 9.2.0**; the live DaemonSet has none. A dead
+   value we carry. Render both versions and diff — do not read the values schema alone.
+2. **The wait container became a bare `curlimages/curl`.** No registry prefix, and
+   `K8sAllowedRepos` matches prefixes with `enforcementAction: deny`, with `falco` NOT in
+   `excludedNamespaces`. Harmless: that Pod is `helm.sh/hook: test-success`, a Helm **test**
+   hook ArgoCD never applies. Confirmed absent from the cluster under both versions.
+3. **Custom-rule log lines with file positions look like rejections.** They are
+   `LOAD_DEPRECATED_ITEM` warnings. Grep for `LOAD_ERR|cannot load|invalid rule` — 0 here.
+
+Verified falco was **working**, not merely Running: 0 hard rule errors, **18 detections in 10
+minutes**, modern BPF probe open, 5/5 ready, falcosidekick forwarding to
+AlertManager/Loki/WebUI. A DaemonSet with zero rules loaded looks identical in
+`kubectl get pods`.
+
+:::FALCO 1.0.0 WILL BREAK ON THESE:::
+0.45.0 warns on `%container.info` and `evt.dir`, both slated for removal in 1.0.0. Neither
+appears in `homelab-rules.yaml` directly — they come from Falco's bundled rules and the
+`spawned_process` macro our rules reference. Re-check before any 1.0.0 upgrade.
+
+**PR #988 closed, not merged.** I branched `fix/loki-reject-old-samples` off
+`docs/current-2026-09-19` instead of main, so those session notes rode along inside #989.
+Merging #988 afterwards would have **reverted the Loki fix** — it was based on a main that
+predated #989. Check a stale PR's diff against *current* main, not just whether it is
+mergeable.
+
+**Final state:** 38/38 apps Synced+Healthy, 98/98 scrape targets up, 0 critical alerts, Loki
+ingesting cleanly with zero drops, no open PRs.
 
 ### 2026-09-19: Loki's ruler alerting on its own logs + Renovate batch (kps 90→91)
 
