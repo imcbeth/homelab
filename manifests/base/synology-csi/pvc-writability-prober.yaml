@@ -338,7 +338,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: prober
-          image: docker.io/alpine/k8s:1.37.0
+          image: docker.io/alpine/k8s:1.37.1
           imagePullPolicy: IfNotPresent
           command: ["python3", "/scripts/probe.py"]
           securityContext:
