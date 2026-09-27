@@ -641,14 +641,28 @@ grafana:
       limits:
         cpu: 50m
         memory: 64Mi
-  # Resource limits for Grafana (actual usage ~269Mi)
+  # Resource limits for Grafana.
+  #
+  # Steady state is ~279Mi, so 512Mi looked like comfortable headroom. It was
+  # not: Grafana was OOMKilled on 2026-09-27 during the kube-prometheus-stack
+  # 91.4.1 -> 91.7.1 upgrade. The spike is at STARTUP, loading 52 dashboard
+  # ConfigMaps at once, not in steady operation — so it recurs on every chart
+  # bump that rolls the pod, and is invisible afterwards because Grafana
+  # restarts and reports 3/3 Running.
+  #
+  # 768Mi covers the startup peak with room for more dashboards. Gatekeeper
+  # caps limits at 2Gi, so there is headroom to raise it further if the
+  # dashboard count keeps growing.
+  #
+  # KubeContainerOOMKilled (pi-cluster-alerts.yaml) is what surfaced this; the
+  # pod had already recovered by the time anyone looked.
   resources:
     requests:
       cpu: 50m
       memory: 256Mi
     limits:
       cpu: 500m
-      memory: 512Mi
+      memory: 768Mi
   namespaceOverride: ""
   forceDeployDatasources: false
   forceDeployDashboards: false
