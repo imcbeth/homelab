@@ -213,7 +213,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: drift
-              image: docker.io/alpine/k8s:1.37.0
+              image: docker.io/alpine/k8s:1.37.1
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "/scripts/drift.sh"]
               securityContext:
