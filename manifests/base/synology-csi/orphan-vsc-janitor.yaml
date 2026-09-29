@@ -89,7 +89,16 @@ spec:
               type: RuntimeDefault
           containers:
             - name: janitor
-              image: registry.k8s.n37.ca/alpine/k8s:1.31.13
+              # docker.io, not registry.k8s.n37.ca. Renovate runs in GitHub's cloud
+              # and cannot reach the internal Zot registry, so an image referenced
+              # through it is invisible to dependency updates. This one silently sat
+              # on 1.31.13 while every sibling in this repo moved to 1.37.1 --
+              # six minor versions, purely because nothing was watching.
+              #
+              # Zot is a pull-through cache, so the kubelet still resolves
+              # docker.io/alpine/k8s via it at pull time; the only thing that
+              # changes is that Renovate can now see the tag.
+              image: docker.io/alpine/k8s:1.37.1
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
