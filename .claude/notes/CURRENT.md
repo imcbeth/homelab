@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-22 (alloy was losing 0.5% of logs to a config mismatch; OOM alerting added; falco 0.45.0; 4 Renovate PRs)
+**Last Updated:** 2026-09-29 (Grafana OOMKill caught by the new alert; Renovate was blind to the internal registry; 11 Renovate PRs)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,103 @@
 ---
 
 ## Recent Sessions
+
+### 2026-09-27/29: Grafana OOMKill caught by the new alert + Renovate's registry blind spot
+
+Two health checks, both otherwise clean: 5/5 nodes, 38/38 apps Synced+Healthy, 8/8 PVCs,
+11/11 certs, 98/98 targets, 0 critical alerts. Both September fixes holding — **Loki 0
+dropped entries in 24h** (was 72,008) and **Grafana 0 restarts in 2d7h** after the bump below.
+
+**11 Renovate PRs applied across the two days.**
+
+| PR | Change |
+|---|---|
+| #996 | flink-operator 1.16.0 → 1.16.1 |
+| #997 | cloudflared → 2026.9.3 |
+| #998 | **istio 1.30.4 → 1.30.5** — istiod/ztunnel/CNI all 5/5, 0 restarts |
+| #999 | kps 91.4.1 → 91.7.1 (operator v0.94.1), **alloy 1.12.1 → 1.13.0** (engine v1.20.0) |
+| #1000 | prometheus v3.14.0 → v3.15.0 |
+| #1001 + #1002 | alpine/k8s → 1.37.1 (same bump, split by registry prefix — apply together) |
+| #1004 | kps 91.7.1 → **91.8.2** (same appVersion v0.94.1 — chart-only) |
+
+:::GRAFANA WAS OOMKILLED — AND ONLY THE NEW ALERT SAW IT (PR #1003):::
+During the kps 91.4.1 → 91.7.1 upgrade, Grafana was **OOMKilled** at 2026-09-27T15:33:44.
+It restarted and reported `3/3 Running`, so **nothing conventional would have surfaced this** —
+the event survived only in `lastState.terminated.reason`.
+
+`KubeContainerOOMKilled`, added six days earlier in PR #991, was its only witness. This was
+its first real firing, and it is exactly the case it was built for: the text-matching Loki
+rule it replaced could never have caught it, because an OOM-killed container does not log
+anything.
+
+Cause: **512Mi was fine for steady state (~279Mi) but not for startup**, where Grafana loads
+**52 dashboard ConfigMaps at once**. So it recurs on every chart bump that rolls the pod.
+Raised to **768Mi** (Gatekeeper caps at 2Gi). Verified by the thing that matters — the
+replacement pod started with **0 restarts**, not merely a bigger number in the manifest.
+
+:::RENOVATE CANNOT SEE THROUGH THE INTERNAL REGISTRY (PRs #1005, #1006):::
+The **Dependency Dashboard** (issue #251) is worth reading during health checks; it reported
+lookup failures nobody had noticed:
+
+```
+Failed to look up docker package registry.k8s.n37.ca/external-dns/external-dns: no-result
+Failed to look up docker package registry.k8s.n37.ca/kashalls/external-dns-unifi-webhook: no-result
+Failed to look up docker package registry.k8s.n37.ca/flink-demo: no-result
+Failed to look up docker package registry.k8s.n37.ca/alpine/k8s: no-result
+```
+
+Renovate runs in GitHub's cloud and cannot reach `registry.k8s.n37.ca`. **An image referenced
+through the internal Zot registry is invisible to dependency updates.** The cost was concrete:
+`orphan-vsc-janitor` sat on `alpine/k8s:1.31.13` while all six siblings reached 1.37.1 — six
+minor versions, purely unwatched. Fixed in #1005 by pointing at `docker.io` (Zot still serves
+the pull as a cache; only Renovate's visibility changes).
+
+#1006 adds `registryAliases` for the two with real upstreams:
+
+```json
+"registryAliases": {
+  "registry.k8s.n37.ca/external-dns": "registry.k8s.io/external-dns",
+  "registry.k8s.n37.ca/kashalls": "ghcr.io/kashalls"
+}
+```
+
+A **blanket host alias would have been wrong** — the four internal images have three different
+upstreams. From `getDepFromImageRef`, the key is a prefix of the full image name matched with a
+trailing slash, then stripped and replaced, so specific prefixes are required.
+
+`flink-demo` and `lifeonabike.ca` are built locally and have **no upstream at all**, so a
+lookup can only ever fail — added to `ignoreDeps`. `bitnami/kubectl` is left alone: pinned to
+`:latest`, untrackable either way.
+
+:::THREE LOOKUP TRAPS WHILE VERIFYING THOSE UPSTREAMS:::
+- **ghcr paginates at 100 tags.** The default page for `kashalls/external-dns-unifi-webhook`
+  stops at `v0.4.2`, which makes it look like our `v0.8.2` is not on ghcr at all and the
+  upstream mapping is wrong. `?n=1000` returns **314 tags**, including `v0.8.2` and `v0.9.0`.
+  Paginate before concluding an image is absent.
+- **`registry.k8s.io` redirects** to `us-west1-docker.pkg.dev`. A direct `/v2/` query returns
+  HTML, not JSON, and reads as a failed lookup. Use `curl -L`.
+- **`renovate-config-validator` via npx resolves renovate 37.440.7**, which predates
+  `managerFilePatterns` and reports 5 errors on a config the live Renovate accepts happily.
+  Those 5 are identical before and after any change — check that before repeating them as
+  findings.
+
+**Two upgrades are now newly VISIBLE and want pre-flight, not a straight merge:**
+- `external-dns` **v0.21.0 → v0.23.0** — two minors; this cluster leans on
+  `--exclude-target-net`, `--source=crd` and the DNSEndpoint CRD.
+- `external-dns-unifi-webhook` **v0.8.2 → v0.9.0** — the interesting one. `UNIFI_RETRY_*`
+  does not exist in v0.8.2, which is why the 2026-09-12 gateway outage could only be
+  *mitigated* with a 60s timeout rather than fixed. v0.9.0 may expose those knobs.
+
+:::"SYNCED" IS STILL NOT "DEPLOYED" — THIRD OCCURRENCE:::
+After merging the first Renovate phase, all affected apps reported `Synced + Healthy` while
+**every image was still the old version**. ArgoCD was comparing against its own cached
+revision (`2fc8120`, days stale) with `lastOp` timestamps from days earlier. A wait-loop on
+sync *status* passed cleanly. Only a hard refresh moved it, and the correct wait is on the
+**deployed image**, never the status word.
+
+Related: kps reports `waiting for completion of hook ...` messages that are **stale** — the
+hook has often already Succeeded and the operation moved on. Its sync also ends in a long
+hook-*deletion* phase where ~10 resources show status `None`; that is cleanup, not failure.
 
 ### 2026-09-21/22: 0.5% of logs being dropped, OOM coverage added, 4 Renovate PRs
 
