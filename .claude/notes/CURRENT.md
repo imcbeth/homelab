@@ -259,7 +259,7 @@ through the internal Zot registry is invisible to dependency updates.** The cost
 minor versions, purely unwatched. Fixed in #1005 by pointing at `docker.io` (Zot still serves
 the pull as a cache; only Renovate's visibility changes).
 
-#1006 adds `registryAliases` for the two with real upstreams:
+PR #1006 adds `registryAliases` for the two with real upstreams:
 
 ```json
 "registryAliases": {
@@ -277,6 +277,7 @@ lookup can only ever fail — added to `ignoreDeps`. `bitnami/kubectl` is left a
 `:latest`, untrackable either way.
 
 :::THREE LOOKUP TRAPS WHILE VERIFYING THOSE UPSTREAMS:::
+
 - **ghcr paginates at 100 tags.** The default page for `kashalls/external-dns-unifi-webhook`
   stops at `v0.4.2`, which makes it look like our `v0.8.2` is not on ghcr at all and the
   upstream mapping is wrong. `?n=1000` returns **314 tags**, including `v0.8.2` and `v0.9.0`.
@@ -289,6 +290,7 @@ lookup can only ever fail — added to `ignoreDeps`. `bitnami/kubectl` is left a
   findings.
 
 **Two upgrades are now newly VISIBLE and want pre-flight, not a straight merge:**
+
 - `external-dns` **v0.21.0 → v0.23.0** — two minors; this cluster leans on
   `--exclude-target-net`, `--source=crd` and the DNSEndpoint CRD.
 - `external-dns-unifi-webhook` **v0.8.2 → v0.9.0** — the interesting one. `UNIFI_RETRY_*`
