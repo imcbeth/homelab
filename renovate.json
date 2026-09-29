@@ -159,7 +159,9 @@
     "registry.k8s.io/ingress-nginx/kube-webhook-certgen",
     "golift/unifi-poller",
     "velero/velero-plugin-for-aws",
-    "localstack/localstack"
+    "localstack/localstack",
+    "registry.k8s.n37.ca/flink-demo",
+    "registry.k8s.n37.ca/lifeonabike/lifeonabike.ca"
   ],
   "vulnerabilityAlerts": {
     "enabled": true,
@@ -167,5 +169,9 @@
       "security",
       "vulnerability"
     ]
+  },
+  "registryAliases": {
+    "registry.k8s.n37.ca/external-dns": "registry.k8s.io/external-dns",
+    "registry.k8s.n37.ca/kashalls": "ghcr.io/kashalls"
   }
 }
