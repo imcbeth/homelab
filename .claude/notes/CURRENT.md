@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-09-29 (Grafana OOMKill caught by the new alert; Renovate was blind to the internal registry; 11 Renovate PRs)
+**Last Updated:** 2026-10-01 (restore validator failed its first unattended run — and had only ever passed on the one target it could)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,103 @@
 ---
 
 ## Recent Sessions
+
+### 2026-10-01: the restore validator had only ever passed on the one target it could
+
+Five alerts this morning, **three of them one root cause**, and the root cause was a flaw in
+the validator built on 2026-09-08.
+
+| Alert | Time | Cause |
+|---|---|---|
+| `VeleroRestoreValidationFailed` (critical) | 10:16 | verify pod could not read the restored data |
+| `KubeJobFailed` | 10:16 | same job |
+| `ArgoCDAppDegraded` (velero) | 10:17 | same job, Degraded the app |
+| `ArgoWorkflowFailed` | 12:02 | two monthly CronWorkflows (see below) |
+| `HighErrorLogRate` | 12:11 | pre-existing, kube-apiserver |
+
+:::THE RESTORE WORKED. THE VERIFICATION COULD NOT READ IT.:::
+
+```
+restore phase: Completed
+PVC bound: data-trivy-server-0
+VERIFY FAIL: volume mounted cleanly but holds no non-empty file.
+```
+
+1.4 GiB was present (`kubelet_volume_stats_used_bytes`) behind a **0770 directory owned by
+nobody**. The verify pod runs `uid 0` with `capabilities.drop: ["ALL"]`, which removes
+`CAP_DAC_OVERRIDE` and `CAP_DAC_READ_SEARCH` — **precisely what lets root ignore file
+modes**. uid 0 with no capabilities is an ordinary unprivileged user that happens to be
+numbered 0. The comment above that securityContext asserted the opposite.
+
+:::IT PASSED ON 09-08 BECAUSE IT VALIDATED THE ONLY TARGET IT COULD:::
+The proving run used **uptime-kuma**, which stores world-readable files
+(`-rw-r--r-- root root`) at the mount root. The validator rotates
+`uptime-kuma → trivy-system → loki` by month index, so **month 2 was always going to fail**.
+A validator that passes once, on the single input it is capable of passing, is not validated.
+
+**Fixed in #1009 — but #1008 was the wrong fix, and this matters more than the fix itself.**
+
+PR #1008 added `DAC_READ_SEARCH`. Admission rejected it:
+
+```
+pods "restore-verify" is forbidden: violates PodSecurity "baseline:latest":
+non-default capabilities (... must not include "DAC_READ_SEARCH" ...)
+```
+
+:::I TESTED IN THE WRONG NAMESPACE:::
+The in-cluster proof for #1008 ran in `default`, where PSA baseline is **not** enforced. The
+scratch namespace enforces it. The test validated the *mechanism* and not the *deployment* —
+after a fortnight of catching exactly that class of error. Test where the thing actually runs.
+
+PR #1008 also **broke the script**:
+
+```
+/scripts/validate.sh: line 173: drwxrws---: not found
+```
+
+The comment contained backticks, and the pod manifest is built with an **unquoted heredoc**
+(`<<EOP`, so `$SCRATCH_NS` and `$VERIFY_IMAGE` interpolate) — so the shell
+command-substituted them. Never put backticks in text that lands inside an unquoted heredoc.
+
+**The real fix:** `fsGroup: 65534` + `fsGroupChangePolicy: Always`. PSA-baseline safe, no
+capability — and **more general than the capability would have been**, because the rotation
+targets use different gids: trivy-system **65534**, loki **10001**, uptime-kuma root. A plain
+`fsGroup` would have fixed trivy and still failed on loki. `Always` re-groups the whole
+restored volume, so any source ownership works. Mutating a throwaway copy is harmless.
+
+Verified **in the scratch namespace** this time, data created by gid 10001, readOnly mount:
+group flips to 65534, `find` returns the file.
+
+**Proven end to end afterwards** — this is the evidence that matters:
+
+```
+reading: /data/trivy/fanal/fanal.db
+262144 bytes (256.0KB) copied, 0.191843 seconds, 1.3MB/s
+VERIFY OK: restored volume is readable
+PASS — backup velero-daily-critical-pvcs-20261001020045 restored from trivy-system
+```
+
+256 KB read off a real restored volume, scratch namespace left empty, **0 orphaned PVs**.
+
+**The two monthly CronWorkflows both failed at 12:00, and both pass on re-run.**
+
+- `cluster-healthcheck` — **explained**. Its `evaluate` step collects issues and exits 1;
+  velero was `Degraded` from the 10:16 Job. Downstream of the same root cause.
+
+- `velero-backup-validation` — **unexplained**. It is purely synthetic (marker ConfigMap in
+  `velero-dr-test`, no PVC), so the restore-validator failure should not have touched it.
+  Most likely velero's state at the time (a failed Restore present; velero processes restores
+  serially), but the pods were GC'd before diagnosis, so that is inference, not evidence.
+  **Watch the next scheduled run before calling it resolved.**
+
+Both had been scheduled for 166 and 189 days with only one retained run each — today's. They
+had never been observed to succeed until this re-run.
+
+:::PROCESS SLIP — I MERGED #1008 WITH CI STILL PENDING:::
+The `until ! gh pr checks ... | grep ...` guard exited immediately because `grep` on this
+machine fails with `unknown option '-G'` on certain patterns, so the loop never waited. CI
+happened to pass. The guard was rewritten in python for #1009 and both checks confirmed
+`pass` before merging. A guard that cannot fail loudly is not a guard.
 
 ### 2026-09-27/29: Grafana OOMKill caught by the new alert + Renovate's registry blind spot
 
