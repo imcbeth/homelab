@@ -231,10 +231,25 @@ data:
     spec:
       restartPolicy: Never
       securityContext:
-        # Root ON PURPOSE — see namespace.yaml. The mount is read-only and all
-        # capabilities are dropped; this exists so the check measures whether
-        # the DATA is readable, not whether the file modes happen to suit a
-        # particular uid.
+        # Root ON PURPOSE — see namespace.yaml — but root ALONE IS NOT ENOUGH.
+        #
+        # This comment used to claim that dropping all capabilities made the check
+        # measure "whether the DATA is readable, not whether the file modes happen
+        # to suit a particular uid". That was backwards. Dropping ALL removes
+        # CAP_DAC_OVERRIDE and CAP_DAC_READ_SEARCH — precisely the capabilities
+        # that let root ignore file modes. uid 0 with no capabilities is an
+        # ordinary unprivileged user that happens to be numbered 0.
+        #
+        # Consequence, 2026-10-01 (first unattended run): trivy-system restored
+        # correctly, then the check reported "holds no non-empty file". The data
+        # was there — 1.4 GiB — behind `drwxrws--- nobody nobody trivy/`, which
+        # uid 0 could not traverse. The 2026-09-08 proving run passed only because
+        # uptime-kuma stores world-readable files at the mount root. Rotating
+        # uptime-kuma -> trivy-system -> loki, month 2 was always going to fail.
+        #
+        # DAC_READ_SEARCH is added on the container below. Verified in-cluster
+        # against a `drwxrwx--- nobody nobody` dir: drop-ALL finds nothing, the
+        # same pod with DAC_READ_SEARCH finds the file.
         runAsUser: 0
         seccompProfile:
           type: RuntimeDefault
@@ -268,6 +283,11 @@ data:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+              # Read + traverse regardless of file mode. Without this, a restored
+              # volume whose data is not world-readable is indistinguishable from
+              # an empty one. The mount is read-only, so this grants no ability to
+              # modify the restored copy.
+              add: ["DAC_READ_SEARCH"]
           resources:
             requests:
               cpu: 25m
