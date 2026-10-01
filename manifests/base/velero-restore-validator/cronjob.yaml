@@ -231,26 +231,35 @@ data:
     spec:
       restartPolicy: Never
       securityContext:
-        # Root ON PURPOSE — see namespace.yaml — but root ALONE IS NOT ENOUGH.
+        # Root ON PURPOSE (see namespace.yaml) but root ALONE IS NOT ENOUGH, and a
+        # capability is not the answer either.
         #
-        # This comment used to claim that dropping all capabilities made the check
-        # measure "whether the DATA is readable, not whether the file modes happen
-        # to suit a particular uid". That was backwards. Dropping ALL removes
-        # CAP_DAC_OVERRIDE and CAP_DAC_READ_SEARCH — precisely the capabilities
-        # that let root ignore file modes. uid 0 with no capabilities is an
-        # ordinary unprivileged user that happens to be numbered 0.
+        # Dropping ALL removes CAP_DAC_OVERRIDE and CAP_DAC_READ_SEARCH, which are
+        # what let root ignore file modes. uid 0 with no capabilities is an ordinary
+        # unprivileged user that happens to be numbered 0. An earlier comment here
+        # claimed the opposite.
         #
-        # Consequence, 2026-10-01 (first unattended run): trivy-system restored
-        # correctly, then the check reported "holds no non-empty file". The data
-        # was there — 1.4 GiB — behind `drwxrws--- nobody nobody trivy/`, which
-        # uid 0 could not traverse. The 2026-09-08 proving run passed only because
-        # uptime-kuma stores world-readable files at the mount root. Rotating
-        # uptime-kuma -> trivy-system -> loki, month 2 was always going to fail.
+        # 2026-10-01, first unattended run: trivy-system restored correctly, then the
+        # check reported "holds no non-empty file". 1.4 GiB was present, behind a
+        # 0770 directory owned by nobody that uid 0 could not traverse. The
+        # 2026-09-08 proving run passed only because uptime-kuma stores
+        # world-readable files at the mount root, so the check had only ever been
+        # exercised on the one target whose modes suited it.
         #
-        # DAC_READ_SEARCH is added on the container below. Verified in-cluster
-        # against a `drwxrwx--- nobody nobody` dir: drop-ALL finds nothing, the
-        # same pod with DAC_READ_SEARCH finds the file.
+        # Adding DAC_READ_SEARCH was tried and REJECTED by admission: the scratch
+        # namespace enforces PodSecurity baseline, which forbids non-default
+        # capabilities. Error was:
+        #   pods "restore-verify" is forbidden: violates PodSecurity "baseline:latest"
+        #
+        # fsGroup is the PSA-safe fix. fsGroupChangePolicy Always re-groups the whole
+        # restored volume, so this works for ANY source ownership -- which matters
+        # because the rotation targets differ: trivy-system 65534, loki 10001,
+        # uptime-kuma root/world-readable. Verified in-cluster against data created
+        # by gid 10001: the group flips to 65534 and the file is found. Mutating the
+        # restored copy is harmless; it is deleted at the end of every run.
         runAsUser: 0
+        fsGroup: 65534
+        fsGroupChangePolicy: Always
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -283,11 +292,6 @@ data:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-              # Read + traverse regardless of file mode. Without this, a restored
-              # volume whose data is not world-readable is indistinguishable from
-              # an empty one. The mount is read-only, so this grants no ability to
-              # modify the restored copy.
-              add: ["DAC_READ_SEARCH"]
           resources:
             requests:
               cpu: 25m
