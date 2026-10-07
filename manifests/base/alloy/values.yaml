@@ -91,9 +91,40 @@ alloy:
         forward_to = [loki.process.pods.receiver]
       }
 
-      // Parse CRI log format
+      // Parse CRI log format, then discard entries Loki would refuse anyway.
+      //
+      // WHY THE DROP STAGE EXISTS
+      //
+      // Loki's limits_config sets reject_old_samples_max_age: 720h to match
+      // retention_period: 720h (PR #989). An entry older than that window is
+      // rejected with HTTP 400 -- and Loki rejects the ENTIRE BATCH, not just the
+      // offending entry, so fresh log lines batched alongside a stale one are lost
+      // as collateral.
+      //
+      // Alloy re-reads container log files from the start when a tailer restarts.
+      // Containers that log rarely (pvc-mount-monitor, eventbus reloader,
+      // chaos-daemon) still hold lines from over 30 days ago, so those batches
+      // kept failing: 4,591 dropped entries in 24h on 2026-10-07, all with
+      // reason=ingester_error, all from a single node.
+      //
+      //   has timestamp too old: 2026-09-06T21:49:57Z
+      //   oldest acceptable is:  2026-09-07T20:21:41Z
+      //
+      // Dropping them here costs nothing -- they are past retention_period, so Loki
+      // would delete them on arrival even if it accepted them. What it buys is the
+      // fresh entries that were being discarded alongside them.
+      //
+      // 696h = 29 days, a 24h margin under Loki's 720h so clock skew and batch
+      // latency cannot push a legitimate entry over the line. If retention_period
+      // changes, change this too -- they are a matched pair.
       loki.process "pods" {
         stage.cri {}
+
+        stage.drop {
+          older_than          = "696h"
+          drop_counter_reason = "older_than_loki_reject_window"
+        }
+
         forward_to = [loki.write.default.receiver]
       }
 
