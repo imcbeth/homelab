@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-01 (restore validator failed its first unattended run — and had only ever passed on the one target it could)
+**Last Updated:** 2026-10-07 (nine months of orphaned external-secrets RBAC removed; 99% of apiserver errors were one dead object)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,166 @@
 ---
 
 ## Recent Sessions
+
+### 2026-10-03/07: nine months of orphaned RBAC, and the alert that could not be seen until October
+
+Two sessions. Saturday was four Renovate PRs. Tuesday was chasing the one alert left over
+from them, which turned out to be a cluster-wide Secrets grant that had been sitting in the
+cluster since January.
+
+**Saturday 10-03 — four Renovate PRs, three of which changed nothing but the chart.**
+
+| PR | Change | appVersion | Wave |
+|---|---|---|---|
+| #1013 | velero image v1.18.3 → v1.18.4 | — (image) | -5 |
+| #1011 | argo-cd 10.9.2 → 10.9.6 | **v3.5.3 → v3.5.3** | -50 |
+| #1011 | argo-workflows 2.0.8 → 2.0.11 | **v4.1.4 → v4.1.4** | -8 |
+| #1014 | kube-prometheus-stack 91.8.2 → 91.9.0 | **v0.94.1 → v0.94.1** | -15 |
+| #1012 | oauth2-proxy 10.7.0 → 10.7.1 | 7.15.3 → **7.15.5** | -3 |
+
+Checking `appVersion` before `helm template` was worth the two minutes: **only oauth2-proxy
+carried an actual application change**. The other three were chart-template bumps, so ArgoCD
+rolled every pod onto an identical image — expected, but it looks alarming if you have not
+checked first. Applied in wave order, oauth2-proxy last because it gates ArgoCD and Grafana:
+a bad bump there locks you out of the UIs rather than breaking a backend.
+
+kps spent ~10 minutes at `op=Running`. **Not the documented stuck-hook case** — it was a real
+`crds-upgrade` Job that 91.9.0 runs, 10 of 11 hooks already Succeeded, and it finished with
+193/193. Worth reading `operationState.message` before reaching for the workaround; it names
+the exact hook it is waiting on.
+
+:::ARGO-WORKFLOWS REPORTED Synced AT THE OLD REVISION, AGAIN:::
+First poll after `kubectl apply`: `rev=2.0.8 status=Synced/Healthy`. The third occurrence of
+this in a month. `status.sync.revisions` is the field that tells the truth; the word "Synced"
+only means "matches what ArgoCD last cached". It reconciled to 2.0.11 on the next poll.
+
+---
+
+**Tuesday 10-07 — `HighErrorLogRate` was 99.2% one dead object.**
+
+The alert had been firing on `kube-apiserver-control-plane` since 10-01 and I had written it
+off as pre-existing. It was not noise:
+
+```
+  total log lines:   123   (60s window)
+  error (E) lines:   119   -> 1.98/s
+  external-secrets:  118   -> 1.97/s
+  external-secrets share of errors: 99.2%
+```
+
+External Secrets Operator was trialled in January and removed in **PR #234**. The removal
+deleted the operator. It did not delete what the operator had installed.
+
+:::THE ALERT IS NOT NEW. THE ABILITY TO SEE IT IS.:::
+This had been happening since January. It only became visible on 10-01 — right after #985/#986
+fixed the Loki ruler, which had been running with zero rules. Nine months of a 2/s apiserver
+error stream that nothing reported. The fix to the monitoring is what surfaced it.
+
+**What was actually orphaned — 27 objects, not the 16 first reported:**
+
+| Kind | Count | Notes |
+|---|---|---|
+| CRDs | 15 | `external-secrets.io` + `generators.external-secrets.io` |
+| ClusterSecretStore | 1 | `kubernetes-secrets`, created 2026-01-13 |
+| **ValidatingWebhookConfigurations** | **2** | `failurePolicy: Fail` → service deleted 9 months ago |
+| **ClusterRoles** | **6** | |
+| **ClusterRoleBindings** | **3** | subjects in a namespace that does not exist |
+
+:::I MISSED 11 OF THEM BY MATCHING ON THE WRONG FIELD:::
+The first survey checked webhook configs with `kubectl get validatingwebhookconfiguration |
+awk /external-secret/` — which matches the **config's name**. Both are named
+`externalsecret-validate` and `secretstore-validate`; the string "external-secrets" appears
+only *inside* them, in `webhooks[].name` and `clientConfig.service`. The survey reported
+"no leftover webhook configs" and was wrong.
+
+They surfaced because they **blocked the first delete**:
+
+```
+Error from server (InternalError): failed calling webhook
+"validate.clustersecretstore.external-secrets.io": service
+"external-secrets-webhook" not found
+```
+
+A `failurePolicy: Fail` webhook pointing at a deleted service hard-blocks every CREATE,
+UPDATE and DELETE on its resources — including the delete that would clean it up. Both were
+scoped strictly to `apiGroups: [external-secrets.io]`, so nothing else was affected, but the
+general shape is a landmine: **the orphan prevents its own removal.**
+
+:::THE SECURITY FINDING — A DANGLING CLUSTER-WIDE SECRETS GRANT:::
+`external-secrets-controller` granted, cluster-wide:
+
+```
+  resources=['secrets']                verbs=['get','list','watch','create','update','delete','patch']
+  resources=['serviceaccounts/token']  verbs=['create']
+```
+
+bound to `ServiceAccount external-secrets/external-secrets` — **a ServiceAccount in a
+namespace that does not exist.**
+
+Inert while the subject is missing. It is still a standing privilege-escalation primitive:
+anyone able to create a namespace named `external-secrets` containing a ServiceAccount named
+`external-secrets` inherits read/write on **every Secret in the cluster** plus the ability to
+mint tokens for any ServiceAccount. Creating a namespace is a far lower bar than being
+granted cluster-wide Secret access directly. Dangling ClusterRoleBindings are not harmless
+clutter — they are a grant waiting for a subject.
+
+**Order of operations** (the first attempt failed because the webhooks gate the rest):
+
+1. ValidatingWebhookConfigurations — they block everything else
+2. ClusterSecretStore — this alone stopped the error stream
+3. 15 CRDs
+4. ClusterRoleBindings, then ClusterRoles
+
+All 27 backed up to YAML before deletion. Every one of the 15 CRD kinds was counted for live
+objects first — **1 object total**, so the blast radius was known rather than assumed.
+
+**Result:**
+
+| Measure | Before | After |
+|---|---|---|
+| apiserver error rate | 1.98/s | **0.00/s** |
+| apiserver log volume | 123 lines/60s | 2 lines/60s |
+| critical RBAC findings | 66 | **62** |
+| `HighErrorLogRate` | firing since 10-01 | **cleared** |
+
+The RBAC drop was confirmed with a delta query, not by reading the gauge:
+`sum(...) - sum(... offset 20m)` = **-4**, matching cert-controller 2 + controller 1 +
+store-reader 1. The raw `62` read after the deletion is the *post*-change value — reading a
+gauge once tells you nothing about what you changed.
+
+A sweep across every namespaced and cluster-scoped API kind now returns clean. Trivy had
+already garbage-collected the six `ClusterRbacAssessmentReports` on its own.
+
+---
+
+**Two findings left open, neither actionable here.**
+
+**chaos-dashboard CVEs — the alert's stated cause is wrong.** `CriticalVulnerabilitiesIncreased`
+says "a newly deployed or upgraded image introduced them." Not here: the tag is unchanged at
+`v2.8.4` and no new series appeared in 24h. These are three newly *disclosed* `perl-base`
+CVEs (CVE-2026-13221, CVE-2026-42496, CVE-2026-8376) against a static image, fixed in Debian
+`12u4`. **v2.8.4 is the latest chaos-mesh release** (2026-08-18), so there is no upgrade —
+it needs an upstream base rebuild. The alert cannot distinguish "new image" from "new CVE
+against an old image"; read the delta before believing the annotation.
+
+**Loki drops returned at the new boundary — 16× smaller, and mostly worthless data.**
+4,591/24h = **0.031%** (was 0.5% before #989), entirely from `alloy-4rmql` on control-plane.
+Different reason than last time: `ingester_error`, not `greater_than_max_sample_age`.
+
+```
+has timestamp too old: 2026-09-06T21:49:57Z
+oldest acceptable is:  2026-09-07T20:21:41Z
+```
+
+Alloy re-reads log lines from rarely-writing containers (`pvc-mount-monitor`, eventbus
+`reloader`, `chaos-daemon`) that are now **31 days old** — just past the 720h window #989
+set. Those entries are past `retention_period` too, so Loki would delete them on arrival:
+their loss costs nothing. The only real cost is collateral — **Loki rejects the whole batch
+on one stale entry**, so fresh lines batched alongside go with it. Left as-is at 0.031%.
+
+Note `kubectl logs ds/alloy` reads **one** pod, not the DaemonSet. The first search for these
+errors came back empty because it happened to pick a different node. Query the metric for the
+offending pod first, then read that pod by name.
 
 ### 2026-10-01: the restore validator had only ever passed on the one target it could
 
