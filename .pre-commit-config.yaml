@@ -82,6 +82,19 @@ repos:
       # it. On 2026-09-19 a comment inserted at the wrong indentation left the
       # Loki alerting rules unparseable; the ruler ran with ZERO rules loaded
       # and every hook here passed. Grafana dashboards ship the same way.
+      # Runs cluster-restarts.py's own fixtures. Needs no cluster, so it is
+      # safe in CI. It exists because the ad-hoc restart count this script
+      # replaced reported "0 restarts cluster-wide" on a cluster with 548 --
+      # it parsed a shifted column and swallowed the error, so zero was the
+      # only answer it could give. The fixtures assert a NONZERO total, which
+      # makes that regression fail here instead of in a health report.
+      - id: cluster-restarts-self-test
+        name: cluster-restarts self-test
+        entry: scripts/cluster-restarts.py --self-test
+        language: system
+        files: ^scripts/cluster-restarts\.py$
+        pass_filenames: false
+
       - id: configmap-embedded
         name: Validate YAML/JSON inside ConfigMaps
         entry: scripts/validate-configmap-embedded.py
