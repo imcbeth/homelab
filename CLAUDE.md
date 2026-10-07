@@ -30,12 +30,20 @@ Use the `/catch-up` skill for a guided summary.
 
 ## Available Skills
 
-| Skill | Purpose |
-|-------|---------|
-| `/catch-up` | Summarise recent sessions and current state |
-| `/renovate-apply` | Step-by-step process for applying Renovate batch PRs |
-| `/cluster-shutdown` | Safe cluster shutdown procedure |
-| `/cluster-healthcheck` | Validate cluster health post-startup or post-change |
+| Skill | Defined in | Purpose |
+|-------|-----------|---------|
+| `/catch-up` | `.claude/skills/` (this repo) | Summarise recent sessions and current state |
+| `/renovate-apply` | `.claude/skills/` (this repo) | Step-by-step process for applying Renovate batch PRs |
+| `/cluster-shutdown` | user settings | Safe cluster shutdown procedure |
+| `/cluster-healthcheck` | user settings | Validate cluster health post-startup or post-change |
+
+Only the first two live in this repo. The other two are registered in the user's Claude Code
+skill store, so they are **not version-controlled and not reviewed through PRs** — and both
+have drifted from the cluster. As of 2026-10-07 `/cluster-healthcheck` still expects
+`24/25` Applications (actual: 38), `5` PVCs (actual: 8), a `promtail` DaemonSet (replaced by
+Alloy in 2026) and a `falco-falcosidekick-ui-redis` PVC that no longer exists. Treat its
+expected-value tables as indicative and check against
+[`.claude/notes/CURRENT.md`](.claude/notes/CURRENT.md), which is current.
 
 ## Key Rules
 
@@ -86,29 +94,65 @@ Sealed files must be named `*-sealed.yaml` — this excludes them from yamllint 
 | Updates | Renovate (weekend schedule) |
 | ArgoCD | `https://argocd.k8s.n37.ca` |
 
-## Sync Wave Order (Summary)
+## Sync Wave Order
+
+All 38 Applications, by `argocd.argoproj.io/sync-wave`. Generated from
+`manifests/applications/*.yaml` — regenerate rather than hand-edit (see below).
 
 ```
--100  tigera-operator (CNI)
- -50  argocd (self-management)
- -45/-42  istio stack
+-100  tigera-operator                      (CNI, must be first)
+ -50  argocd                               (self-management)
+ -45  istio-base
+ -44  istiod
+ -42  istio-cni, istio-ztunnel
  -40  network-policies
- -35  metallb
- -30  ingress-nginx, synology-csi
+ -38  resource-quotas
+ -35  metal-lb
+ -30  ingress-nginx-config, synology-csi
  -25  sealed-secrets
+ -20  unipoller
  -15  kube-prometheus-stack
  -12  loki
- -11  alloy
+ -11  alloy, tempo
  -10  cert-manager, external-dns, metrics-server
-  -8  argo-workflows, argo-events
+  -8  argo-events, argo-workflows
   -7  localstack
-  -6  gatekeeper + ConstraintTemplates
-  -5  gatekeeper-policies, velero, falco
-  -2  zot
-   0  chaos-mesh, oauth2-proxy, uptime-kuma, tempo (and most apps)
+  -6  gatekeeper                           (+ its ConstraintTemplates)
+  -5  falco, gatekeeper-policies, velero
+  -4  vpa
+  -3  chaos-mesh, flink-operator, oauth2-proxy
+  -2  strimzi-operator, zot
+   0  trivy-operator, uptime-kuma
+   1  kafka
+   2  flink-demo
    5  lifeonabike
 ```
 
+Regenerate with:
+
+```bash
+python3 -c "
+import glob, yaml
+w={}
+for f in glob.glob('manifests/applications/*.yaml'):
+    for d in yaml.safe_load_all(open(f, encoding='utf-8')):
+        if isinstance(d, dict) and d.get('kind') == 'Application':
+            a = (d.get('metadata', {}).get('annotations') or {})
+            w[d['metadata']['name']] = int(a.get('argocd.argoproj.io/sync-wave', 0))
+for wave, name in sorted((v, k) for k, v in w.items()):
+    print(f'{wave:5}  {name}')
+"
+```
+
+**Use `safe_load_all`, not `safe_load`.** Several files in that directory hold multiple
+documents (`istiod.yaml` among them), and `safe_load` raises on them — or, worse, a script
+that catches the error silently undercounts. An earlier audit of this table missed every
+multi-document file that way and reported 36 Applications instead of 38.
+
 ## Documentation Companion Repo
 
-Application guides live in the `k8s-docs-n37` repo (Docusaurus site). The canonical location is the GitHub repository; `~/k8s-docs-n37` is a machine-specific local checkout path. After making significant changes to an application, update the corresponding `docs/applications/<app>.md` file there. Active branch: `docs/april-2026-updates`.
+Application guides live in the `k8s-docs-n37` repo (Docusaurus site). The canonical location is the GitHub repository at `https://github.com/imcbeth/k8s-docs-n37`; the local checkout on this machine is `~/repos/k8s-docs-n37` (machine-specific). After making significant changes to an application, update the corresponding `docs/applications/<app>.md` file there.
+
+**Branch from `main` and open a PR**, same as this repo — `main` is protected by a ruleset requiring one approving review. Do not name a long-lived "active branch" here: the previous entry pointed at `docs/april-2026-updates` for five months after its PRs (#77, #78, #79) had already been squash-merged.
+
+Pre-commit in that repo runs a full `docusaurus build`, so a broken in-page anchor or unbalanced `:::admonition` fails before it is pushed.
