@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-07 (nine months of orphaned external-secrets RBAC removed; 99% of apiserver errors were one dead object)
+**Last Updated:** 2026-10-08 (synology-csi v1.3.0 -> v1.3.1 in two stages; v1.4.0 was never published to Docker Hub)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,97 @@
 ---
 
 ## Recent Sessions
+
+### 2026-10-08: the CSI upgrade that was two versions smaller than the release notes implied
+
+Asked to plan and implement the synology-csi upgrade flagged by that morning's health check:
+v1.3.0 running, v1.4.0 apparently available, 5 critical CVEs.
+
+:::THE TARGET VERSION DOES NOT EXIST AS AN IMAGE:::
+`synology/synology-csi` tags on Docker Hub end at **v1.3.1**. The v1.4.0 GitHub release is real
+(2026-09-15, with "fixed data read errors" and XFS snapshot support) but **the image was never
+published**. The whole upgrade retargeted to v1.3.1 before a line changed.
+
+**A GitHub release is not an installable image. Check the registry tag list first.**
+
+**And v1.4.0 would have broken storage if it had existed.** Reading the upstream manifest diff
+turned up a comment explaining a new `runAsUser: 0` in `node.yml`:
+
+```
+# The image declares USER 1000 (container certification's RunAsNonRoot check);
+# the node plugin genuinely needs root for mount/format and chroot into the host,
+# so override it here. privileged alone does not change the runtime user.
+```
+
+Our vendored `node.yml` has **only** `privileged: true`. A bare tag bump to v1.4.0 runs the node
+plugin as uid 1000 → every mount and format fails. **This is the concrete justification for the
+`ignoreDeps` pin that PR #871 documented in the abstract** — a Renovate PR *is* a bare tag bump.
+Recorded in REFERENCE.md so the next attempt cannot miss it.
+
+**What v1.3.1 actually buys, measured rather than inferred.** Both images scanned against the
+in-cluster trivy server:
+
+| Image | Alpine | Go binary | Total critical |
+|---|---|---|---|
+| v1.3.0 | **2** (`libwbclient 4.22.8-r0`) | 3 | **5** |
+| v1.3.1 | **0** | 3 | **3** |
+
+Clears the two `libwbclient` CVEs. The three Go CVEs (`grpc v1.56.3`, `stdlib v1.21.4` ×2) persist
+and need an upstream rebuild — they are what v1.4.0 was wanted for.
+
+**Pre-flight, all verified against the registry rather than assumed:** arm64 published for v1.3.1;
+image config `User` is **null** so no `runAsUser` needed; upstream manifest diff v1.3.0→v1.3.1 is
+the **image tag only** — no args, RBAC or securityContext changes.
+
+The suspected breaking change turned out not to apply. v1.3.1's one functional change is "HTTPS
+certificate verification enabled by default for DSM" — our `client-info` is `https: false` on port
+5000, so there is no TLS and nothing to verify.
+
+**Staged in two PRs, shaped by the cluster's own history.** The 2026-01-07 regression hit the
+**node plugin** while the controller was fine, and the recorded fix was "v1.2.0 node plugin,
+sidecars upgraded" — so controller-ahead-of-node is a configuration this cluster has already run.
+
+- **PR #1020** controller + snapshotter → v1.3.1
+- **PR #1021** node plugin → v1.3.1
+
+Blast radius reasoning that made the node half safe to attempt: a node-plugin fault breaks **new**
+mounts only. Established mounts live in the host kernel and keep working, so running workloads were
+never at risk.
+
+**Verification — three tests, each proving something the others do not.**
+
+1. Full provision → mount → write → read on a 1Gi volume, under controller v1.3.1 + node v1.3.0.
+   Proved the *harness* worked before the risky half.
+2. **Cross-version read.** The test PVC was deliberately retained across the node upgrade, so the
+   same volume — bytes written by v1.3.0 — was remounted under v1.3.1 and checked against the md5
+   recorded at write time:
+   ```
+   expected: 69343bf6cfd9e711ca5583b3c3b0e1fa
+   actual:   69343bf6cfd9e711ca5583b3c3b0e1fa
+   CROSS-VERSION OK: v1.3.1 read v1.3.0 data intact and can still write
+   ```
+   Mounting a fresh volume only proves the new plugin round-trips its own output.
+3. Fresh provision + mount entirely under v1.3.1.
+
+Test volumes used `synology-iscsi-delete`, **not** the default `synology-iscsi-retain` — a Retain
+test volume leaves a Released PV and an orphaned NAS LUN. PV count returned 10 → 8 with 0
+Released, so both LUNs were reclaimed.
+
+Result: all 6 components on v1.3.1, 0 restarts, no `iscsiadm` errors, 8/8 production PVCs Bound,
+8 volumeattachments, 0 cluster-wide restarts in the hour after.
+
+:::MY TEST FAILED FIRST, AND THE TEST WAS THE THING THAT WAS WRONG:::
+The harness's first run reported `FAIL: /data not mounted`. It used `mount | grep /data` — but the
+pod's command cannot execute at all unless kubelet already mounted the volume, so the storage was
+provably fine and the check was fragile. Replaced with a `stat` device-number comparison against
+`/`. Worth noting because the instinct on seeing a storage test fail is to suspect storage.
+
+**Adjacent finding: `pvc-writability-prober` has a 3-of-8 blind spot.** It logs
+`probed 8 PVC(s); 0 not writable, 3 unprobeable` — which reads like full coverage. The 3 are
+grafana, loki and zot, whose containers are distroless and have no `sh`. Same root cause as the
+distroless gotcha recorded earlier today. Loki's volume was independently confirmed writable
+(`kubelet_volume_stats_used_bytes` rose 3381→3410 MiB during the upgrade); grafana and zot are
+low-write and read fine. Not fixed — recorded in REFERENCE.md.
 
 ### 2026-10-03/07: nine months of orphaned RBAC, and the alert that could not be seen until October
 
