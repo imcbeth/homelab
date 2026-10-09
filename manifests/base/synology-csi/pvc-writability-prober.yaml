@@ -42,6 +42,11 @@ rules:
   - apiGroups: [""]
     resources: ["pods/exec"]
     verbs: ["create"]
+  # Needed only to map a claim to its PV name, which is the directory name in
+  # the kubelet host path used by the distroless fallback below. Read-only.
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -149,6 +154,10 @@ data:
                             "container": c["name"],
                             "claim": claim,
                             "path": m["mountPath"],
+                            # Both only used by the distroless fallback, which
+                            # needs /var/lib/kubelet/pods/<uid>/... on <node>.
+                            "pod_uid": pod["metadata"]["uid"],
+                            "node": pod["spec"].get("nodeName", ""),
                         }
                     )
                     break
@@ -165,6 +174,115 @@ data:
         "container not found",
         "unable to start container process",
     )
+
+
+    def build_context():
+        """Per-cycle lookups for the distroless fallback.
+
+        Fetched once per cycle rather than per target: 8 PVCs x 2 extra API
+        calls every 5 minutes is pointless load on the apiserver.
+        """
+        ctx = {"pv_by_claim": {}, "nodeplugin_by_node": {}}
+
+        out = kubectl(["get", "pvc", "-A", "-o", "json"], 60)
+        if out.returncode == 0:
+            for c in json.loads(out.stdout).get("items", []):
+                vol = c.get("spec", {}).get("volumeName")
+                if vol:
+                    key = (c["metadata"]["namespace"], c["metadata"]["name"])
+                    ctx["pv_by_claim"][key] = vol
+
+        out = kubectl(
+            ["get", "pods", "-n", "synology-csi", "-l", "app=synology-csi-node",
+             "-o", "json"],
+            60,
+        )
+        if out.returncode == 0:
+            for p in json.loads(out.stdout).get("items", []):
+                if p.get("status", {}).get("phase") != "Running":
+                    continue
+                node = p["spec"].get("nodeName")
+                if node:
+                    ctx["nodeplugin_by_node"][node] = p["metadata"]["name"]
+        return ctx
+
+
+    def probe_via_node_plugin(t, ctx):
+        """Fallback for distroless workloads, which have no shell to exec into.
+
+        WHY THIS EXISTS
+        ---------------
+        The primary probe execs `sh -c` inside the workload container. grafana,
+        loki and zot are distroless: no sh, no bash, nothing. Those three were
+        reported as "unprobeable" on every cycle, and the summary line
+        `probed 8 PVC(s); 0 not writable, 3 unprobeable` READ like full coverage
+        while 3 of 8 volumes were never actually tested.
+
+        This probes the same volume through the synology-csi-node pod on the
+        same node, which is Alpine (it has a shell), is already privileged, and
+        already mounts /var/lib/kubelet read-write because mounting volumes is
+        its job. The per-pod CSI mount is at:
+
+            /var/lib/kubelet/pods/<pod-uid>/volumes/kubernetes.io~csi/<pv>/mount
+
+        NO NEW RBAC IS GRANTED BY THIS. The ServiceAccount already holds
+        pods/exec cluster-wide, which has always included the node plugin pods.
+        The only addition is read access to PVCs, to turn a claim name into the
+        <pv> directory name.
+
+        It is strictly a fallback. The in-workload probe stays primary because
+        it writes as the workload's own uid into the workload's own mount, which
+        is a truer test; this writes as root into the host mount path.
+        """
+        node = t.get("node")
+        if not node:
+            return "unprobeable", "pod has no nodeName"
+        plugin = ctx["nodeplugin_by_node"].get(node)
+        if not plugin:
+            return "unprobeable", f"no running synology-csi-node pod on {node}"
+        pv = ctx["pv_by_claim"].get((t["namespace"], t["claim"]))
+        if not pv:
+            return "unprobeable", f"could not resolve PV for claim {t['claim']}"
+
+        host_path = (
+            f"/var/lib/kubelet/pods/{t['pod_uid']}"
+            f"/volumes/kubernetes.io~csi/{pv}/mount"
+        )
+        probe_file = f"{host_path}/{PROBE_FILE}"
+
+        # The mountpoint check is a SAFETY GATE, not a nicety. If the volume is
+        # detached but the directory still exists, touching a file there writes
+        # to the NODE'S ROOT DISK instead of the volume -- silently, and as
+        # root. Comparing the device number of the path against its parent is
+        # what "is this actually a mount" means; busybox has no `mountpoint`.
+        script = (
+            f'set -e; '
+            f'test -d "{host_path}" || {{ echo "PROBE_NO_PATH"; exit 10; }}; '
+            f'[ "$(stat -c %d "{host_path}")" != "$(stat -c %d "{host_path}/..")" ] '
+            f'|| {{ echo "PROBE_NOT_A_MOUNT"; exit 11; }}; '
+            f'touch "{probe_file}" && rm -f "{probe_file}"'
+        )
+        try:
+            r = kubectl(
+                ["exec", "-n", "synology-csi", plugin, "-c", "csi-plugin",
+                 "--", "sh", "-c", script],
+                EXEC_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            return "unprobeable", "node-plugin exec timed out"
+
+        if r.returncode == 0:
+            return "writable", ""
+
+        full = (r.stderr or r.stdout).strip().replace("\n", " ")
+        # Our own gates mean "could not test", never "the volume is broken".
+        if "PROBE_NO_PATH" in full:
+            return "unprobeable", f"host path absent: {host_path}"
+        if "PROBE_NOT_A_MOUNT" in full:
+            return "unprobeable", f"host path is not a mountpoint: {host_path}"
+        if any(m in full for m in UNPROBEABLE_MARKERS):
+            return "unprobeable", full[-160:]
+        return "failed", full[:200]
 
 
     def probe(t):
@@ -209,12 +327,26 @@ data:
 
     def cycle():
         targets = discover()
+        ctx = build_context()
         results = []
         for t in targets:
+            method = "workload"
             state, detail = probe(t)
-            results.append({**t, "state": state, "detail": detail})
+            # Distroless workloads have no shell, so the in-workload probe
+            # cannot run at all. Retry through the node plugin before giving
+            # up -- an untested volume reported as "unprobeable" looked like
+            # coverage for 3 of 8 volumes here.
+            if state == "unprobeable":
+                fb_state, fb_detail = probe_via_node_plugin(t, ctx)
+                if fb_state != "unprobeable":
+                    method, state, detail = "node-plugin", fb_state, fb_detail
+                else:
+                    # Keep BOTH reasons. Reporting only the fallback's failure
+                    # hides why the primary probe was skipped in the first place.
+                    detail = f"workload: {detail} | node-plugin: {fb_detail}"
+            results.append({**t, "state": state, "detail": detail, "method": method})
             if state == "failed":
-                log(f"NOT WRITABLE {t['namespace']}/{t['claim']} via {t['pod']}: {detail}")
+                log(f"NOT WRITABLE {t['namespace']}/{t['claim']} via {t['pod']} [{method}]: {detail}")
             elif state == "unprobeable":
                 log(f"unprobeable {t['namespace']}/{t['claim']} via {t['pod']}: {detail}")
         with LOCK:
@@ -223,7 +355,13 @@ data:
             STATE["cycles"] += 1
         bad = sum(1 for r in results if r["state"] == "failed")
         skipped = sum(1 for r in results if r["state"] == "unprobeable")
-        log(f"probed {len(results)} PVC(s); {bad} not writable, {skipped} unprobeable")
+        indirect = sum(1 for r in results if r["method"] == "node-plugin" and r["state"] != "unprobeable")
+        # Name the fallback count in the summary. The previous line read
+        # "0 not writable, 3 unprobeable", which invited reading 0 as healthy.
+        log(
+            f"probed {len(results)} PVC(s); {bad} not writable, "
+            f"{skipped} unprobeable, {indirect} via node-plugin fallback"
+        )
 
 
     def loop():
@@ -248,14 +386,18 @@ data:
             cycles = STATE["cycles"]
             errors = STATE["errors"]
         out = [
-            "# HELP pvc_writable 1 if a write to the PVC succeeded from inside its own pod",
+            "# HELP pvc_writable 1 if a write to the PVC succeeded. method=workload means the",
+            "# write ran inside the workload container as its own uid; method=node-plugin means",
+            "# the workload is distroless (no shell) and the same volume was probed through the",
+            "# synology-csi-node pod's kubelet host mount instead.",
             "# TYPE pvc_writable gauge",
         ]
         unprobeable = []
         for r in results:
             labels = (
                 f'namespace="{esc(r["namespace"])}",claim="{esc(r["claim"])}",'
-                f'pod="{esc(r["pod"])}",mountpath="{esc(r["path"])}"'
+                f'pod="{esc(r["pod"])}",mountpath="{esc(r["path"])}",'
+                f'method="{esc(r.get("method", "workload"))}"'
             )
             # Only emit pvc_writable for targets actually probed. A volume we
             # could not test is NOT a volume known to be healthy, and it is
