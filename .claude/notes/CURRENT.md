@@ -298,7 +298,45 @@ provably fine and the check was fragile. Replaced with a `stat` device-number co
 grafana, loki and zot, whose containers are distroless and have no `sh`. Same root cause as the
 distroless gotcha recorded earlier today. Loki's volume was independently confirmed writable
 (`kubelet_volume_stats_used_bytes` rose 3381→3410 MiB during the upgrade); grafana and zot are
-low-write and read fine. Not fixed — recorded in REFERENCE.md.
+low-write and read fine. **Fixed the same day in PR #1023** — see the entry below.
+
+### 2026-10-08 (later): the prober's 3-of-8 blind spot, closed
+
+Follow-on from the CSI upgrade above. `pvc-writability-prober` had logged
+`probed 8 PVC(s); 0 not writable, 3 unprobeable` for four weeks — correct classification,
+and it still read like full coverage while 3 of 8 volumes went untested.
+
+Two simpler options were ruled out before building anything: trying `bash` as well as `sh` is
+pointless because distroless has **no** shell, and no sibling container mounts the volume in
+any of the three pods (the `k8s-sidecar` containers mount config dirs only). Ephemeral debug
+containers — which the docs had proposed as the eventual fix — were rejected because they
+**cannot be removed** once added and this probe runs every five minutes.
+
+**The fallback:** on `unprobeable`, retry through the `synology-csi-node` pod on the same node
+at `/var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~csi/<pv>/mount`. That pod is Alpine, is
+already privileged, and already mounts `/var/lib/kubelet` read-write because mounting volumes
+is its job. **No new RBAC** — the SA already held `pods/exec` cluster-wide, which always
+included the node plugin pods; the only addition is read on PVCs to resolve claim → PV name.
+The in-workload probe stays primary because it writes as the workload's own uid.
+
+:::THE MOUNTPOINT GATE IS THE LOAD-BEARING PART:::
+If a volume is detached but its directory still exists, `touch` writes to the **node's root
+disk**, silently, as root. The script compares device numbers against the parent (busybox has
+no `mountpoint`) and returns `unprobeable` — never `failed` — on either gate.
+
+Live: `probed 8 PVC(s); 0 not writable, 0 unprobeable, 3 via node-plugin fallback`, two
+consecutive cycles, 8/8 `pvc_writable` series at 1, no probe files left behind.
+
+13 unit tests against a stubbed `kubectl`. **The first negative control was invalid** — the
+mutation never applied because the extracted script's indentation differs from the YAML
+source, so it reported a vacuous pass. Caught only because the `AssertionError` was visible.
+Redone by line number; removing the gate then failed 3 tests.
+
+Two process notes: I first read the **old terminating pod's** logs and saw the old behaviour
+(`--field-selector=status.phase=Running` still matches a terminating pod — exclude
+`deletionTimestamp`). And the ConfigMap change needed an explicit `rollout restart`: unlike
+Alloy there is no config-reloader here, so the 11-day-old pod kept running the old script
+after ArgoCD synced.
 
 ### 2026-10-03/07: nine months of orphaned RBAC, and the alert that could not be seen until October
 
