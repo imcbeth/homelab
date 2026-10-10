@@ -34,7 +34,7 @@ spec:
             - "falco.k8s.n37.ca"
       containers:
         - name: blackbox-exporter
-          image: prom/blackbox-exporter:v0.28.0
+          image: prom/blackbox-exporter:v0.29.0
           args:
             - "--config.file=/config/blackbox.yml"
             - "--log.level=info"
