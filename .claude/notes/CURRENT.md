@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-08 (synology-csi v1.3.0 -> v1.3.1 in two stages; v1.4.0 was never published to Docker Hub)
+**Last Updated:** 2026-10-11 (14-PR Renovate batch incl. the kps major; September published to lifeonabike; the home address was already in a published GPX)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,124 @@
 ---
 
 ## Recent Sessions
+
+### 2026-10-11: a 14-PR Renovate batch, September published, and an address that was already public
+
+Sunday. Health check, the weekend Renovate batch, and the first content push to
+lifeonabike.ca since August.
+
+**trivy-operator OOMKilled at 15:49 on 10-10.** Caught by `KubeContainerOOMKilled`
+(PR #997) — its second real catch after Grafana. Raised 512Mi → 768Mi in PR #1036.
+
+| | |
+|---|---|
+| peak (1h / 6h / 24h / 3d / 7d) | **495 MiB**, flat across every window |
+| limit | 512 MiB → **~3% headroom** |
+| steady state | ~245 MiB, flat within 240–249 over 23h |
+
+:::THE 2026-09-09 REASONING WAS SOUND. THE WORKLOAD OUTGREW IT.:::
+That earlier change set 512Mi and its comment claimed "~70% headroom over the observed
+peak" — true at the time, when the peak was ~300 MiB. The number that mattered was never
+the limit, it was **the gap**, and the gap closed as the report count grew to 842 objects.
+The new comment records that the trigger to watch is the gap, not the limit, because this
+will need revisiting again.
+
+Checked for a leak before raising — flat steady state with a 2× transient is batch
+reconciliation. Raising a limit on a leaking process only moves the OOM later.
+
+:::A QUERY THAT RETURNED AN IMPOSSIBLE ANSWER:::
+The first peak-memory check returned **"3 MiB over 7d"** while the 24h peak was 412 MiB.
+Cause: `max_over_time(...)` returns one series per label set, and I printed `result[0]` —
+which was the newly created pod's first sample. Wrapping in an outer `max()` gave the real
+495 MiB. An impossible number is a gift; it is the plausible wrong ones that survive.
+
+---
+
+**The Renovate batch — 14 PRs, not the 10 it started as.** Four more appeared while the
+first ten were being applied.
+
+| | |
+|---|---|
+| **argocd** | 10.9.6 → **10.10.2** (app **v3.5.4** — the Go stdlib CVE fix flagged on 10-08) |
+| argo-workflows | 2.0.12 · alloy 1.13.1 · velero 12.2.1 · zot 0.1.128 + v2.1.22 |
+| trivy-operator | 0.37.0 (app 0.34.0 → 0.35.0) |
+| images | uptime-kuma 2.5.6 · cloudflared 2026.10.0 · blackbox-exporter v0.29.0 |
+| CSI sidecars | csi-provisioner v6.4.0 · csi-resizer v2.3.0 (driver stays pinned at v1.3.1) |
+| **kube-prometheus-stack** | 91.9.0 → **92.3.0**, the major |
+
+:::TWO PRs EDITED argocd.yaml, AND GITHUB SAID MERGEABLE:::
+PR #1026 carried argocd 10.9.6 → 10.9.7, and PR #1033 carried 10.9.6 → **10.10.2**.
+After #1033 was merged, GitHub still reported #1026 as `MERGEABLE` — and merging it
+blind would have **downgraded ArgoCD to 10.9.7**. Re-reading the diff showed Renovate
+had already rebased the branch and dropped the argocd hunk, leaving only argo-workflows. `MERGEABLE` is a statement about
+textual conflict, not about whether the result is what you want.
+
+Both chart versions deliver appVersion v3.5.4, so either would have closed the CVE.
+
+**The kps major's breaking change** is *"Default Linux-only workloads to
+`kubernetes.io/os: linux`"* — a new nodeSelector. Harmless only if every node carries the
+label, and the failure mode is the entire monitoring stack going `Pending`. Verified all
+5 nodes carry it **before** applying. Only 2 of 4 rendered workloads actually get the
+selector.
+
+**Both of this week's config edits survived their chart bumps** — trivy-operator's 768Mi
+(set the same morning) and Alloy's `stage.drop` — confirmed by rendering, not by scanning
+values keys.
+
+:::KEY-SCANNING GAVE TWO FALSE ALARMS; RENDERING SETTLED BOTH:::
+Comparing our values keys against `helm show values` reported `resources` "missing" for
+**zot 0.1.128** and `grafana.resources` absent from **kps 92.3.0**. Both were wrong: those
+keys live in sub-chart defaults, not the parent's documented values. `helm template` with
+our values showed both rendering exactly as before. A key absent from the defaults is not
+a key the chart ignores.
+
+The kps sync then stuck at `op=Running` with the `crds-upgrade` Job already `Complete` —
+the documented hook behaviour. All 186 resources were Synced+Healthy, so the stale
+operation was cleared per the runbook. Left alone it blocks future `selfHeal` syncs, since
+ArgoCD will not start a sync while one is notionally running.
+
+Applied in sync-wave order throughout. **0 container restarts cluster-wide across the
+entire batch**, 38/38 apps Synced+Healthy afterwards.
+
+---
+
+**lifeonabike.ca — September published**, two posts, the first content since 2026-08-31:
+
+- **20 Sept** — 61.7 km, 483 m, 17 PRs. The longest ride of the year. Carries a GPX.
+- **27 Sept** — 26.5 km with the Nikon. 1h29m moving inside 3h24m elapsed; **1h55m
+  standing still**, which is the right ratio for a ride whose Strava note reads *"Short
+  ride to catch some fall photos."*
+
+:::THE HOME ADDRESS WAS ALREADY PUBLISHED, AND HAD BEEN FOR WEEKS:::
+Every ride in the Strava history starts **and ends** at the same point within ~3 m. The
+2026-09-13 audit looked at the published tracks and concluded *"no home address is
+currently inferable."* That was wrong. Measured properly:
+
+```
+routes/bow-glenmore-loop/bow-glenmore-loop.gpx
+  closest approach to origin: 2 METRES
+```
+
+A loop that begins and ends at one residential point, repeated across the track, **is** the
+address. Retro-trimmed to 1000 m; the new track was trimmed to 933 m before it was ever
+committed. Every GPX in the repo is now ≥933 m from the origin.
+
+Trimming works on the **cumulative distance stream**, not a point count — spacing varies
+with speed, so "drop the first N points" removes an unpredictable distance.
+
+Eight of the nine supplied photos carried GPS. None were taken at the house, but all EXIF
+was stripped regardless: the published images carry none, and these would have broken that
+convention.
+
+Built with **`hugomods/hugo:0.162.1`** — the exact image pinned in `deploy/Dockerfile`, run
+in-cluster since Docker isn't running locally — rather than letting the Kaniko pipeline find
+out. 40 pages, 36 processed images, no warnings. Site live and serving the trimmed GPX.
+
+:::I REPORTED THE ZIP AS "NEVER REMOVED". IT HAD BEEN.:::
+`lifeonabike.ca.zip` was removed in that repo's PR #21. My local checkout was two merges
+stale, so `git ls-files` was reading an out-of-date index and reported it still tracked.
+This surfaced as a merge conflict, which is the only reason it was caught. **Pull before
+auditing the state of a repo you have not touched in days.**
 
 ### 2026-10-08: the CSI upgrade that was two versions smaller than the release notes implied
 
