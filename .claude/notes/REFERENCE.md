@@ -321,9 +321,14 @@ Merging a standalone version PR first leaves the grouped PR's other hunks
 pointing at versions already superseded — and the diff still applies cleanly
 and CI still passes.
 
-2026-09-11: #958 took argocd to 10.9.0; the grouped "argocd ecosystem" PR
-#955 still proposed 10.8.4. Merging it would have rolled ArgoCD back two
-minor versions with nothing to flag it.
+2026-09-11: PR #958 took argocd to 10.9.0; the grouped "argocd ecosystem"
+PR #955 still proposed 10.8.4. Merging it would have rolled ArgoCD back
+two minor versions with nothing to flag it.
+
+2026-10-11 saw the same shape again: PR #1033 took argocd to 10.10.2, and
+GitHub still reported the grouped PR #1026 (10.9.7) as MERGEABLE. Renovate
+had in fact rebased and dropped that hunk, but MERGEABLE describes textual
+conflict, not whether the result is the version you want.
 
 Merge standalone version PRs BEFORE grouped ones from the same group, then
 re-read the group's diff against what is actually on main:
