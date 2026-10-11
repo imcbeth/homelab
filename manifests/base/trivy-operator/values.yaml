@@ -161,16 +161,36 @@ serviceAccount:
 #           rule was written for: high throttling AND high utilization
 #           together, which means the limit really is too low (see F9).
 #
-# 512Mi leaves ~70% headroom over the observed peak rather than the ~1% it
-# had. Requests are raised too — 100Mi was so far below real usage that the
+# 512Mi left ~70% headroom over the peak observed THAT DAY (~300 MiB).
+# Requests were raised too — 100Mi was so far below real usage that the
 # scheduler had no idea what this pod actually costs.
+#
+# RAISED AGAIN 2026-10-11, 512Mi -> 768Mi, after one OOMKill on 10-10 at
+# 15:49. The 2026-09-09 reasoning was sound; the workload outgrew it. The
+# number that mattered was not the limit but the gap to the peak, and that
+# gap closed as the report count grew:
+#
+#   peak (1h/6h/24h/3d/7d)  495 MiB, flat across every window
+#   limit                   512 MiB  -> ~3% headroom, not the ~70% above
+#   steady state            ~245 MiB, flat within 240-249 over 23h
+#
+# Flat steady state with a 2x transient peak is batch reconciliation, NOT a
+# leak — checked before raising, because raising a limit on a leaking process
+# only moves the OOM later. It reconciles 842 report objects today:
+# 304 configaudit, 236 exposedsecret, 165 clusterrbacassessment,
+# 102 vulnerability, 35 rbacassessment. That count grows with the cluster, so
+# expect to revisit this; the trigger to watch is the GAP, not the limit.
+#
+# Caught by KubeContainerOOMKilled (added 2026-09-29, PR #997) — its second
+# real catch after Grafana. Gatekeeper's container-limits constraint caps
+# memory at 2Gi, so 768Mi is well within policy.
 resources:
   requests:
     cpu: 100m
     memory: 256Mi
   limits:
     cpu: 500m
-    memory: 512Mi
+    memory: 768Mi
 
 # Security policies
 # Note: nodeCollector.tolerations are configured above for control-plane scanning
