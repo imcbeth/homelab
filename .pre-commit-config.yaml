@@ -88,6 +88,23 @@ repos:
       # it parsed a shifted column and swallowed the error, so zero was the
       # only answer it could give. The fixtures assert a NONZERO total, which
       # makes that regression fail here instead of in a health report.
+      # Guards against markdownlint --fix turning prose into headings, and
+      # asserts MD018 stays disabled above. Runs on every markdown file plus
+      # the hook config itself, so removing the --disable fails here.
+      - id: markdown-heading-guard
+        name: Markdown heading hazards
+        entry: scripts/validate-markdown-headings.py
+        language: system
+        files: '(\.md$|^\.pre-commit-config\.yaml$)'
+        exclude: '(^secrets/|.*secret.*|.*\.key$|.*-sealed\.ya?ml$)'
+
+      - id: markdown-heading-guard-self-test
+        name: markdown heading guard self-test
+        entry: scripts/validate-markdown-headings.py --self-test
+        language: system
+        files: ^scripts/validate-markdown-headings\.py$
+        pass_filenames: false
+
       - id: cluster-restarts-self-test
         name: cluster-restarts self-test
         entry: scripts/cluster-restarts.py --self-test
@@ -132,10 +149,17 @@ repos:
     hooks:
       - id: markdownlint
         name: Lint Markdown files
-        args: ['--fix', '--disable', 'MD013', 'MD033']
+        args: ['--fix', '--disable', 'MD013', 'MD033', 'MD018']
         exclude: '(^secrets/|.*secret.*|.*\.key$|.*-sealed\.ya?ml$)'
         # MD013: Line length
         # MD033: Inline HTML
+        # MD018: no-missing-space-atx. MUST stay disabled while --fix is on.
+        #   Its autofix rewrites "#955 still proposed 10.8.4." into
+        #   "# 955 still proposed 10.8.4." -- turning a wrapped sentence into
+        #   an H1, editing the file, and still passing. It produced phantom
+        #   headings in CURRENT.md on 2026-09-29, 10-03 and 10-11 before the
+        #   mechanism was understood. scripts/validate-markdown-headings.py
+        #   asserts this stays disabled.
 
   # Check for TODO/FIXME in commits (warning only)
   - repo: local
