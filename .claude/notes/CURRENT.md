@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-11 (14-PR Renovate batch incl. the kps major; September published to lifeonabike; the home address was already in a published GPX)
+**Last Updated:** 2026-10-16 (Renovate was blind to external-dns since PR #1006; CriticalErrorLogs was matching the backup name, not a severity)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,103 @@
 ---
 
 ## Recent Sessions
+
+### 2026-10-16: two alerts that were telling the truth about the wrong thing
+
+Friday health check. Cluster green on every axis — 5/5 nodes, 38/38 apps, 8/8 PVCs,
+11/11 certs, 98/98 targets, Velero clean, prober at full coverage. Two findings, both of
+them monitoring that was confidently reporting something other than what it claimed.
+
+:::RENOVATE HAD BEEN BLIND TO external-dns SINCE PR #1006:::
+The Dependency Dashboard had been carrying this the entire time:
+
+```
+Failed to look up docker package registry.k8s.n37.ca/external-dns/external-dns: no-result
+Failed to look up docker package registry.k8s.n37.ca/kashalls/external-dns-unifi-webhook: no-result
+```
+
+The `registryAliases` added in PR #1006 **never worked**. Renovate kept querying our private
+Zot pull-through registry instead of resolving to upstream, so both images were invisible:
+
+| | running | available |
+|---|---|---|
+| external-dns | v0.21.0 | **v0.23.0** (2026-09-18) |
+| unifi webhook | v0.8.2 | **v0.9.0** |
+
+This is the "a pin that doesn't pin" pattern in a new costume — **an alias that doesn't
+alias**. The warning was on the dashboard the whole time and nobody read it. Fixed in
+PR #1043 with explicit `depNameTemplate` customManagers, both upstream names verified
+resolvable against the registries first.
+
+Two near-misses while fixing it:
+
+- The GHCR tag list returned 100 tags ending at `v0.4.2` and **did not contain v0.8.2**,
+  which looked like proof the upstream name was wrong. The response carried a
+  `Link rel="next"` header — it was paginated. A direct manifest GET returned 200.
+  **A truncated list is not an absence.**
+- The first fix excluded the directory with `/^manifests/base/(?!external-dns/).*\.ya?ml$/`
+  and `renovate-config-validator` rejected it: **Renovate uses RE2, which has no lookahead.**
+  Caught only because the config was validated.
+
+:::AND THE VALIDATOR LIED FIRST:::
+`npx --package renovate` resolved to **37.440.7**, which predates `managerFilePatterns`
+replacing `fileMatch`. It reported every customManager in the file as invalid — including
+four that demonstrably work, since 37 `manifests/base/` files appear in the dashboard's
+scanned list. Pinning `renovate@latest` reduced the output to the one real error. An old
+validator disagreeing with a working config is the validator being wrong.
+
+---
+
+:::CriticalErrorLogs WAS MATCHING THE BACKUP NAME, NOT A SEVERITY:::
+The alert fired at 02:02 claiming *"critical/fatal errors at 263.3m/s"* against
+snapshot-controller. There were none. Every matching line was INFO:
+
+```
+I1016 02:02:40 ... setAnnVolumeSnapshotBeingDeleted: volume snapshot content
+  &{... Labels:map[velero.io/backup-name:velero-daily-critical-pvcs-20261016020049] ...}
+```
+
+The pattern was `|~ "(?i)(critical|fatal|panic|emergency)"`. The word *critical* came from
+the nightly schedule name `velero-daily-critical-pvcs`, embedded in a label on the
+VolumeSnapshotContent object the controller dumps in full at info level. **It fires every
+night at ~02:00 when the backup runs.**
+
+Word boundaries would not have helped: `\bcritical\b` still matches inside
+`velero-daily-critical-pvcs`, because a hyphen IS a word boundary. Severity had to be
+matched structurally — klog `^F`, `level=fatal`, `"level":"fatal"`, `[CRITICAL]`, `panic:`.
+
+Fixed in PR #1044, validated in both directions against **real** Loki lines rather than
+imagined ones: the three genuine `external-dns level=fatal` lines from 10-13 still match,
+and four "critical"-as-ordinary-text lines no longer do — all four of which the old pattern
+matched. Re-tested **after the YAML round-trip**, by pulling the regex back out of the
+parsed ConfigMap, because escaping through YAML is exactly where it could silently change.
+11/11.
+
+Ruler confirmed afterwards at **9 rules in 4 groups**, checked explicitly rather than
+assumed: PR #985 broke this same file and left the ruler running with zero rules.
+
+---
+
+**Operator knowledge, from the user, now in REFERENCE.md.** When `external-dns-unifi` and
+`unipoller` restart together, the **UniFi gateway has stopped answering polling**, typically
+under load. Internet traffic keeps flowing, so the network looks fine from a user's seat
+while metrics collection and DNS reconciliation are broken.
+
+That is a gateway-health signal, not two application faults — which is what it had been
+investigated as twice. The diagnostic is whether restarts are CLUSTERED:
+`scripts/cluster-restarts.py --since 7d`. 2026-10-13 produced 55 in one day and zero on the
+days either side; chronic daily restarts would mean something else.
+
+The restarts themselves are correct: external-dns treats a webhook timeout as fatal and
+exits, and Kubernetes retries with backoff until the gateway answers. No fix was attempted,
+because the webhook exposes no per-request upstream timeout and external-dns has no flag to
+soften a timeout — and a speculative change to the DNS path that cannot be tested without
+taking the gateway down is how PR #1008 went wrong.
+
+**Checked and benign:** the Loki drop-stage counter read 431,689, which looked alarming. It
+is cumulative since the 10-11 pod replacement and includes a first-read burst. Steady state
+is ~2,600/day against 14.6M entries shipped — 0.005% of volume, all of it past retention,
+with **0 dropped and 0 discarded**.
 
 ### 2026-10-11: a 14-PR Renovate batch, September published, and an address that was already public
 
