@@ -126,6 +126,14 @@
         "major-update"
       ],
       "prPriority": -1
+    },
+    {
+      "description": "The generic image manager also extracts these under their pull-through registry.k8s.n37.ca names, which Renovate cannot look up (it queries our private Zot, not upstream) and which produced 'no-result' dashboard warnings. Disable those names; the dedicated customManagers extract the same images under their real upstream names instead.",
+      "matchPackageNames": [
+        "registry.k8s.n37.ca/external-dns/external-dns",
+        "registry.k8s.n37.ca/kashalls/external-dns-unifi-webhook"
+      ],
+      "enabled": false
     }
   ],
   "customManagers": [
@@ -151,6 +159,30 @@
       ],
       "depNameTemplate": "kubernetes-csi/external-snapshotter",
       "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "external-dns via the pull-through registry; resolved to its upstream name",
+      "managerFilePatterns": [
+        "/^manifests/base/external-dns/.*\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "image:\\s*[\"']?registry\\.k8s\\.n37\\.ca/external-dns/external-dns:(?<currentValue>[^@\\s\"']+)"
+      ],
+      "depNameTemplate": "registry.k8s.io/external-dns/external-dns",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "unifi webhook via the pull-through registry; resolved to its upstream name",
+      "managerFilePatterns": [
+        "/^manifests/base/external-dns/.*\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "image:\\s*[\"']?registry\\.k8s\\.n37\\.ca/kashalls/external-dns-unifi-webhook:(?<currentValue>[^@\\s\"']+)"
+      ],
+      "depNameTemplate": "ghcr.io/kashalls/external-dns-unifi-webhook",
+      "datasourceTemplate": "docker"
     }
   ],
   "ignoreDeps": [
@@ -169,9 +201,5 @@
       "security",
       "vulnerability"
     ]
-  },
-  "registryAliases": {
-    "registry.k8s.n37.ca/external-dns": "registry.k8s.io/external-dns",
-    "registry.k8s.n37.ca/kashalls": "ghcr.io/kashalls"
   }
 }
