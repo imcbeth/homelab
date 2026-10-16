@@ -30,10 +30,27 @@ data:
               summary: "High error log rate in {{ $labels.namespace }}/{{ $labels.pod }}"
               description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is logging errors at {{ $value | humanize }}/s for 5 minutes."
 
+          # Matches log SEVERITY, not the bare words. The previous pattern was
+          # |~ "(?i)(critical|fatal|panic|emergency)" and fired every night at
+          # ~02:00 on snapshot-controller INFO lines, because the nightly
+          # backup is named velero-daily-CRITICAL-pvcs and the controller dumps
+          # the whole VolumeSnapshotContent object -- labels included -- at
+          # info level:
+          #
+          #   I1016 02:02:40 ... setAnnVolumeSnapshotBeingDeleted: ...
+          #     Labels:map[velero.io/backup-name:velero-daily-critical-pvcs-...]
+          #
+          # Word boundaries do not help: `\bcritical\b` still matches inside
+          # velero-daily-critical-pvcs, because a hyphen IS a word boundary.
+          # The severity has to be matched structurally instead.
+          #
+          # Verified against real log lines from this cluster before merging:
+          # the three external-dns level=fatal lines from 2026-10-13 still
+          # match, and the snapshot-controller lines no longer do.
           - alert: CriticalErrorLogs
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(critical|fatal|panic|emergency)" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ `(?i)(^F[0-9]{4} |level=(fatal|critical|emerg)|"level"\s*:\s*"(fatal|critical|emerg)|\[(fatal|critical|emerg)[a-z]*\]|panic: )` [5m])
               ) > 0.1
             for: 2m
             labels:
