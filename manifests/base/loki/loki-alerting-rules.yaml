@@ -175,10 +175,27 @@ data:
               summary: "Auth failures in {{ $labels.namespace }}/{{ $labels.pod }}"
               description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has {{ $value | humanize }} auth failures/s."
 
+          # The keyword match alone fires on the REQUEST PATH in a web access
+          # log, so any internet scanner probing a URL containing one of these
+          # words trips it. 2026-10-19: a single
+          #   GET /attacker/docker-compose.yml -> 404
+          # raised this on lifeonabike/web. The site was not compromised --
+          # that probe, and 366 others in the same window, all returned 404.
+          #
+          # A public site is scanned continuously, so the unfiltered rule cries
+          # wolf and trains you to ignore it. The `!~` drops access-log lines
+          # whose response was 3xx or 4xx -- i.e. the probe FAILED and nothing
+          # was served. What still fires:
+          #   - the same suspicious path returning 2xx (something was served)
+          #   - app-level events ("intrusion detected"), which carry no HTTP
+          #     status and so are never excluded
+          #   - Falco output (malicious binary, etc.)
+          #
+          # Falco remains the authoritative compromise detector; this is a net.
           - alert: SuspiciousActivity
             expr: |
               sum by (namespace, pod) (
-                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(attack|intrusion|exploit|malicious|suspicious)" [5m])
+                rate({namespace=~".+", namespace!="loki"} |~ "(?i)(attack|intrusion|exploit|malicious|suspicious)" !~ `" (3[0-9]{2}|4[0-9]{2}) [0-9]+ "` [5m])
               ) > 0
             for: 2m
             labels:
