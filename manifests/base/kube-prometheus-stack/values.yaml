@@ -1273,10 +1273,23 @@ prometheusOperator:
       automountServiceAccountToken: true
     patch:
       enabled: true
+      # Must stay >= 1.11.0 and on the jkroepke repo. Chart 92.13.1 added
+      # `secretType: kubernetes.io/tls`, which makes the certgen Job pass
+      # --secret-type; that flag only exists in kube-webhook-certgen 1.11.0+.
+      #
+      # This block previously pinned registry.k8s.io/ingress-nginx/kube-webhook-certgen
+      # at v1.6.9 -- a stale copy of a much older chart default. The chart has
+      # defaulted to ghcr.io/jkroepke/kube-webhook-certgen:1.11.0 since at least
+      # 92.10.1, so the pin was already wrong but silent, because nothing passed
+      # --secret-type until 92.13.1.
+      #
+      # The failure mode was a blocked PreSync hook: the Job CrashLooped with
+      # "Error: unknown flag: --secret-type" and held all 92 kps resources
+      # OutOfSync behind it, while the app still reported Healthy.
       image:
-        registry: registry.k8s.io
-        repository: ingress-nginx/kube-webhook-certgen
-        tag: v1.6.9
+        registry: ghcr.io
+        repository: jkroepke/kube-webhook-certgen
+        tag: 1.11.0
         sha: ""
         pullPolicy: IfNotPresent
       # Resource limits required by Gatekeeper require-resource-limits constraint
