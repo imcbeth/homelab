@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-16 (Renovate was blind to external-dns since PR #1006; CriticalErrorLogs was matching the backup name, not a severity)
+**Last Updated:** 2026-10-24 (our own documented shutdown procedure was deleting Loki's PVC on every run; k8s 1.37 is blocked on Istio, not on kubeadm)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,124 @@
 ---
 
 ## Recent Sessions
+
+### 2026-10-24: the shutdown procedure was deleting Loki's PVC, and 1.37 is blocked on Istio
+
+Two sessions in one day. Morning: Saturday Renovate batch + health check. Afternoon: full
+cluster shutdown for NAS patching, Ubuntu updates, and the 1.37 upgrade plan.
+
+**Morning — health check green, 10 PRs applied.** 5/5 nodes, 38/38 Synced+Healthy, **0
+restarts in 4 days**, 8/8 PVCs, 11/11 certs, 98/98 targets, Velero **72/72 Completed** (the
+two July failures finally aged out), Loki 0 drops, apiserver 0.047/s.
+
+Renovate had not fired (window opens 06:00 MDT; at 08:07 there were 15 queued and 0 PRs), so
+the Dependency Dashboard manual-run box was ticked. That produced 10 patch bumps
+(#1057-#1066): istio 1.30.7, cert-manager v1.21.3, alloy 1.14.3, argo-workflows 2.0.14,
+falco 9.2.1, chaos-mesh 2.8.6, cloudflared, uptime-kuma, blackbox v0.29.1, prometheus
+v3.15.1. All merged and applied in sync-wave order, verified against deployed images rather
+than status words. blackbox and prometheus needed a kps sync (they live under that app); kps
+hit the stuck-hook pattern again and was cleared per the runbook.
+
+**trivy-operator headroom is halving.** Peak 495 -> **614 MiB** of 768 (36% -> 20% headroom);
+steady state ~245 -> **~379 MiB** (+55%). Report count flat at 841, so this is not workload
+growth -- the likely cause is the 0.37.0 upgrade on 2026-10-19 (app 0.34.0 -> 0.35.0) raising
+the baseline. **No OOMs since the bump.** Deliberately NOT bumped again: that would be
+chasing a number rather than understanding it. Watch the gap, not the peak.
+
+Also: strimzi 1.3.0 brought **+3 critical CVEs** (ca-certificates, netty) and
+`alpine/k8s:1.37.1` has 2 -- but 1.37.1 is already the latest tag, so both need upstream
+rebuilds, not a version bump.
+
+---
+
+**Afternoon — cluster shut down for NAS patching. Three real defects found in our own
+documented procedure.**
+
+**1. `/cluster-shutdown` was deleting Loki's PVC on every run.** The loki chart defaults
+`singleBinary.persistence.enableStatefulSetAutoDeletePVC` to **true**, rendering
+`persistentVolumeClaimRetentionPolicy: {whenScaled: Delete, whenDeleted: Delete}`. Step 2 of
+our own skill runs `kubectl scale statefulset loki --replicas=0` -- which therefore
+**deletes `storage-loki-0`**. It is the only component defaulted that way; write, ingester,
+compactor, indexGateway and both bloom components all default to false.
+
+Caught it because the PVC count went 8 -> 7 mid-shutdown. The data survived **only** because
+`synology-iscsi-retain` carries `reclaimPolicy: Retain`: the LUN stayed on the NAS, the PV
+went `Released`, and it was re-bindable by hand (clear `claimRef`, recreate the PVC with an
+explicit `volumeName`). On a `-delete` class this would have destroyed 30 days of logs.
+
+The silent shape is what matters: on restart the StatefulSet recreates `storage-loki-0`,
+provisions a **brand new empty 20Gi LUN**, binds happily, and Loki comes up **Healthy with
+no history** while the old LUN is orphaned on the NAS. Nothing alerts. ArgoCD reports Synced.
+An operator would see a green cluster, empty logs, and blame retention.
+
+Fixed in PR #1067 (`enableStatefulSetAutoDeletePVC: false`, verified with `helm template`:
+before `{whenDeleted: Delete, whenScaled: Delete}`, after absent = Kubernetes default
+Retain). The field is mutable so it applies without recreating the StatefulSet. The other
+four PVC-owning StatefulSets were already Retain/Retain.
+
+**2. `pvc-ro-remediator` fires every 2 minutes and the skill never suspended it.** It mounts
+PVCs to repair read-only mounts, so it would fire mid-shutdown and re-attach a volume just
+detached -- stalling the detach gate or re-establishing an iSCSI session after the NAS was
+believed clear. Same for `pvc-writability-prober` (Deployment, 43d old, didn't exist when the
+skill was written). Both now suspended/stopped as a new Step 1b.
+
+**3. The skill still scaled down `falco-falcosidekick-ui-redis`,** whose 2Gi PVC no longer
+exists -- the pod is ephemeral now. Harmless but misleading. Removed from both lists.
+
+Also: the Gatekeeper PDB blocked node02's drain after a 2m30s stall (minAvailable 1, 2
+replicas, second drain always blocks) -- the skill mentioned this reactively; it is now a
+proactive pre-step. And an **orphan `calico-kube-controllers` PDB** in kube-system
+(created 2025-12-22, no ownerReferences, raw `kubectl apply`, `expectedPods: 0`) was deleted
+-- the real controller runs in `calico-system` under Tigera, so it matched nothing. Not in
+any manifest, so nothing recreates it.
+
+**Shutdown completed clean:** 0 VolumeAttachments, 0 PVC-mounting pods, 8/8 PVCs Bound
+(including the re-bound loki), and -- the gate that actually licenses powering off the NAS --
+**`iscsiadm: No active sessions.` from every node.** All 5 nodes confirmed down.
+
+**Ubuntu updates applied before power-off, not after.** The nodes were already drained and
+cordoned, which is the ideal window, and they needed a reboot for kernel 1065 anyway -- so
+the shutdown doubles as the kernel reboot. **38 -> 5 upgradable** per node. The 5 remaining:
+kubeadm/kubectl/kubelet (correctly **held** at 1.36.3) plus `fwupd` and `linux-firmware`,
+held back because `upgrade` won't pull new dependencies.
+
+Deliberately deferred, both needing a supervised pass: `linux-firmware` (touches Pi boot) and
+**`autoremove` for 17 stale kernels** (1031-1065 all still installed; autoremove has never
+run). Regenerating Pi boot config before an unattended power-off with no remote recovery is
+not a risk worth taking. No space pressure -- 113-191GB free.
+
+**4. k8s 1.37 plan: the blocker is Istio, not kubeadm** (PR #1072, `runbooks/k8s-1.37-upgrade.md`).
+Target v1.37.1 (2026-09-15, EOL 2027-10-28). **No released Istio version lists k8s 1.37 as
+supported** -- 1.30 (ours, 1.30.7) covers 1.32-1.36, and even 1.31 places 1.37 in
+"tested, but not supported". We run Ambient with cluster-wide mTLS, so ztunnel and istio-cni
+are in every pod's data path: an incompatibility is a cluster-wide outage, not a degraded
+feature. And nothing forces it -- **1.36 is supported until 2027-06-28**.
+
+Staged instead: Phase 0 patch to 1.36.5 (free, already in the apt repo) -> Phase 1 Calico
+3.31.4 -> 3.33.x (3.33 is what's tested against 1.37; needed regardless) -> Phase 2 wait for
+Istio 1.32 -> Phase 3 k8s 1.37.1.
+
+The one hard action-required item is **`scheduling.k8s.io` v1alpha2 being dropped entirely**
+("remove all v1alpha2 objects before performing the cluster update"). Plus removed cAdvisor
+metrics needing a dashboard/PrometheusRule sweep.
+
+**Three widely-blogged "1.37 blockers" are not in the changelog** and were excluded:
+`PreventStaticPodAPIReferences`, four API-version removals (ClusterTrustBundle v1alpha1,
+IPAddress/ServiceCIDR v1beta1, VolumeAttributesClass v1beta1), and a cgroup v1 hard-fail.
+Each returned not-found, and SIG Release says plainly "Nothing changes in v1.37 for cgroup
+v1" -- that default landed in 1.35, which we are past. Recorded as excluded so they are not
+reintroduced without a primary source.
+
+**Left for the restart:** 4 Renovate PRs (#1068 argo-cd v10.11.1, #1069 monitoring stack
+**minor**, #1070 external-dns **v0.24.0** -- the alias fix still working, #1071
+csi-snapshotter) were created while the cluster was down and **deliberately NOT merged**.
+Merging would have ArgoCD sync four version changes during startup on top of the iSCSI
+reattach risk.
+
+**On restart, follow Steps 7-14 including the new Step 11b** (un-suspend 6 CronJobs +
+restart the prober). Baseline for comparison: 38 apps, 143 Running pods, 8 PVCs, all 11
+scaled workloads at replicas=1.
+
 
 ### 2026-10-16: two alerts that were telling the truth about the wrong thing
 
