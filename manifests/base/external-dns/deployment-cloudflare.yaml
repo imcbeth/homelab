@@ -57,6 +57,19 @@ spec:
 
         # Policy - upsert-only (safe, won't delete records)
         - --policy=upsert-only
+        # PINNED DELIBERATELY. external-dns v0.22.0 changed the DEFAULT annotation
+        # prefix from external-dns.alpha.kubernetes.io/ to external-dns.kubernetes.io/
+        # with NO fallback. Every external-dns annotation in this cluster still uses the
+        # alpha form (18 of them across 9 Ingresses, verified 2026-10-24), so without
+        # this flag v0.24.0 stops recognising all of them.
+        #
+        # --policy=upsert-only is what makes that dangerous rather than loud: existing
+        # records are NOT deleted, so DNS keeps resolving from stale entries while the
+        # automation has silently stopped managing them. Nothing alerts.
+        #
+        # Remove only as part of a deliberate migration of all annotations to the new
+        # prefix, done in one cutover.
+        - --annotation-prefix=external-dns.alpha.kubernetes.io/
 
         # TXT registry for ownership tracking
         - --registry=txt
