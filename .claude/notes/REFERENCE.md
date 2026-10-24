@@ -119,7 +119,7 @@
 | external-dns-unifi + unipoller restarting together = the UniFi gateway is unresponsive to polling | **Operator knowledge, 2026-10-16.** When both pods restart in the same window, the UDR has stopped answering API/polling requests — typically under high load. **Internet traffic keeps flowing**, so the network looks fine from a user's seat; what breaks is metrics collection and DNS record reconciliation. Treat paired restarts as a gateway-health signal, not two separate app faults. The restarts are the correct response: external-dns treats a webhook timeout as fatal and exits, and Kubernetes retries with backoff until the gateway answers. Check whether restarts are CLUSTERED in one day (`scripts/cluster-restarts.py --since 7d`) — chronic daily restarts would mean something else. 2026-10-13 produced 55 in one day and zero on the surrounding days. | 2026-10-16 |
 | Synology CSI v1.4.0 image declares USER 1000 — a bare tag bump breaks mounts | v1.3.1 and earlier run as root (image config `User` is null). **v1.4.0 sets `USER 1000`**, and `privileged: true` does NOT change the runtime user — upstream had to add `runAsUser: 0` to `node.yml` for exactly this. Our vendored `node.yml` carries only `privileged: true`, so bumping the tag alone would run the node plugin as uid 1000 and fail every mount/format. **Any move to v1.4.0+ must add `runAsUser: 0` to the `csi-plugin` container in the same commit.** This is the concrete reason `synology/synology-csi` stays in Renovate `ignoreDeps`: a Renovate PR is a bare tag bump. | 2026-10-08 |
 | Synology CSI v1.4.0 is not on Docker Hub | The GitHub release exists (2026-09-15) but the image was never published — `synology/synology-csi` tags end at `v1.3.1`. Release notes are not proof of an installable image; check the registry tag list before planning an upgrade. | 2026-10-08 |
-| pvc-writability-prober falls back to the node plugin for distroless pods | The in-workload probe execs `sh -c`, which cannot start in grafana/loki/zot (distroless, no shell). It used to log `probed 8 PVC(s); 0 not writable, 3 unprobeable` — which READ like full coverage while 3 of 8 volumes went untested. **Fixed 2026-10-08 (PR #1023):** on `unprobeable` it retries through the `synology-csi-node` pod on the same node at `/var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~csi/<pv>/mount`. Now reports `0 unprobeable, 3 via node-plugin fallback`, and `pvc_writable` carries a `method="workload|node-plugin"` label. The fallback requires the path to be a real mountpoint (device-number comparison against the parent) — without that gate a detached volume would send root writes to the node's root disk. | 2026-10-08 |
+| pvc-writability-prober falls back to the node plugin for distroless pods | The in-workload probe execs `sh -c`, which cannot start in grafana/loki/zot (distroless, no shell). It used to log `probed 8 PVC(s); 0 not writable, 3 unprobeable` — which READ like full coverage while 3 of 8 volumes went untested. **Fixed 2026-10-08 (PR #1023):** on `unprobeable` it retries through the `synology-csi-node` pod on the same node at `/var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~csi/<pv>/mount`. Now reports `0 unprobeable, 3 via node-plugin fallback`, and `pvc_writable` carries a `method="workload\|node-plugin"` label. The fallback requires the path to be a real mountpoint (device-number comparison against the parent) — without that gate a detached volume would send root writes to the node's root disk. | 2026-10-08 |
 | Synology CSI fsGroup race with SQLite | Add `fsGroupChangePolicy: OnRootMismatch` to podSecurityContext | 2026-01-25 |
 | Loki distributed mode conflict | Set `replicas: 0` for caches explicitly | 2026-01-05 |
 | Velero CSI + Kopia conflict | Use CSI exclusively, set `defaultVolumesToFsBackup: false` | 2026-01-05 |
@@ -151,7 +151,7 @@
 | `/host/proc/mounts` is per-container, not host | Symlinks to `/proc/self/mounts` resolving to reader's mount ns. Use `/host/proc/1/mounts` to get HOST init's mount table regardless of PID namespace | 2026-06-05 |
 | ArgoCD "Synced + Healthy" ≠ "applied + working" | (1) SSA field-ownership disagreements can leave cluster in pre-change state silently (PR #739 broken NetPol never propagated). (2) For CronJobs, ArgoCD checks resource exists, not whether the Jobs actually succeed (16-day silent outage). Always verify NetworkPolicy with `kubectl get` after sync; alert on Job success independently | 2026-06-07 |
 | Don't build auto-remediation depending on system being remediated | The PVC RO remediator queried Prometheus → silent no-op for 16 days when Prom's PVC went RO. Solution: query source of truth as directly as possible. Monitor pods' `/metrics` has no upstream dependencies (PR #753) | 2026-06-21 |
-| `set -e` + `grep` no-match is a trap | `grep` exits 1 on no match. Cluster-healthy state IS no-match. With `set -e`, healthy case looks identical to script failure. Always `|| true` the no-match path. Caused remediator to silently fail every healthy run (PR #764) | 2026-06-21 |
+| `set -e` + `grep` no-match is a trap | `grep` exits 1 on no match. Cluster-healthy state IS no-match. With `set -e`, healthy case looks identical to script failure. Always `\|\| true` the no-match path. Caused remediator to silently fail every healthy run (PR #764) | 2026-06-21 |
 | iSCSI globalmount RO independent of pod-mount RO | A pod's CSI mount is a bind-mount of the CSI driver's globalmount. If globalmount itself is RO, pod-delete creates fresh pod that bind-mounts the same RO globalmount. Fix: cross-node reschedule (cordon + delete pod → schedules elsewhere → CSI does fresh attach) | 2026-06-21 |
 | CronJob `failedJobsHistoryLimit` affects forensics | Default 3 means at 2-min cadence you have 6 min of failure history. Useful for normal debugging, useless for a 16-day silent incident. Bump to ~50 for incident retention | 2026-06-21 |
 | ~~Renovate chart minor bumps may need manual sync~~ | **CORRECTED 2026-07-12:** chart-label drift after chart bumps DOES selfHeal within ~30-60s. The prior belief that manual sync was required was misdiagnosis — we were force-syncing before selfHeal had a chance. Reproduced with a controlled SSA-label drift test: `selfHeal: true` (which every app has) recovered `helm.sh/chart` corruption in 30s. When in doubt, wait 60s before intervening | 2026-06-21 → 2026-07-12 |
@@ -196,6 +196,13 @@
 | PodChaos `mode: all` on a node selector is self-destructive | If chaos-mesh's own reconciler pods are on that node, they get pause-swapped and can't restore. 11-day self-lockup on 2026-07-01 to 2026-07-12. Use `namespaces:` allowlist limiting the blast radius to user-workload namespaces, OR `mode: fixed-percent` with small percentage | 2026-07-12 |
 | ArgoCD `Synced + Progressing` persists silently | ArgoCD's built-in rules only fire on `Degraded`. Sustained Progressing (pods stuck RunContainerError, Jobs not completing) has no signal path unless you add one. `ArgoCDAppProgressing` alert (health_status="Progressing" for 1h) fills the gap | 2026-07-12 |
 | argocd_app_info has separate health_status and sync_status labels | Sealed-secrets when the chart repo returns 404 shows `health=Healthy` (runtime fine) but `sync=Unknown` (can't render manifests to compare). Alerts for "app in questionable state" should use `or` across both label values | 2026-07-12 |
+| `kubectl scale sts --replicas=0` can DELETE the PVC | A StatefulSet with `persistentVolumeClaimRetentionPolicy.whenScaled: Delete` loses its PVC on scale-down. The loki chart defaults `singleBinary.persistence.enableStatefulSetAutoDeletePVC` to **true** -- uniquely; write/ingester/compactor/indexGateway/bloom all default false. Our own `/cluster-shutdown` Step 2 therefore deleted `storage-loki-0` on every run. Fixed PR #1067. **Audit after any chart bump:** `kubectl get sts -A -o json` and flag any `whenScaled: Delete` | 2026-10-24 |
+| `pvc-ro-remediator` fires every 2 minutes and will fight a shutdown | It mounts PVCs to repair RO mounts, so it re-attaches volumes mid-shutdown and can re-open an iSCSI session after you believe the NAS is clear. Suspend it (and `pvc-writability-prober`) before scaling anything down -- now Step 1b of `/cluster-shutdown` | 2026-10-24 |
+| VolumeAttachment count is not proof the NAS is safe to power off | It is Kubernetes' bookkeeping, not the initiator state. The authoritative gate is `sudo iscsiadm -m session` on each node, expecting `No active sessions.` | 2026-10-24 |
+| Gatekeeper PDB always blocks the SECOND node drain | `minAvailable: 1` with 2 replicas: once one replica is evicted, the next drain stalls for the full timeout (2m30s on node02, 2026-10-24). Delete the PDB up front; ArgoCD restores it | 2026-10-24 |
+| gitleaks flags an `--api-group` flag joined by `=` to a dotted API group as a generic API key | Writing that flag in its joined form with a dotted group name after it tripped `generic-api-key` (entropy 3.73) and blocked a docs commit twice -- once in the runbook, once in the row describing it. Use the space-separated flag form instead (Go flags accept both) rather than adding a gitleaks allowlist entry | 2026-10-24 |
+| `pre-commit run --files` scans the STAGED version, not the working tree | It stashes unstaged changes first. A fix you just made to an unstaged file appears not to work -- the finding even quotes the old text. `git add` the file, then re-run | 2026-10-24 |
+| `$?` after a pipeline reports the LAST command's status | `apt-get upgrade ... \| tail -25; echo EXIT:$?` always prints `EXIT:0` because that is tail's status. Verify the real outcome by re-querying state (`apt list --upgradable`, `dpkg -l`), never by the exit code of a piped command | 2026-10-24 |
 
 ---
 
@@ -347,3 +354,35 @@ count grew, with no change to blame.
 Measure before setting a limit. `/sys/fs/cgroup/memory.peak` from a probe pod
 running the same commands takes two minutes and beats guessing — the
 compliance reporter measured 147 MiB against its 128Mi ceiling.
+
+### A StatefulSet can delete its own PVC on scale-down, and nothing tells you
+
+`persistentVolumeClaimRetentionPolicy.whenScaled: Delete` means `--replicas=0` destroys the
+claim. It is set by chart defaults more often than you would expect: the Loki chart enables
+it for `singleBinary` only, while every other stateful component in the same chart defaults
+to false.
+
+The reason this is worth a section rather than a table row is the **failure shape**. Nothing
+errors. On restart the StatefulSet recreates the PVC from its `volumeClaimTemplate`,
+dynamically provisions a **brand new empty volume**, binds successfully, and the pod comes up
+`Healthy`. ArgoCD reports `Synced`. No alert fires. The old volume is orphaned on the NAS.
+
+What an operator actually sees is a green cluster with empty data, which reads as a retention
+setting rather than data loss.
+
+Two things made this survivable on 2026-10-24:
+
+1. **`reclaimPolicy: Retain`** on the StorageClass, so the PV went `Released` instead of
+   being deleted, and the LUN stayed on the NAS.
+2. Noticing the **PVC count drop from 8 to 7** mid-procedure.
+
+Recovery, while the PV is still `Released`:
+
+```bash
+kubectl patch pv $PV --type=json -p '[{"op":"remove","path":"/spec/claimRef"}]'   # -> Available
+# then recreate the PVC with an explicit volumeName: $PV, matching the
+# volumeClaimTemplate's size / storageClass / accessModes exactly -> Bound
+```
+
+On a `*-delete` StorageClass there is no recovery. Check the policy before scaling any
+stateful workload to zero.
