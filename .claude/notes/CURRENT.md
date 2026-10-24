@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-24 (shutdown procedure was deleting Loki's PVC; ztunnel without XDS silently blackholes a node while everything reports Healthy)
+**Last Updated:** 2026-10-24 (Loki PVC deletion, ztunnel XDS blackhole, and three upgrades that reported Synced+Healthy while running the old image)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -375,9 +375,47 @@ waiting for the broker, then reconciled normally.
 **Final state: 38/38 Synced+Healthy, 143 Running (baseline exactly), 8/8 PVCs + 8
 VolumeAttachments, 11/11 certs, 13/13 DaemonSets, 6/6 CronJobs active, 98/98 targets.**
 
-**Still outstanding:** the 4 Renovate PRs (#1068-#1071) are merge-ready now that the cluster
-is verified healthy. And `linux-firmware` + the 17-kernel `autoremove` still want a
-supervised pass.
+**6. Renovate batch applied (#1068-#1071) + one blocker found.** Merged once the cluster was
+verified green. argo-cd 10.10.5->10.11.1 (v3.5.6), kps 92.10.1->92.13.1, loki chart
+7.3.0->7.5.0, external-dns v0.21.0->**v0.24.0**, csi-snapshotter v8.6.0->v8.7.0.
+
+**external-dns needed a mitigation committed onto the PR branch before merging.** v0.22.0
+changed the DEFAULT annotation prefix from `external-dns.alpha.kubernetes.io/` to
+`external-dns.kubernetes.io/` with **no fallback**, and all 18 annotations here (9 Ingresses)
+still use the alpha form with `--annotation-prefix` unset. `--policy=upsert-only` is what
+makes that silent instead of loud -- records are never deleted, so DNS keeps resolving from
+stale entries while the automation quietly stops managing them. Pinned the alpha prefix
+explicitly on both Deployments. Verified after: both log "All records are already up to
+date", no errors, and argocd/grafana/registry still resolve to 10.0.10.10.
+
+**kps 92.13.1 was blocked by our own stale certgen pin (PR #1075).** The chart added
+`secretType: kubernetes.io/tls`, which makes the certgen Job pass `--secret-type` -- a flag
+only present in kube-webhook-certgen **1.11.0+**. Our values pinned
+`registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.6.9`, a stale copy of a long-dead
+chart default (the chart has defaulted to `ghcr.io/jkroepke/...` since at least 92.10.1), so
+the pin was already wrong by both repo and version and only stayed silent because nothing
+passed the flag. The hook CrashLooped with `unknown flag: --secret-type` and held **all 92
+kps resources OutOfSync while the app still reported Healthy**. After the fix, certgen 1.11.0
+migrated the secret itself: Opaque -> kubernetes.io/tls, keeping the legacy ca/cert/key
+entries alongside the new ca.crt/tls.crt/tls.key.
+
+Two process lessons, both now in REFERENCE.md:
+
+- **"Synced + Healthy" lied on all four apps.** argocd, loki, external-dns and synology-csi
+  each reported Synced+Healthy while still running the PREVIOUS image, and kps reported
+  `synced_revisions: 92.10.1` against a desired 92.13.1. Nothing moved until an
+  `argocd.argoproj.io/refresh: hard` patch. Verify revisions AND running images.
+- **Read the FULL operationState message.** Truncating at 90 chars hid that the sync was
+  waiting on `/ServiceAccount/kube-prometheus-stack-crds-upgrade` -- which did not exist --
+  and sent me chasing the admission-create Job instead. Deleting the sibling crds-upgrade
+  Job/CR/CRB released it.
+
+**Final: 38/38 Synced+Healthy, 143 Running, 8/8 PVCs, 98/98 targets, 0 restarts in 15m,
+loki whenScaled=Retain, both external-dns pods carrying the pinned prefix.**
+
+**Still outstanding:** `linux-firmware` and the 17-kernel `autoremove` want a supervised
+pass. Loki's image stays 3.6.11 under chart 7.5.0 -- the chart's image tag lags its
+appVersion (3.6.16), and rendered matches deployed, so that is correct and not drift.
 
 
 ### 2026-10-16: two alerts that were telling the truth about the wrong thing
