@@ -93,6 +93,24 @@ singleBinary:
 
   persistence:
     enabled: true
+    # The chart defaults this to TRUE for singleBinary (and only singleBinary --
+    # write/ingester/compactor all default to false), which renders
+    # persistentVolumeClaimRetentionPolicy whenScaled=Delete AND whenDeleted=Delete.
+    #
+    # That makes `kubectl scale statefulset loki --replicas=0` DELETE
+    # storage-loki-0. Our documented cluster-shutdown procedure does exactly
+    # that on every planned shutdown. Observed 2026-10-24: the PVC vanished
+    # mid-shutdown and its PV went Released.
+    #
+    # The data survived only because synology-iscsi-retain carries
+    # reclaimPolicy=Retain -- the LUN stayed on the NAS and the PV was
+    # re-bindable by hand. Without that, 30 days of logs would have been gone.
+    # On restart the StatefulSet would have provisioned a NEW empty 20Gi LUN
+    # and orphaned the old one, silently, with Loki simply starting empty.
+    #
+    # Setting this false omits the retention policy entirely, so Kubernetes
+    # applies its default of Retain for both. Verified with `helm template`.
+    enableStatefulSetAutoDeletePVC: false
     storageClass: synology-iscsi-retain
     size: 20Gi
     accessModes:
