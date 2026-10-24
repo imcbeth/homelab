@@ -202,6 +202,7 @@
 | Gatekeeper PDB always blocks the SECOND node drain | `minAvailable: 1` with 2 replicas: once one replica is evicted, the next drain stalls for the full timeout (2m30s on node02, 2026-10-24). Delete the PDB up front; ArgoCD restores it | 2026-10-24 |
 | gitleaks flags an `--api-group` flag joined by `=` to a dotted API group as a generic API key | Writing that flag in its joined form with a dotted group name after it tripped `generic-api-key` (entropy 3.73) and blocked a docs commit twice -- once in the runbook, once in the row describing it. Use the space-separated flag form instead (Go flags accept both) rather than adding a gitleaks allowlist entry | 2026-10-24 |
 | `pre-commit run --files` scans the STAGED version, not the working tree | It stashes unstaged changes first. A fix you just made to an unstaged file appears not to work -- the finding even quotes the old text. `git add` the file, then re-run | 2026-10-24 |
+| After a full power cycle, ztunnel can lose XDS and silently blackhole pods on its node | ztunnel starts before istiod is reachable, logs `XDS client connection error ... tcp connect error` every 15s forever, and with no endpoint data **resets** inbound connections to every ambient-enrolled pod on that node. Pods report `Running 1/1`, ArgoCD reports `Synced + Healthy`, and nothing alerts -- the only signal is the Prometheus target count. Observed 2026-10-24 on control-plane: 2 of 98 targets down for ~12 min. **Restarting ztunnel alone is NOT enough** -- the destination pods must also be restarted to re-enroll. See the prose section below | 2026-10-24 |
 | `$?` after a pipeline reports the LAST command's status | `apt-get upgrade ... \| tail -25; echo EXIT:$?` always prints `EXIT:0` because that is tail's status. Verify the real outcome by re-querying state (`apt list --upgradable`, `dpkg -l`), never by the exit code of a piped command | 2026-10-24 |
 
 ---
@@ -386,3 +387,57 @@ kubectl patch pv $PV --type=json -p '[{"op":"remove","path":"/spec/claimRef"}]' 
 
 On a `*-delete` StorageClass there is no recovery. Check the policy before scaling any
 stateful workload to zero.
+
+### ztunnel without XDS resets connections, and looks perfectly healthy doing it
+
+After a full cluster power cycle, `ztunnel` on a node can come up before `istiod` is
+reachable. It retries XDS every 15 seconds and never gives up:
+
+```text
+warn  xds::client  XDS client connection error: gRPC connection error connecting to
+      https://istiod.istio-system.svc:15012: ... tcp connect error, retrying in 15s
+```
+
+With no XDS config it has no workload or endpoint data, so it **resets** inbound connections
+to every ambient-enrolled pod on that node. From a client you see
+`Connection reset by peer`, not a timeout — which looks like the destination is refusing,
+not like a mesh fault.
+
+**Everything reports healthy.** The affected pods are `Running 1/1`. Their ArgoCD apps are
+`Synced + Healthy`. `kubectl get pods` is clean. ztunnel itself is `1/1 Running`. The only
+visible symptom on 2026-10-24 was **2 of 98 Prometheus targets down** — which is why the
+target count is worth checking explicitly after every restart, not just the app statuses.
+
+Diagnosis that distinguishes it from a routing problem:
+
+```bash
+# Routing is FINE in this failure mode - confirm, then stop looking at L3:
+#   BGP peers established, and the destination block is routed on the client node
+kubectl exec -n calico-system <calico-node-pod> -c calico-node -- calico-node -bird-ready
+ssh <client-node> "ip route show | grep <dest-pod-block>"
+
+# The actual tell:
+kubectl logs -n istio-system <ztunnel-on-dest-node> --tail=40 | grep -i xds
+```
+
+**The fix is two steps, and the first alone does nothing:**
+
+```bash
+# 1. restart ztunnel so it establishes XDS (look for "Stream established"
+#    and "marking server ready")
+kubectl delete pod -n istio-system <ztunnel-on-that-node>
+
+# 2. restart the DESTINATION pods so istio-cni re-enrolls them against a
+#    working ztunnel. Without this, connections still reset.
+kubectl delete pod -n <ns> <pod>
+```
+
+Only pods in ambient-labelled namespaces and **not** on `hostNetwork` are affected, so the
+blast radius on a control-plane node is small. Enumerate it with:
+
+```bash
+kubectl get ns -o json | python3 -c "
+import json,sys
+print([n['metadata']['name'] for n in json.load(sys.stdin)['items']
+       if (n['metadata'].get('labels') or {}).get('istio.io/dataplane-mode')=='ambient'])"
+```
