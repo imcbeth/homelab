@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-24 (our own documented shutdown procedure was deleting Loki's PVC on every run; k8s 1.37 is blocked on Istio, not on kubeadm)
+**Last Updated:** 2026-10-24 (shutdown procedure was deleting Loki's PVC; ztunnel without XDS silently blackholes a node while everything reports Healthy)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -325,6 +325,59 @@ reattach risk.
 **On restart, follow Steps 7-14 including the new Step 11b** (un-suspend 6 CronJobs +
 restart the prober). Baseline for comparison: 38 apps, 143 Running pods, 8 PVCs, all 11
 scaled workloads at replicas=1.
+
+**RESTART COMPLETED** (NAS came back on DSM 7.4.1-90080 Update 1).
+
+All 5 nodes booted on **kernel 6.8.0-1065 with `reboot-required: no`** -- the
+shutdown-as-reboot worked, clearing the kernel-staging item that had been open for weeks.
+NAS iSCSI answered on 3260 with no stale sessions. **All 8 PVCs survived, including the
+hand-re-bound `storage-loki-0`.**
+
+**Loki came back with its history intact** -- oldest servable entry 2026-09-24, exactly 30
+days back, matching the 720h retention window. A fresh empty LUN would have shown only
+today. That is the proof the re-bind worked. And the merged fix is live:
+`whenScaled=Retain` on the StatefulSet, so the next shutdown will not delete it.
+
+Zero read-only remounts across all 8 PVC pods despite the DSM update -- the clean detach is
+what bought that.
+
+**5. NEW FAILURE MODE: ztunnel without XDS silently blackholes its node.** After the power
+cycle, `ztunnel` on control-plane came up before istiod was reachable and logged
+`XDS client connection error ... tcp connect error` every 15s from 15:46 to 15:48. With no
+endpoint data it **reset** inbound connections to every ambient-enrolled pod on that node.
+
+**Everything reported healthy throughout:** pods `Running 1/1`, apps `Synced + Healthy`,
+ztunnel itself `1/1 Running`, `kubectl get pods` clean. The only symptom was **2 of 98
+Prometheus targets down** (node-exporter + alloy, both on control-plane). Nothing alerted.
+
+The error shape misleads too: `Connection reset by peer`, not a timeout, which reads like
+the destination refusing rather than a mesh fault. Chased Calico first -- BGP had 4 peers
+established and node04 had a correct route to `192.168.235.128/26`, so L3 was never the
+problem.
+
+**The fix needed two steps, and the first alone did nothing:** restarting ztunnel got XDS
+("Stream established", "marking server ready") but connections still reset -- the
+destination pods also had to be deleted so istio-cni re-enrolled them against a working
+ztunnel. After both, 98/98 targets up. Checked the blast radius: only 2 non-hostNetwork
+pods on control-plane sit in the 11 ambient namespaces, and both were the affected ones.
+
+Recorded in REFERENCE.md (gotcha row + prose section) and as **Step 13b** of
+`/cluster-shutdown`, which now mandates a Prometheus target-count check on every startup
+plus a baseline table -- because app status alone provably does not catch this.
+
+Also benign: `zot` showed `OutOfSync` on startup from a stale cached comparison (target had
+`serviceName: ""`, normalized live dropped it; `spec.replicas` was also absent from
+argocd-controller's managedFields after the manual scale). A hard refresh cleared it.
+`localstack` sat `Progressing` with reason `NewReplicaSetAvailable` -- a completed rollout --
+and settled on its own. Kafka's topic-operator restarted 4x with `exit=0 Completed` while
+waiting for the broker, then reconciled normally.
+
+**Final state: 38/38 Synced+Healthy, 143 Running (baseline exactly), 8/8 PVCs + 8
+VolumeAttachments, 11/11 certs, 13/13 DaemonSets, 6/6 CronJobs active, 98/98 targets.**
+
+**Still outstanding:** the 4 Renovate PRs (#1068-#1071) are merge-ready now that the cluster
+is verified healthy. And `linux-firmware` + the 17-kernel `autoremove` still want a
+supervised pass.
 
 
 ### 2026-10-16: two alerts that were telling the truth about the wrong thing
