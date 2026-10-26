@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-24 (Loki PVC deletion, ztunnel XDS blackhole, and three upgrades that reported Synced+Healthy while running the old image)
+**Last Updated:** 2026-10-26 (firmware rolled across all 5 nodes; the "17 stale kernels" I reported on Saturday never existed -- I counted dpkg `rc` as installed)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -209,6 +209,45 @@
 
 ## Recent Sessions
 
+### 2026-10-26: firmware rolled across all 5 nodes; the autoremove backlog never existed
+
+Supervised pass on the two items deferred Saturday, plus PR #1077.
+
+**`autoremove` was a no-op -- my Saturday count was wrong.** See the correction in the
+2026-10-24 entry. `dpkg -l` lists `rc` (removed-but-conffiles) alongside `ii`, and I filtered
+on neither. 3 installed, 16 `rc`, 0 to autoremove. **When counting installed packages, match
+`^ii`.**
+
+**`linux-firmware` was also lower-risk than I claimed.** `dpkg -L linux-firmware` shows it
+writes only to `/lib/firmware` and `/usr/share` -- it does **not** touch `/boot/firmware`.
+The Pi boot path lives in `linux-firmware-raspi`, `rpi-eeprom` and `rpi-eeprom-firmware`,
+none of which were upgrading. So the "regenerates Pi boot config" caution was overcautious;
+these are device blobs (Broadcom wireless, GPU), not bootloader.
+
+**Why `apt-get upgrade` held it back on Saturday:** `linux-firmware` has been **split into
+~18 sub-packages** (`-amd-graphics`, `-broadcom-wireless`, `-intel-*`, `-mellanox-*`, ...).
+`upgrade` will not install NEW packages by design, so the split blocked it. `dist-upgrade`
+resolves it: 22-23 Inst, **0 Remv**, holds intact.
+
+Rolled one node at a time with **node02 as canary** (36 pods, 0 PVC-backed -- real load, no
+iSCSI risk), then node03 -> node01 -> node04 (6 PVCs) -> control-plane last. Per node: drain,
+dry-run gated on `Remv == 0`, dist-upgrade, verify boot files intact BEFORE rebooting, reboot,
+confirm kernel/firmware/failed-units, wait Ready, uncordon. Script kept at
+`scratchpad/fw-node.sh`. Each node came back in ~105s with 0 failed units.
+
+All 5 now on `linux-firmware 20240318.git3b128b60.0ubuntu3.1`, kernel 1065, and **only the 3
+held k8s packages left upgradable** -- the OS is fully current for the first time in a while.
+
+**ztunnel did NOT hit the XDS blackhole this time.** Rolling reboots keep istiod reachable
+throughout, so the Saturday failure mode never triggered -- which confirms that root-cause
+read. The target count stayed 98/98 across the whole operation.
+
+Also merged **PR #1077** (snmp-exporter v0.30.1 -> v0.31.0); `snmp-synology` target up.
+
+Only 3 single restarts across the entire rolling upgrade, all at reboot timestamps. Final:
+38/38 Synced+Healthy, 143 Running, 8/8 PVCs + 8 VolumeAttachments, 13/13 DaemonSets, 11/11
+certs, 98/98 targets, `bind-address=0.0.0.0` still intact on both static pods.
+
 ### 2026-10-24: the shutdown procedure was deleting Loki's PVC, and 1.37 is blocked on Istio
 
 Two sessions in one day. Morning: Saturday Renovate batch + health check. Afternoon: full
@@ -413,9 +452,22 @@ Two process lessons, both now in REFERENCE.md:
 **Final: 38/38 Synced+Healthy, 143 Running, 8/8 PVCs, 98/98 targets, 0 restarts in 15m,
 loki whenScaled=Retain, both external-dns pods carrying the pinned prefix.**
 
-**Still outstanding:** `linux-firmware` and the 17-kernel `autoremove` want a supervised
-pass. Loki's image stays 3.6.11 under chart 7.5.0 -- the chart's image tag lags its
-appVersion (3.6.16), and rendered matches deployed, so that is correct and not drift.
+**Still outstanding:** `linux-firmware` wants a supervised pass. Loki's image stays 3.6.11
+under chart 7.5.0 -- the chart's image tag lags its appVersion (3.6.16), and rendered matches
+deployed, so that is correct and not drift.
+
+**CORRECTION (2026-10-26): the "17 stale kernels / autoremove has never run" claim above was
+wrong.** The Saturday count came from `dpkg -l | awk /linux-image/` without filtering the
+status field, so packages in `rc` state (removed, only conffiles remain) were counted as
+installed. Actual state per node: **3 `ii`** (`linux-image-1064`, `-1065`, and the
+`linux-image-raspi` meta) and **16 `rc`**. Only 2 `vmlinuz` files on `/boot`.
+`apt-get --dry-run autoremove` removes **0 packages** on all five nodes -- there was never
+any backlog to clear.
+
+There *is* a smaller leftover in the other direction that the Saturday pass missed: **18
+`/lib/modules/` trees** survive for kernels back to 1031 even though their packages are gone.
+Total reclaimable is only **108 MB** of a 337 MB tree, against 110-191 GB free, so it is not
+worth the boot-config risk. Deliberately left alone.
 
 
 ### 2026-10-16: two alerts that were telling the truth about the wrong thing
