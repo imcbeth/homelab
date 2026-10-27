@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-27 (the lifeonabike publish pipeline had been dead for sixteen days -- a pull-through cache that is also a push target must not use prefix "**")
+**Last Updated:** 2026-10-27 (zot 503 on local pushes; and a correction -- the Argo alerting worked all along, the pipeline was simply never exercised)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -245,10 +245,32 @@ made it fatal. After the fix: build Succeeded end to end, web Deployment rolled,
 URLs return 200, images load, 38/38 apps Healthy, **zero image-pull failures** -- narrowing
 the prefixes broke no pull-through.
 
-**The part worth remembering is the sixteen days.** Nothing alerted. Argo Workflow failures
-are not wired to AlertManager, so a dead publish pipeline is invisible until someone merges.
-Worth checking `kubectl get workflows -n argo-workflows` after any registry or build-tooling
-change instead of waiting for the next merge to surface it.
+**CORRECTION (same day, after checking):** the two paragraphs' worth of "nothing alerted"
+written above was wrong, twice over.
+
+Argo Workflow failures **are** wired to AlertManager and always were.
+`manifests/base/kube-prometheus-stack/argo-workflows-alerts.yaml` has carried
+`ArgoWorkflowFailed` on `argo_workflows_gauge{phase="Failed"} > 0` the whole time. It fired
+today at **13:57**, roughly four minutes after the first build failed, and was sitting active
+and unsilenced in AlertManager when checked.
+
+The "626 hours of continuous firing" figure that briefly looked like alert fatigue was an
+artifact of my own query: I collapsed `ALERTS` into runs and only broke a run on an explicit
+zero, so gaps with *no data* read as continuous firing.
+
+And nothing was missed between the 11th and the 27th, because **there was nothing to miss**.
+The zot image tags prove it — `4fcf25e` (PR #22, 2026-10-11) is present in the registry, so
+that day's build **succeeded** and published. The zot bump landed later the same day. Between
+then and the 27th nobody merged to that repo, so no build ran, so nothing failed.
+
+So the honest sequence is: working on the 11th, broken silently by the bump later that day,
+undetectable until the 27th because **the pipeline was never exercised**.
+
+That reframes the gap, and the real one is still worth closing. Failure-alerting cannot see a
+pipeline that is latently broken but idle, and it equally cannot see a webhook or sensor that
+has stopped firing — in both cases no workflow is created, so no workflow fails. The signal
+that catches all three is **divergence**: `main` has moved but the deployed artifact has not.
+`ttlStrategy.secondsAfterFailure` is 28800 (8h), so persistence was never the issue either.
 
 Also today: finished the Promtail-to-Alloy docs migration (k8s-docs #127) after finding
 loki.md carried 42 Promtail references against 9 for Alloy, including a metrics section whose
