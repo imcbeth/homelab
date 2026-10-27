@@ -1,0 +1,193 @@
+---
+# Publish-pipeline divergence check.
+#
+# WHY THIS EXISTS
+# ---------------
+# ArgoWorkflowFailed already catches a build that RUNS and fails. It cannot
+# catch the two cases where no workflow is ever created:
+#
+#   1. The pipeline is latently broken but idle. Nothing merges, so nothing
+#      builds, so nothing fails. This is exactly what happened between
+#      2026-10-11 and 2026-10-27: the zot v2.1.22 bump made local pushes
+#      return 503, and it stayed invisible for sixteen days because the repo
+#      had no merges in between.
+#   2. The GitHub webhook or the argo-events sensor has died. The merge
+#      happens, no workflow is triggered, and nothing anywhere notices.
+#
+# The signal that covers both, plus ordinary build failures, is DIVERGENCE:
+# main has moved but no image exists for it.
+#
+# HOW
+# ---
+# Ask GitHub for main's HEAD, then ask the registry whether a manifest exists
+# for that short SHA (the build tags images with `git rev-parse --short HEAD`).
+# Missing tag + commit older than the grace window = the pipeline has not
+# delivered.
+#
+# Alerts by POSTing straight to the AlertManager v2 API rather than going via
+# Prometheus, because argo_workflows_gauge carries no per-workflow label — a
+# PromQL rule could not tell this apart from a genuine build failure, and
+# would mask the next real one behind an already-firing alert.
+#
+# severity=warning on purpose: the site is still serving, just stale.
+# severity=info is routed to the null receiver and would be silently dropped.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: publish-divergence-check-script
+  namespace: argo-workflows
+data:
+  check.sh: |
+    #!/bin/sh
+    set -eu
+
+    REPO="${REPO:-imcbeth/lifeonabike.ca}"
+    BRANCH="${BRANCH:-main}"
+    REGISTRY="${REGISTRY:-zot.zot.svc.cluster.local:5000}"
+    IMAGE="${IMAGE:-lifeonabike/lifeonabike.ca}"
+    # A normal build takes ~2 minutes end to end. 20 gives a 10x margin so a
+    # check landing mid-build never alerts.
+    GRACE_MIN="${GRACE_MIN:-20}"
+    AM="${ALERTMANAGER_URL:-http://kube-prometheus-stack-alertmanager.default.svc.cluster.local:9093}"
+    DRY_RUN="${DRY_RUN:-false}"
+
+    ts() { date -u +%FT%TZ; }
+    log() { echo "[$(ts)] $*"; }
+
+    PROBLEM=""
+    DETAIL=""
+
+    # --- what does the repo say is current? ------------------------------
+    # A failure here is itself alertable: if we cannot read GitHub we cannot
+    # rule out that the pipeline is broken, so we say so rather than exiting
+    # quietly and looking healthy.
+    if ! gh_json=$(curl -sfS --max-time 25 \
+          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${REPO}/commits/${BRANCH}" 2>&1); then
+      PROBLEM="cannot reach the GitHub API"
+      DETAIL="${gh_json}"
+    else
+      SHA_SHORT=$(echo "$gh_json" | jq -r '.sha' | cut -c1-7)
+      AGE_MIN=$(echo "$gh_json" | jq -r '((now - (.commit.committer.date | fromdateiso8601)) / 60) | floor')
+      SUBJECT=$(echo "$gh_json" | jq -r '.commit.message' | head -1)
+      log "HEAD of ${BRANCH} is ${SHA_SHORT} (${AGE_MIN}m old): ${SUBJECT}"
+
+      # --- has the pipeline delivered an image for it? -------------------
+      REG_AUTH=$(jq -r --arg r "$REGISTRY" '.auths[$r].auth' /registry/config.json)
+      CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 \
+               -H "Authorization: Basic ${REG_AUTH}" \
+               -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
+               "http://${REGISTRY}/v2/${IMAGE}/manifests/${SHA_SHORT}" || echo "000")
+      log "registry manifest for ${SHA_SHORT}: HTTP ${CODE}"
+
+      case "$CODE" in
+        200)
+          : ;;                       # delivered — nothing to say
+        404)
+          if [ "$AGE_MIN" -lt "$GRACE_MIN" ]; then
+            log "not published yet, but only ${AGE_MIN}m old (grace ${GRACE_MIN}m) — a build is probably in flight"
+          else
+            PROBLEM="no image published for ${BRANCH} HEAD"
+            DETAIL="commit ${SHA_SHORT} (\"${SUBJECT}\") merged ${AGE_MIN} minutes ago, and ${REGISTRY}/${IMAGE}:${SHA_SHORT} does not exist. Either the build failed, or no workflow was ever triggered."
+          fi
+          ;;
+        *)
+          PROBLEM="registry returned HTTP ${CODE} for ${IMAGE}:${SHA_SHORT}"
+          DETAIL="Expected 200 (published) or 404 (not yet). A 503 here is the zot sync-prefix regression — see manifests/base/zot/values.yaml."
+          ;;
+      esac
+    fi
+
+    if [ -z "$PROBLEM" ]; then
+      log "OK — publish pipeline is current"
+      exit 0
+    fi
+
+    log "PROBLEM: ${PROBLEM} :: ${DETAIL}"
+    if [ "$DRY_RUN" = "true" ]; then
+      log "DRY-RUN — would alert and exit"
+      exit 0
+    fi
+
+    # --- alert -----------------------------------------------------------
+    # endsAt two runs ahead, so the alert resolves itself once the condition
+    # clears instead of needing an explicit resolve.
+    ENDS=$(jq -rn --argjson t "$(( $(date -u +%s) + 5400 ))" '$t | todate')
+    PAYLOAD=$(jq -n \
+      --arg sum "Publish pipeline has not delivered ${BRANCH} HEAD of ${REPO}" \
+      --arg desc "${PROBLEM}. ${DETAIL}" \
+      --arg repo "$REPO" \
+      --arg ends "$ENDS" \
+      '[{labels:{alertname:"PublishPipelineStale",severity:"warning",namespace:"lifeonabike",service:"lifeonabike-build",repo:$repo},
+         annotations:{summary:$sum,description:$desc},
+         endsAt:$ends}]')
+
+    if curl -sfS --max-time 25 -XPOST "${AM}/api/v2/alerts" \
+         -H 'Content-Type: application/json' -d "$PAYLOAD" >/dev/null; then
+      log "alert PublishPipelineStale posted to AlertManager"
+    else
+      log "ERROR: failed to post alert to AlertManager"
+      exit 1
+    fi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: publish-divergence-check
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: publish-divergence-check
+spec:
+  schedule: "*/30 * * * *"
+  timeZone: America/Edmonton
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: publish-divergence-check
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          containers:
+            - name: check
+              image: docker.io/alpine/k8s:1.37.1
+              command: ["/bin/sh", "/scripts/check.sh"]
+              env:
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: github-clone-token
+                      key: token
+                - name: DRY_RUN
+                  value: "false"
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                - name: registry-creds
+                  mountPath: /registry
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: publish-divergence-check-script
+            - name: registry-creds
+              secret:
+                secretName: lifeonabike-registry-creds
+                items:
+                  - key: .dockerconfigjson
+                    path: config.json
