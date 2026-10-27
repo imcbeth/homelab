@@ -26,6 +26,33 @@ resources:
     cpu: 1000m
     memory: 2Gi  # Trivy CVE DB needs ~1.5Gi on first load
 
+# SYNC PREFIXES — do not change these back to "**".
+#
+# This registry serves two purposes at once: a pull-through cache for upstream
+# images, AND the push target for images we build in-cluster (lifeonabike/,
+# flink-demo/).
+#
+# With content prefix "**", every upstream is asked about EVERY repo, including
+# our own local ones. On a push the client HEADs the manifest first; zot does not
+# find it locally, tries on-demand sync against all four upstreams, they all fail
+# (unauthorized / repository does not exist), and zot answers 503 rather than
+# 404. Kaniko treats that as fatal:
+#
+#   error pushing image: ... HEAD .../manifests/<sha>:
+#   unexpected status code 503 Service Unavailable
+#
+# That silently broke the lifeonabike publish pipeline from 2026-10-11 (the zot
+# v2.1.22 / chart 0.1.128 bump) until 2026-10-27, because nothing merged to that
+# repo in between.
+#
+# So list only the namespaces actually mirrored from each upstream. A namespace
+# NOT listed is treated as local-only, and a missing tag returns a clean 404 —
+# which is exactly what a push needs.
+#
+# Adding a new pull-through image means adding its prefix below. A missing prefix
+# shows up as a 404 on pull, which is obvious; blanket "**" failed in the far
+# more confusing direction.
+
 # Mount the Zot config from ConfigMap
 mountConfig: true
 configFiles:
@@ -68,25 +95,39 @@ configFiles:
               "urls": ["https://registry-1.docker.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "content": [{"prefix": "**"}]
+              "content": [
+                {"prefix": "library/**"},
+                {"prefix": "alpine/**"},
+                {"prefix": "bitnami/**"}
+              ]
             },
             {
               "urls": ["https://ghcr.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "content": [{"prefix": "**"}]
+              "content": [
+                {"prefix": "kashalls/**"}
+              ]
             },
             {
               "urls": ["https://quay.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "content": [{"prefix": "**"}]
+              "content": [
+                {"prefix": "prometheus/**"},
+                {"prefix": "prometheus-operator/**"},
+                {"prefix": "argoproj/**"}
+              ]
             },
             {
               "urls": ["https://registry.k8s.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "content": [{"prefix": "**"}]
+              "content": [
+                {"prefix": "external-dns/**"},
+                {"prefix": "sig-storage/**"},
+                {"prefix": "ingress-nginx/**"}
+              ]
             }
           ]
         },
