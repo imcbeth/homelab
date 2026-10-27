@@ -136,6 +136,17 @@ spec:
           port: 2746
         - protocol: TCP
           port: 9090
+    # Allow the publish-divergence-check CronJob to post alerts straight to
+    # the AlertManager v2 API. It bypasses Prometheus deliberately:
+    # argo_workflows_gauge has no per-workflow label, so a PromQL rule could
+    # not distinguish a stale pipeline from an ordinary build failure.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 9093  # alertmanager
     # Allow Istio ambient mesh communication (ztunnel, istiod)
     - to:
         - namespaceSelector:

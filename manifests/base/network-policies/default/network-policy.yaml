@@ -58,6 +58,18 @@ spec:
         - protocol: TCP
           port: 3000   # grafana
 
+    # publish-divergence-check (argo-workflows) posts PublishPipelineStale
+    # directly to the AlertManager v2 API. It bypasses Prometheus on purpose:
+    # argo_workflows_gauge carries no per-workflow label, so a PromQL rule
+    # could not tell a stale pipeline apart from an ordinary build failure.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-workflows
+      ports:
+        - protocol: TCP
+          port: 9093   # alertmanager
+
     # Uptime Kuma health monitoring
     - from:
         - namespaceSelector:
