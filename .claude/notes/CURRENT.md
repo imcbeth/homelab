@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-26 (firmware rolled across all 5 nodes; the "17 stale kernels" I reported on Saturday never existed -- I counted dpkg `rc` as installed)
+**Last Updated:** 2026-10-27 (the lifeonabike publish pipeline had been dead for sixteen days -- a pull-through cache that is also a push target must not use prefix "**")
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,53 @@
 ---
 
 ## Recent Sessions
+
+### 2026-10-27: a pull-through cache that was also a push target answered 503
+
+Published three October rides and the camera gear to lifeonabike (PRs #23, #24 there),
+then found the publish pipeline had been **silently broken for sixteen days**.
+
+Both merges fired `lifeonabike-build` workflows and both failed. Kaniko:
+
+```
+error pushing image: ... HEAD .../manifests/b97e1ec:
+unexpected status code 503 Service Unavailable
+```
+
+**The Hugo build was fine** -- reproduced the Dockerfile locally and it succeeded, 43 pages
+and 60 images. The failure was entirely registry-side, which is what made it worth chasing
+rather than retrying.
+
+**Cause:** zot serves two purposes at once -- pull-through cache for upstream images, and
+push target for in-cluster builds. Every upstream had `content: [{"prefix": "**"}]`, so a
+lookup for ANY repo including our own fanned out to all four upstreams. On a push the client
+HEADs the manifest first; zot missed locally, attempted on-demand sync against docker.io,
+ghcr.io, quay.io and registry.k8s.io, all failed (`unauthorized` / `repository does not
+exist`), and it returned **503 rather than 404**. Kaniko treats 503 as fatal where 404 means
+"not there yet, go ahead".
+
+Fixed in PR #1079 by listing only the namespaces actually mirrored, determined from what the
+registry really holds (read off the node's mounted PVC, since zot is distroless and the
+catalog needs auth) rather than guessed. Verified all five mirrored repos still match and
+that **both local push namespaces -- `lifeonabike/` and `flink-demo/` -- now match nothing**.
+`flink-demo` had the same latent bug; it simply had not pushed since the regression.
+
+Timing points at the zot **v2.1.22 / chart 0.1.128** bump on 2026-10-11 (#1028, #1031)
+changing the failed-sync response to 503. The blanket `**` was always wrong; that upgrade
+made it fatal. After the fix: build Succeeded end to end, web Deployment rolled, all four
+URLs return 200, images load, 38/38 apps Healthy, **zero image-pull failures** -- narrowing
+the prefixes broke no pull-through.
+
+**The part worth remembering is the sixteen days.** Nothing alerted. Argo Workflow failures
+are not wired to AlertManager, so a dead publish pipeline is invisible until someone merges.
+Worth checking `kubectl get workflows -n argo-workflows` after any registry or build-tooling
+change instead of waiting for the next merge to surface it.
+
+Also today: finished the Promtail-to-Alloy docs migration (k8s-docs #127) after finding
+loki.md carried 42 Promtail references against 9 for Alloy, including a metrics section whose
+`promtail_*` queries return **0 series**. And cleaned the lifeonabike repo down to `main`
+alone -- ten stale branches removed, nine provably merged and one (`fix/nginx-non-root-permissions`)
+obsolete in a way that would have regressed `USER nginx` if merged.
 
 ### 2026-10-26: firmware rolled across all 5 nodes; the autoremove backlog never existed
 
