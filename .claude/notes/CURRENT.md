@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-27 (zot 503 on local pushes; and a correction -- the Argo alerting worked all along, the pipeline was simply never exercised)
+**Last Updated:** 2026-10-27 (zot 503 on local pushes; PublishPipelineStale now alerts on divergence, which failure-alerting cannot see)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,54 @@
 ---
 
 ## Recent Sessions
+
+### 2026-10-27 (later): PublishPipelineStale — alerting on divergence, not failure
+
+Asked to "wire workflow failures into AlertManager", found they already were, and built the
+thing that actually closes the gap instead (PR #1082).
+
+**What already worked.** `argo-workflows-alerts.yaml` has carried `ArgoWorkflowFailed` the
+whole time. It fired at 13:57, ~4 minutes after the first build failed, and sat active and
+unsilenced in AlertManager. `ttlStrategy.secondsAfterFailure` is 28800, so a failed workflow
+persists 8h against a 30s scrape — persistence was never the issue.
+
+**What it cannot catch**, because no workflow is ever created:
+
+- a pipeline latently broken but idle (nothing merges, nothing builds, nothing fails)
+- a dead GitHub webhook or argo-events sensor (merge happens, nothing is triggered)
+
+Both are invisible to failure-alerting by construction. The signal covering them *and*
+ordinary failures is **divergence**: `main` has moved but no image exists for it.
+
+**`publish-divergence-check`** — CronJob, every 30 min, `argo-workflows` namespace (where
+`github-clone-token` and `lifeonabike-registry-creds` already live). Asks GitHub for `main`'s
+HEAD, asks the registry whether a manifest exists for that short SHA. Missing + older than a
+20-minute grace window = not delivered.
+
+**Why it POSTs to the AlertManager v2 API rather than using a PrometheusRule:**
+`argo_workflows_gauge` carries **no per-workflow label**, only `phase`. A PromQL rule could
+not tell a stale pipeline from an ordinary build failure — and a long-lived stale condition
+would hold `ArgoWorkflowFailed` permanently firing, masking the next genuine failure behind
+it. A distinct `alertname` avoids that entirely.
+
+`severity=warning` on purpose: the site still serves, it is just stale. **`severity=info`
+routes to the null receiver and would be silently dropped** — worth remembering before
+labelling anything `info` in this cluster.
+
+Needed two narrow NetworkPolicy rules, because argo-workflows simply could not reach
+AlertManager: egress `argo-workflows -> default:9093` and the matching ingress on the default
+policy, which previously admitted 9093 only from `default` itself. Both directions required.
+
+No RBAC, no ServiceAccount token — it talks to GitHub, the registry and AlertManager and
+never touches the Kubernetes API.
+
+**Verified end to end, not just deployed:** positive case reported `HTTP 200 / OK` against
+the real current state; negative case (`IMAGE=never-built`, `GRACE_MIN=0`, `DRY_RUN=true`)
+produced the correct PROBLEM with an actionable description; and AlertManager reachability
+through the new policy holes was proved with a throwaway `severity=info` probe that returned
+`POST 200` and landed in the API **without emailing**, then was expired. Test jobs and the
+probe cleaned up; the four now-resolved failed build workflows were deleted so
+`ArgoWorkflowFailed` cleared rather than lingering 8 hours.
 
 ### 2026-10-27: a pull-through cache that was also a push target answered 503
 
