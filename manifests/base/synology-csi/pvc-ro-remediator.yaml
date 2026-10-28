@@ -326,7 +326,7 @@ data:
             # Written immediately after the cordon, so even an instant kill
             # leaves the breadcrumb the next run needs.
             kubectl annotate node "$node" --overwrite \
-              "$CORDON_ANNOTATION=$(date -u +%FT%TZ)" >/dev/null 2>&1 || true   # the EXIT trap guarantees this is undone
+              "$CORDON_ANNOTATION=$(date -u +%FT%TZ)" >/dev/null 2>&1 || true
             cordon_ok="true"
             echo "[$(date -u +%FT%TZ)] cordoned node=$node ($schedulable schedulable before)"
           else
