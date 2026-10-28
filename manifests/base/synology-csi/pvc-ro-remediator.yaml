@@ -107,9 +107,45 @@ data:
     # that state is not ours to clear.
     CORDONED_NODE=""
 
+    # Proof-of-ownership for a cordon, written onto the Node object itself.
+    #
+    # The traps below are best-effort and always will be. SIGKILL cannot be
+    # trapped, and a trap cannot finish if terminationGracePeriodSeconds
+    # expires while `kubectl uncordon` is still in flight. Both have happened:
+    # node03 for 36h on 2026-09-13, node02 for ~5h on 2026-10-28.
+    #
+    # So ownership is recorded OUT OF PROCESS. The annotation survives every
+    # way this pod can die, letting the NEXT run (two minutes later) clear a
+    # cordon this one stranded. concurrencyPolicy is Forbid, so if we are
+    # running then no other run is — any annotated cordon present at startup
+    # is finished business, not a live remediation.
+    CORDON_ANNOTATION="pvc-ro-remediator.n37.ca/cordoned-at"
+
+    # Clear cordons stranded by a previous run. Only ever touches nodes
+    # carrying OUR annotation, so a cordon a human placed for maintenance is
+    # left exactly where it is.
+    reap_stranded_cordons() {
+      stranded=$(kubectl get nodes -o json 2>/dev/null | jq -r --arg a "$CORDON_ANNOTATION" \
+        '.items[] | select(.spec.unschedulable == true)
+                  | select(.metadata.annotations[$a] != null)
+                  | "\(.metadata.name) \(.metadata.annotations[$a])"' 2>/dev/null) || return 0
+      [ -z "${stranded:-}" ] && return 0
+      echo "$stranded" | while read -r sname ssince; do
+        [ -z "$sname" ] && continue
+        echo "[$(date -u +%FT%TZ)] STRANDED cordon node=$sname since=$ssince — clearing"
+        if kubectl uncordon "$sname" >/dev/null 2>&1; then
+          kubectl annotate node "$sname" "$CORDON_ANNOTATION-" >/dev/null 2>&1 || true
+          echo "[$(date -u +%FT%TZ)] recovered node=$sname"
+        else
+          echo "[$(date -u +%FT%TZ)] ALERT could not uncordon stranded node=$sname"
+        fi
+      done
+    }
+
     uncordon_if_needed() {
       if [ -n "${CORDONED_NODE:-}" ]; then
         if kubectl uncordon "$CORDONED_NODE" >/dev/null 2>&1; then
+          kubectl annotate node "$CORDONED_NODE" "$CORDON_ANNOTATION-" >/dev/null 2>&1 || true
           echo "[$(date -u +%FT%TZ)] uncordoned node=$CORDONED_NODE"
         else
           echo "[$(date -u +%FT%TZ)] ALERT failed to uncordon node=$CORDONED_NODE — uncordon it by hand"
@@ -147,6 +183,9 @@ data:
     # Keep this list small but cover anything where pod-delete-without-thought
     # could cascade badly.
     PROTECTED_NS="kube-system|calico-system|tigera-operator|gatekeeper-system|metallb-system|istio-system|cert-manager|argocd"
+
+    # Recover anything a previous run stranded, before doing new work.
+    reap_stranded_cordons
 
     echo "[$(date -u +%FT%TZ)] pvc-ro-remediator starting"
     echo "  monitor service: $MONITOR_SVC:$MONITOR_PORT"
@@ -283,7 +322,11 @@ data:
             continue
           fi
           if kubectl cordon "$node" >/dev/null 2>&1; then
-            CORDONED_NODE="$node"   # the EXIT trap guarantees this is undone
+            CORDONED_NODE="$node"
+            # Written immediately after the cordon, so even an instant kill
+            # leaves the breadcrumb the next run needs.
+            kubectl annotate node "$node" --overwrite \
+              "$CORDON_ANNOTATION=$(date -u +%FT%TZ)" >/dev/null 2>&1 || true   # the EXIT trap guarantees this is undone
             cordon_ok="true"
             echo "[$(date -u +%FT%TZ)] cordoned node=$node ($schedulable schedulable before)"
           else
@@ -304,7 +347,13 @@ data:
         if [ "$cordon_ok" = "true" ]; then
           waited=0
           detached="false"
-          while [ "$waited" -lt "${DETACH_TIMEOUT:-180}" ]; do
+          # MUST stay well under activeDeadlineSeconds (120s), or the Job is killed
+          # mid-wait and strands the cordon. This was 180 against a 120s deadline,
+          # making that outcome a certainty rather than a race: any detach slower
+          # than ~110s could never finish inside the Job's own lifetime. Detach
+          # normally completes in seconds; 45 is generous and leaves headroom for
+          # several PVCs in one run.
+          while [ "$waited" -lt "${DETACH_TIMEOUT:-45}" ]; do
             n_att=$(kubectl get volumeattachment -o json 2>/dev/null \
               | jq --arg pv "$pvc" --arg n "$node" \
                   '[.items[] | select(.spec.source.persistentVolumeName==$pv and .spec.nodeName==$n)] | length')
