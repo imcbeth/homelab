@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-27 (zot 503 on local pushes; PublishPipelineStale now alerts on divergence, which failure-alerting cannot see)
+**Last Updated:** 2026-10-29 (security review: PSA on 13 namespaces, lifeonabike netpol, one Falco rule that was 99.8% of all detections, registry-admin creds off the public pod; localstack bump reverted — 4.14.0 is the last licence-free release)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,194 @@
 ---
 
 ## Recent Sessions
+
+### 2026-10-29: security posture review — 8 PRs, and a bump that had to be rolled back
+
+Asked for a security review with licence to change things. Shipped eight PRs. One of
+them was wrong and had to be reverted the same session; that is recorded below in
+full because the *reason* it was wrong is the reusable part.
+
+**PSA labels on 13 namespaces (#1086).** 31 of 35 namespaces carried no
+`pod-security.kubernetes.io/*` labels at all, so Pod Security Admission was
+admitting every pod in them at the `privileged` default. Levels were chosen by
+dry-running each against the pods actually scheduled there
+(`kubectl label --dry-run=server`), not by taste:
+
+| Level | Namespaces |
+|---|---|
+| `restricted` | cert-manager, oauth2-proxy, strimzi-system, flink-demo |
+| `baseline` + warn/audit `restricted` | argo-events, external-dns, lifeonabike, flink-operator, kafka, tempo, trivy-system, velero |
+| `privileged` (explicit) | synology-csi |
+
+`default` is the one workload namespace that cannot take `baseline` as-is —
+blackbox-exporter wants `NET_RAW`, node-exporter wants `hostPID`. Left alone
+deliberately. `synology-csi` is pinned to `privileged` rather than left unlabelled so
+it reads as a decision.
+
+**`manifests/base/velero/namespace.yaml` was never applied (#1090).** Found by
+*checking* the result of #1086 instead of trusting it: 12 of 13 namespaces picked up
+their labels and velero reported `enforce=MISSING`. The file was sitting in its
+directory unreferenced by its kustomization, while ArgoCD created the namespace via
+`CreateNamespace=true` — bare, no labels. So the file looked authoritative and had
+never had any effect, including for the `app.kubernetes.io/*` labels that had been in
+it all along. Audited all thirteen namespace manifests the same way; this was the only
+orphan.
+
+**NetworkPolicy for lifeonabike (#1087).** The only namespace with a genuinely public
+ingress and no policy at all — every other workload namespace already default-denies
+both directions. Three policies, not one: a single namespace-wide policy would have to
+grant the union of both workloads' needs, handing the public-facing nginx pod internet
+egress it has no use for.
+
+Two requirements that only surfaced by testing rather than reading:
+
+- cloudflared proxies `build-webhook.n37.ca` to **argo-events:12000**. Miss that rule
+  and the site serves perfectly while silently never rebuilding on merge again.
+- Uptime Kuma monitors the Service **internally** at `http://web.lifeonabike:80`, not
+  the public URL (`manifests/base/uptime-kuma/monitor-baseline-configmap.yaml:57-58`).
+  The first draft blacked out both monitors while the site itself stayed green.
+
+Rules name port **8080**, not 80: NetworkPolicy is evaluated against the pod port,
+after kube-proxy DNAT. Validated against live traffic before committing — all four
+public paths unchanged, all 12 sitemap URLs 200, uptime-kuma 200, localstack denied
+(times out), cloudflared logged no reconnects, 0 restarts.
+
+lifeonabike is **not** in Istio ambient, which is why these carry none of the HBONE
+`:15008` or ztunnel link-local rules the meshed namespaces have. Recorded in the file —
+enrolling the namespace without adding them breaks all traffic.
+
+**One Falco rule was 99.8% of all detections (#1088).** `Contact K8S API Server From
+Container` logged 178,428 of 178,701 matches over 7 days. What it buried: 230 "Read
+sensitive file untrusted", 28 "Drop and execute new binary in container", 15 "Clear Log
+Activities".
+
+Not cosmetic. falcosidekick-ui holds 7 days in Redis under
+`maxmemory-policy allkeys-lru`, so ~25k events/day of this one rule were actively
+**evicting** the 0.2% worth reading. The signal was being deleted by the noise.
+
+All 20 sources were identified from the event stream in Loki (24h, 24,551 events) and
+every one is a cluster controller doing its job — the synology-csi prober and
+remediator, the Grafana and Loki config sidecars, the Flink and Strimzi operators,
+Calico, Prometheus SD, Velero, the ArgoCD application controller, our kubectl CronJobs.
+
+Fixed at the upstream extension point: `user_known_contact_k8s_api_server_activities`
+ships as `(never_true)` precisely so operators can fill it in. The rule stays
+**enabled**. Exemptions are **(namespace AND image) pairs, never image alone** — a
+compromised pod running `alpine/k8s` outside the three namespaces that legitimately do
+still fires. Two entries exist only because upstream's `k8s_containers` allowlist
+spells them unqualified (`velero/velero`, `prom/prometheus`) while our images carry a
+registry prefix.
+
+Verified by compiling the rule with Falco itself rather than by eye —
+`falco -r <base> -r <new> -l '<rule>'` and reading `condition_compiled`. Result after
+rollout: **zero** matches in 8 minutes, down from ~25k/day.
+
+**Registry-admin credentials were mounted in the public-facing blog pod (#1092).** zot
+had exactly one account: `admin`, with read/create/update/delete on every repository.
+And `lifeonabike-registry-creds`, mounted into the web pod, *was* that account. A
+compromise of the most exposed pod in the cluster yielded the ability to replace or
+delete any image other workloads pull.
+
+Added a second htpasswd user, `puller`, and set
+`accessControl.repositories."**".defaultPolicy = ["read"]` — zot's "authenticated but
+matching no user-specific policy" tier. The admin SealedSecret is no longer applied to
+the lifeonabike namespace at all. Admin stays in argo-workflows, where the build
+pipeline genuinely needs create/update to push.
+
+`anonymousPolicy: ["read"]` is **deliberately unchanged**, for two reasons. Every pod in
+the cluster pulls through `registry.k8s.n37.ca` without credentials, so closing it is an
+imagePullSecret rollout across every consumer, not a config edit. And leaving it on
+means the change cannot break a pull — if the puller policy were wrong, anonymous read
+still serves it.
+
+Checked zot's docs instead of assuming the schema: when several repository patterns
+match, the **longest wins**. That is why there is no `lifeonabike/**` entry — a more
+specific pattern would have overridden the `**` anonymous policy and removed the very
+safety net the change relies on.
+
+Verified behaviourally after rollout: anonymous read 200, puller read 200, bad password
+401, puller create **403**, puller DELETE on a real manifest **403**, admin read 200 and
+push **202**. Image intact afterwards.
+
+**localstack: bumped, broken, reverted (#1089 then #1091).** Trivy showed 24 CRITICAL /
+179 HIGH on `4.14.0`, all unpatched Debian packages with fixes published upstream, and
+`localstack/localstack` was sitting in renovate.json's `ignoreDeps`. Bumped it to
+`2026.10.4`. It went straight into CrashLoopBackOff:
+
+```
+Localstack returning with exit code 55. Reason:
+License activation failed!
+Reason: No credentials were found in the environment. Please set the
+LOCALSTACK_AUTH_TOKEN variable to a valid auth token.
+```
+
+**With 2026.03.0 LocalStack merged the Community and Pro images into one.**
+`localstack/localstack` and `localstack/localstack-pro` now point at the same product,
+and which services it exposes depends on the account behind `LOCALSTACK_AUTH_TOKEN`. So
+**4.14.0 (2026-02-26) is not merely the last 4.x — it is the last release that runs at
+all without a licence.** There is no newer image to move to.
+
+Ruled out our own config rather than assuming: 2026.10.4 with `PERSISTENCE` removed —
+exit 55. With `SERVICES` cut to just `s3` — exit 55. 4.14.0 restored — Running.
+
+The trap worth remembering: **ArgoCD `selfHeal` reverted the first of those tests within
+seconds**, so the pod that came back still had `PERSISTENCE=1` and the result looked
+like a disproved hypothesis. Auto-sync had to be suspended on the app
+(`spec.syncPolicy.automated: null`) for the rest of the investigation, and re-enabled
+afterwards.
+
+`localstack/localstack` is back in `ignoreDeps` — but with the **real** reason recorded.
+It was previously ignored because the 4.x → 2026.x versioning switch was noisy, which
+read as neglect and is exactly what prompted the bad bump. The CVEs are an accepted risk
+on a LAN-only dev emulator, not something a Renovate PR can fix.
+
+Two things that fell out of the rollback and are still open:
+
+- **`PERSISTENCE=1` has never worked.** On restart the init script reported
+  `[init] created bucket s3://argo-workflows` rather than `already present` — nothing
+  persisted. It is a Pro feature, silently ignored on 4.x. The PVC behind it is doing
+  nothing, the same shape as the falco-redis PVC removed in 2026-09.
+- **argo-workflows points its `artifactRepository` at this emulator**
+  (`localstack.localstack.svc:4566`, bucket `argo-workflows`). Combined with the above,
+  workflow artifacts do not survive a localstack restart today.
+
+**Control-plane gaps staged rather than done (#1093).** `--audit-policy-file` and
+`--encryption-provider-config` are both absent, so nothing records who changed what and
+all 103 Secrets sit unencrypted in etcd — including the SealedSecrets private keys,
+which makes every `*-sealed.yaml` in this repo reachable from any etcd read or Velero
+backup. git-crypt protects the repo and does nothing for etcd.
+
+Both are static-pod edits on the single control-plane node with the single etcd member,
+so a typo takes the API server down along with kubectl and ArgoCD. Written up as
+[`runbooks/control-plane-hardening.md`](../../runbooks/control-plane-hardening.md) for a
+window where the cluster is already expected to wobble — naturally beside Phase 0 of the
+1.37 plan, which already restarts the apiserver for the 1.36.5 patch. The audit gap is
+not theoretical: the 2026-10-28 unexplained cordon ended in a guess precisely because
+nothing records node mutations.
+
+**Clean on inspection.** Gatekeeper: 5 constraints, all `deny`, 0 violations. RBAC: only
+velero and argocd-application-controller hold cluster-wide wildcards, both by design;
+chaos-mesh's wildcards are scoped to its own API group. Kubelet read-only port (10255)
+closed on every node. SealedSecrets keys rotating monthly, 10 retained. After #1087,
+every namespace that runs anything has a NetworkPolicy — the five without
+(kube-node-lease, kube-public, secrets-source, velero-test, velero-restore-test) all
+hold zero pods.
+
+**Left behind, disclosed:** the zot permission tests created an empty repository
+`zz-perm-test-delete-me` (no tags). Proving `create` is denied for puller and still
+permitted for admin needed a real `POST /v2/.../blobs/uploads/`, and a throwaway repo
+name was the least invasive target. zot's gc (`gcDelay 1h`) reaps the orphaned upload
+session; the empty catalog entry is cosmetic and needs a filesystem touch on the PVC to
+remove, which is not worth a zot scale-down.
+
+**Three stale remote branches** also surfaced, all with CLOSED PRs and unmerged commits:
+`chore/session-notes-2026-06-21-renovate` (#767), `feat/argocd-github-oidc` (#584),
+`fix/synology-csi-egress-prom` (#739). Left alone. Worth noting #584 contains a
+*reverted* commit removing oauth2-proxy from localstack, with the reason "AWS CLI/SDK
+cannot handle OAuth redirects" — which independently confirms why forward-auth on
+`localstack.k8s.n37.ca` was not attempted in this session's review.
+
+---
 
 ### 2026-10-27 (later): PublishPipelineStale — alerting on divergence, not failure
 
