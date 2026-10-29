@@ -1,0 +1,165 @@
+# lifeonabike was the only namespace with a genuinely PUBLIC ingress and no
+# NetworkPolicy at all. Every other workload namespace already default-denies
+# both directions; this one did not, so a compromise of either pod had
+# unrestricted lateral reach across the cluster. Found during the 2026-10-29
+# security review.
+#
+# Two workloads live here and they want very different things, so a single
+# namespace-wide policy would have to grant the union of both — which would
+# hand the public-facing web pod egress to the internet it has no use for.
+# Hence a default-deny baseline plus one narrow policy per workload.
+#
+#   web          static nginx serving the site. Takes traffic on 8080; makes
+#                no outbound calls of its own.
+#   cloudflared  outbound-only tunnel to the Cloudflare edge. Takes no
+#                inbound cluster traffic at all — it dials out and the edge
+#                rides that connection back in.
+#
+# cloudflared's egress list is taken from its own config.yaml rather than
+# guessed, because one of the three hostnames it proxies leaves the namespace:
+#
+#   lifeonabike.ca        -> web.lifeonabike.svc:80
+#   www.lifeonabike.ca    -> web.lifeonabike.svc:80
+#   build-webhook.n37.ca  -> lifeonabike-github-eventsource-svc.argo-events.svc:12000
+#
+# Miss that third one and GitHub webhooks stop reaching argo-events, so the
+# site quietly stops rebuilding on merge while continuing to serve the old
+# content perfectly — exactly the invisible failure the publish-divergence
+# check exists to catch.
+#
+# NOTE ON PORTS: the Service exposes 80 and targets the container's 8080.
+# NetworkPolicy is evaluated against the pod port after kube-proxy DNAT, so
+# the rules below say 8080, not 80.
+#
+# NOTE ON THE MESH: lifeonabike is NOT enrolled in Istio ambient (no
+# `istio.io/dataplane-mode` label), which is why these policies carry none of
+# the HBONE :15008 or ztunnel link-local rules the meshed namespaces have.
+# If the namespace is ever enrolled, those rules must be added here first or
+# all traffic breaks.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lifeonabike-default-deny
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # No ingress rules: nothing in this namespace is reachable unless one of
+  # the per-workload policies below says so.
+  egress:
+    # DNS resolution. TCP as well as UDP — responses over 512 bytes retry
+    # over TCP, and a UDP-only rule fails intermittently rather than cleanly.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lifeonabike-web
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike-web
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: lifeonabike-web
+  policyTypes:
+    - Ingress
+  ingress:
+    # Public path one: ingress-nginx, for the lifeonabike.ca / www Ingress.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Public path two: the Cloudflare tunnel, which proxies to this Service.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudflared
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Uptime Kuma's "lifeonabike.ca" and "www.lifeonabike.ca" monitors hit the
+    # Service INTERNALLY (http://web.lifeonabike:80), not the public URL — see
+    # manifests/base/uptime-kuma/monitor-baseline-configmap.yaml. Omitting
+    # this rule leaves the site up but both monitors permanently down, which
+    # is the worst of both worlds: a red dashboard nobody trusts.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lifeonabike-cloudflared
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: cloudflared
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  policyTypes:
+    - Egress
+  egress:
+    # The Cloudflare edge. 7844 is the tunnel's own transport (QUIC, with a
+    # TCP fallback); 443 covers registration and the HTTP/2 fallback path.
+    # The destination has to be the public internet — Cloudflare publishes no
+    # address range stable enough to pin here — but RFC1918 is excluded, so
+    # this cannot be turned around and used to reach the rest of the LAN.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: UDP
+          port: 7844
+        - protocol: TCP
+          port: 7844
+        - protocol: TCP
+          port: 443
+    # Origin one: the site itself.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: lifeonabike-web
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Origin two: the GitHub webhook receiver in argo-events. The matching
+    # ingress rule on that side already names this namespace.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-events
+      ports:
+        - protocol: TCP
+          port: 12000
