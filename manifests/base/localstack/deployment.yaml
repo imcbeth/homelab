@@ -43,7 +43,13 @@ spec:
           # licence, so its CVEs are frozen at whatever 4.14.0 ships. That is
           # tolerable only because this is a disposable test emulator on a
           # private network with no untrusted input.
-          image: localstack/localstack:4.14.0
+          # 2026.10.4, not 4.x. LocalStack abandoned the 4.x line after
+          # 4.14.0 (2026-02-26) and moved to date-based versioning with
+          # 2026.4.1 (2026-05-07), so 4.14.0 is terminal: it will never
+          # receive another base-image refresh. Trivy found 24 CRITICAL and
+          # 179 HIGH on it, every one an unpatched Debian 13 package with a
+          # fix already published upstream.
+          image: localstack/localstack:2026.10.4
           ports:
             - containerPort: 4566 # Default LocalStack port
           # Right-sized resources (actual usage ~89Mi)
