@@ -4,4 +4,12 @@ kind: Kustomization
 namespace: velero
 
 resources:
+  # namespace.yaml was sitting in this directory UNREFERENCED, so it had
+  # never been applied to the cluster. ArgoCD creates the namespace itself
+  # via `CreateNamespace=true`, which produces a bare namespace with no
+  # labels — so the file looked authoritative while having no effect, and
+  # the Pod Security Admission labels added to it in #1086 silently did
+  # nothing. Found when 12 of 13 namespaces picked up their labels and this
+  # one did not.
+  - namespace.yaml
   - b2-credentials-sealed.yaml
