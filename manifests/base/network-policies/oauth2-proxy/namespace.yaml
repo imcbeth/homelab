@@ -2,3 +2,12 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: oauth2-proxy
+
+  labels:
+    # Pod Security Admission. Verified with `kubectl label --dry-run=server`
+    # against the running pods on 2026-10-29 — this level does not evict or
+    # block anything currently deployed.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
