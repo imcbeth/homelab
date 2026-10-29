@@ -55,3 +55,5 @@ resources:
   - synology-csi/network-policy.yaml
   - kube-system/network-policy.yaml
   - tigera-operator/network-policy.yaml
+  # Public blog (Cloudflare tunnel + nginx)
+  - lifeonabike/network-policy.yaml
