@@ -2,3 +2,13 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: synology-csi
+  labels:
+    # Pod Security Admission. `privileged` is pinned explicitly so it reads as
+    # a decision rather than an unlabelled default: the CSI node plugin mounts
+    # host paths and needs privileged containers, so it cannot run under
+    # `baseline`. Verified with `kubectl label --dry-run=server` against the
+    # running pods on 2026-10-29.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: privileged
+    pod-security.kubernetes.io/audit: privileged
