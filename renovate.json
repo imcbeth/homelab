@@ -103,7 +103,7 @@
       ]
     },
     {
-      "description": "localstack/localstack is deliberately NOT in ignoreDeps. It used to be, because the 4.x -> 2026.x switch to date-based versioning read as an enormous major bump and Renovate would not propose it. The side effect was that the pin sat on 4.14.0 (2026-02-26) for eight months on an abandoned release line and accumulated 24 CRITICAL and 179 HIGH CVEs, all unpatched Debian base packages. Now that the pin is on 2026.10.4, 2026.x sorts as ordinary semver and tracks cleanly. Do not re-add it to ignoreDeps.",
+      "description": "localstack/localstack is in ignoreDeps for a hard reason, not out of neglect: 4.14.0 is the LAST release that runs without a licence. From 2026.03.0 LocalStack merged the Community and Pro images into one, and without LOCALSTACK_AUTH_TOKEN the container exits 55 at startup. Bumping it to 2026.10.4 on 2026-10-29 took the service down and had to be rolled back. The pin therefore carries 24 CRITICAL / 179 HIGH unpatchable CVEs, which is a known accepted risk on a LAN-only dev emulator, NOT something a Renovate PR can fix. Escaping it means getting a free Hobby auth token or replacing LocalStack altogether.",
       "matchPackageNames": [
         "localstack/localstack"
       ],
@@ -202,6 +202,7 @@
     "registry.k8s.io/ingress-nginx/kube-webhook-certgen",
     "golift/unifi-poller",
     "velero/velero-plugin-for-aws",
+    "localstack/localstack",
     "registry.k8s.n37.ca/flink-demo",
     "registry.k8s.n37.ca/lifeonabike/lifeonabike.ca"
   ],
