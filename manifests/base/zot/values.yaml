@@ -53,6 +53,34 @@ resources:
 # shows up as a 404 on pull, which is obvious; blanket "**" failed in the far
 # more confusing direction.
 
+# ACCESS CONTROL — why there are two users
+#
+# There used to be exactly one: `admin`, with read/create/update/delete on
+# every repository. And `lifeonabike-registry-creds`, mounted into the
+# PUBLIC-FACING web pod, was that admin credential. A compromise of the blog
+# frontend therefore handed over the ability to replace or delete any image
+# in this registry, including ones other workloads pull — a supply-chain
+# foothold reachable from the most exposed pod in the cluster.
+#
+# `defaultPolicy: ["read"]` grants read to any AUTHENTICATED user, which is
+# the whole of what a pull-only consumer needs. The `puller` user added to
+# the htpasswd uses it; `lifeonabike` now mounts those credentials instead
+# of admin, and admin is left to the build pipeline in argo-workflows, which
+# genuinely needs create/update to push.
+#
+# `anonymousPolicy: ["read"]` is DELIBERATELY unchanged. Every pod in the
+# cluster pulls through registry.k8s.n37.ca without credentials — external-dns,
+# trivy-system, argo-workflows and the kubectl CronJobs among them — so
+# closing it is not a config edit, it is an imagePullSecret rollout across
+# every consumer. Leaving it in place also means this change cannot break a
+# pull: if the puller policy were wrong, anonymous read still serves it.
+#
+# NEXT STEP, deliberately not taken here: set "anonymousPolicy": [] to close
+# the registry. Blocked on two things — wiring a pull secret into the
+# flink-demo FlinkDeployments (their podTemplates have none today, so they
+# would ImagePullBackOff on next restart), and doing the same for every
+# namespace that pulls an upstream mirror through this cache.
+#
 # Mount the Zot config from ConfigMap
 mountConfig: true
 configFiles:
@@ -75,6 +103,7 @@ configFiles:
         "accessControl": {
           "repositories": {
             "**": {
+              "defaultPolicy": ["read"],
               "anonymousPolicy": ["read"]
             }
           },

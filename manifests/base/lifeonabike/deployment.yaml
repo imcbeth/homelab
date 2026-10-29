@@ -23,8 +23,20 @@ spec:
         app: lifeonabike-web
         app.kubernetes.io/name: lifeonabike-web
     spec:
+      # Read-only registry credentials, NOT admin.
+      #
+      # This used to mount `lifeonabike-registry-creds`, which is the zot
+      # `admin` account: read/create/update/delete on every repository. On
+      # the public-facing pod. A compromise here meant the attacker could
+      # replace or delete any image in the registry, including ones other
+      # workloads pull.
+      #
+      # `zot-puller-creds` authenticates as `puller`, which zot's
+      # `defaultPolicy: ["read"]` grants read and nothing else. The admin
+      # credential stays in argo-workflows, where the build pipeline
+      # genuinely needs create/update to push.
       imagePullSecrets:
-        - name: lifeonabike-registry-creds
+        - name: zot-puller-creds
       securityContext:
         runAsNonRoot: true
         runAsUser: 101          # nginx user in the alpine image

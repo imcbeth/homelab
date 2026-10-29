@@ -1,0 +1,14 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: zot-puller-creds
+  namespace: lifeonabike
+spec:
+  encryptedData:
+    .dockerconfigjson: AgDBJQHhYzw8BoDr+Q8Cbg96ZhjVTQqr4HP93UWXF7yPxg/N6uIwm4uFSWt/wsZpVIgfglrkzL67PUqF9TOr03c7szBwFEy2dLJ8gV8k0dv6O6iHPA+oAD4Fo4WdKzJM+QNAXePfCaO5xcEK/8Ld3oE6+uK/TPtco5WUAKBvstyVoRiPoJAfYSiY2CjK/Ux9ULpX2gKLj5xr7Xpn/ctlmhC+00hzdB2H/2XeWLrnyknWXmfplwvhvBJeYrUDmZIrsD2YYARxGZ605SzY/Cm+4WylRwlUvYwBVOFomRGwVSh5ImL0F1G1WGj5XN1q36qTd4zG6EXPVZbEmQOYTaRmd4L9W6RVeXC5ReA4geQcbhvudFr8YNOEgjm0JMRebggJMXRps/pXZSDqGrHVyPFMYv6rgxU4ATnVVBNp3mrN8mWoTLV0R54Xwbn+Lpq744EAABTauAEVO2mmO2YOeXsxKRp1wUduvR7IlCwiYov0H6plqau81I+8oxk9UuGvg5rSDxJE2+X2h40k2OP9+jSOhu1znK8lzMBntIUKGFbnRtYwx9Zdx+KWbsKA0uVqiHPhFir7WEjXPOuqODg8jsEeivZyFMjl72e3vV5Rjh1p/N5byYthUU4ZEF+srGYNtv07rl3l5cB8+cTbVU41w5wGqC4t99ZZJQ3PuPRYY12AfqkZHHvZfGwViDe57uF6RzAHZPvSLBSoFnH1wgKG137fc5z7gqDWq9szZ9ARLnTSNbQq99gdDfuwgtyRlx2Z1J8nnly76HC/3Gt6RR0A/iLZ1sKaLn74rUXSHrbBdCSCvsOzp4JkzY0u0QdsyKfIBNzeWyRlyemlFJOstDa1TeFPg0L0Z0qgcliTO6ttMG/doKVEQIw+linoISGHFURZWY3XDvy1QhgCG2UeOnfelTZIN1iwuu5XMRl2WXy0Odb+suxp3XRM0M3ZNvAEx7vnijZk
+  template:
+    metadata:
+      name: zot-puller-creds
+      namespace: lifeonabike
+    type: kubernetes.io/dockerconfigjson
