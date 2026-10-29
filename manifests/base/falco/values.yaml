@@ -122,6 +122,85 @@ customRules:
         enabled: replace
       enabled: false
 
+    # -----------------------------------------------------------------------
+    # "Contact K8S API Server From Container" — 99.8% of all Falco matches
+    # -----------------------------------------------------------------------
+    # Measured over 7 days on 2026-10-29:
+    #
+    #   178,428  Contact K8S API Server From Container   99.8%
+    #       230  Read sensitive file untrusted            0.1%
+    #        28  Drop and execute new binary in container 0.0%
+    #        15  Clear Log Activities                     0.0%
+    #
+    # This is not a cosmetic problem. falcosidekick-ui keeps 7 days in Redis
+    # under `maxmemory-policy allkeys-lru`, so ~25k events/day of this one
+    # rule actively EVICTS the 0.2% that matters. The signal was being
+    # deleted by the noise.
+    #
+    # Every source was identified from the event stream in Loki (24h window,
+    # 24,551 events, 20 distinct sources) and every one is a cluster
+    # component doing the job it was deployed to do:
+    #
+    #   11139  synology-csi     alpine/k8s                  pvc-writability-prober, pvc-ro-remediator, vsc-orphan-janitor
+    #    5782  default          kiwigrid/k8s-sidecar        grafana dashboard sidecar
+    #    2881  loki             kiwigrid/k8s-sidecar        loki rules sidecar
+    #    2683  flink-operator   flink-kubernetes-operator   operator reconcile loop
+    #    1956  strimzi/kafka    strimzi/operator            operator reconcile loop
+    #      54  default          prometheus                  service discovery
+    #      20  calico-system    calico/node, calico/typha   CNI
+    #      16  argo-workflows   bitnami/kubectl, argoexec   cluster-healthcheck workflows
+    #      12  default,uptime-kuma  alpine/k8s              CronJobs
+    #       4  velero           velero/velero
+    #       4  argocd           argocd-application-controller
+    #
+    # Fixed at the upstream extension point rather than by disabling the
+    # rule: `user_known_contact_k8s_api_server_activities` ships as
+    # `(never_true)` precisely so operators can fill it in. The rule itself
+    # stays enabled, so an unexpected container talking to the API server
+    # still fires.
+    #
+    # Pairs are (namespace AND image), never image alone. A compromised pod
+    # running alpine/k8s somewhere other than synology-csi/uptime-kuma/default
+    # still alerts — which is most of the value of keeping the rule on.
+    #
+    # Note two of these would have been covered by the upstream
+    # `k8s_containers` allowlist except that it spells them unqualified
+    # (`velero/velero`, `prom/prometheus`) and our images carry the registry
+    # prefix. Hence `docker.io/velero/velero` and
+    # `quay.io/prometheus/prometheus` appear here explicitly.
+    #
+    # If a new controller is deployed, its noise reappears here rather than
+    # being silently swallowed — the failure direction is "too many alerts",
+    # which is the safe one.
+    - macro: user_known_contact_k8s_api_server_activities
+      override:
+        condition: replace
+      condition: >
+        (
+          (k8s.ns.name in (synology-csi, uptime-kuma, default) and
+           container.image.repository = "docker.io/alpine/k8s") or
+          (k8s.ns.name = "argo-workflows" and
+           container.image.repository in ("registry.k8s.n37.ca/bitnami/kubectl",
+                                          "quay.io/argoproj/argoexec")) or
+          (k8s.ns.name = "default" and
+           container.image.repository = "quay.io/kiwigrid/k8s-sidecar") or
+          (k8s.ns.name = "loki" and
+           container.image.repository = "docker.io/kiwigrid/k8s-sidecar") or
+          (k8s.ns.name = "flink-operator" and
+           container.image.repository = "docker.io/apache/flink-kubernetes-operator") or
+          (k8s.ns.name in (strimzi-system, kafka) and
+           container.image.repository = "quay.io/strimzi/operator") or
+          (k8s.ns.name = "default" and
+           container.image.repository = "quay.io/prometheus/prometheus") or
+          (k8s.ns.name = "calico-system" and
+           container.image.repository in ("docker.io/calico/node",
+                                          "docker.io/calico/typha")) or
+          (k8s.ns.name = "velero" and
+           container.image.repository = "docker.io/velero/velero") or
+          (k8s.ns.name = "argocd" and
+           container.image.repository = "quay.io/argoproj/argocd")
+        )
+
     # Custom rule: Detect cryptocurrency mining
     - rule: Detect Cryptocurrency Mining
       desc: Detect cryptocurrency mining processes
