@@ -1,6 +1,6 @@
 ---
 # Node Failure Simulation — node04 Pod Eviction
-# Schedule: Monthly, 1st of month 06:00 MT (12:00 UTC)
+# Schedule: Monthly, 1st of month ~14:00 MT (20:00 UTC) — see SCHEDULE NOTE
 # Target: All pods on node04 (only has Falco Redis PVC — most tolerant of brief outage)
 # Duration: 5 minutes — simulates node04 going offline
 # Purpose: Tests cluster resilience to single-node failure without actual drain
@@ -19,7 +19,41 @@ metadata:
     app.kubernetes.io/component: experiment
     chaos-mesh.org/experiment-type: pod-failure
 spec:
-  schedule: "0 12 1 * *"  # 1st of month 12:00 UTC = 06:00 MT
+  # SCHEDULE NOTE — moved off 06:00 MT on 2026-11-01. Do not move it back.
+  #
+  # This used to be "0 12 1 * *" (06:00 MT), which put it in the SAME MINUTE
+  # as two scheduled validators:
+  #
+  #   cluster-healthcheck       CronWorkflow  0 6 * * *   America/Edmonton
+  #   velero-backup-validation  CronWorkflow  1st @ 06:00 America/Edmonton
+  #
+  # Chaos Mesh's `pod-failure` works by swapping the target container's image
+  # for a pause image (see the self-lockup note below), and on ARM64 that
+  # image is amd64-only — so the targets do not pause cleanly, they
+  # CrashLoopBackOff with `exec /pause: exec format error`. The health check
+  # then sees exactly that and reports real-looking failure.
+  #
+  # Observed every month it has run — 2026-09-01, 2026-10-01 and 2026-11-01,
+  # all at 12:00:00Z — producing a false ClusterHealthDegraded plus a
+  # lingering ArgoWorkflowFailed. Three months of monthly false alarms,
+  # which is how an alert stops being believed.
+  #
+  # Worse than the noise: velero-backup-validation runs IN argo-workflows,
+  # which is inside this experiment's blast radius. A chaos-killed verify
+  # step and a genuine backup failure are indistinguishable in the result,
+  # so the collision undermined the one monthly DR check we have.
+  #
+  # 20:00 UTC is ~14:00 MT — clear of the 04:00 restore validator, the 06:00
+  # batch, and in waking hours where a surprise is noticed rather than slept
+  # through. Any future move must stay off 12:00Z AND 13:00Z, since
+  # "06:00 America/Edmonton" is 12:00Z in summer and 13:00Z in winter.
+  #
+  # Residual, accepted: publish-divergence-check is a CronJob on a 30-minute
+  # cadence in argo-workflows, so a 5-minute experiment still has roughly a
+  # 1-in-6 chance of catching one and raising KubeJobFailed. Narrowing the
+  # namespace allowlist would fix that but would also stop testing the CI/CD
+  # path, which is a deliberate part of this experiment's coverage.
+  schedule: "0 20 1 * *"  # 1st of month 20:00 UTC = ~14:00 MT
   type: PodChaos
   historyLimit: 3
   concurrencyPolicy: Forbid
