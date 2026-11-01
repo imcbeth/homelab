@@ -412,7 +412,7 @@ spec:
           containers:
             - name: remediator
               # alpine/k8s has kubectl + curl + jq + sh
-              image: docker.io/alpine/k8s:1.37.1
+              image: docker.io/alpine/k8s:1.37.2
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false

@@ -480,7 +480,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: prober
-          image: docker.io/alpine/k8s:1.37.1
+          image: docker.io/alpine/k8s:1.37.2
           imagePullPolicy: IfNotPresent
           command: ["python3", "/scripts/probe.py"]
           securityContext:

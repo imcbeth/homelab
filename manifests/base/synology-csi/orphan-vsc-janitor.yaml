@@ -98,7 +98,7 @@ spec:
               # Zot is a pull-through cache, so the kubelet still resolves
               # docker.io/alpine/k8s via it at pull time; the only thing that
               # changes is that Renovate can now see the tag.
-              image: docker.io/alpine/k8s:1.37.1
+              image: docker.io/alpine/k8s:1.37.2
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
