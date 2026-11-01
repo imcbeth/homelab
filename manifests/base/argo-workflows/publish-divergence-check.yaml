@@ -158,7 +158,7 @@ spec:
           automountServiceAccountToken: false
           containers:
             - name: check
-              image: docker.io/alpine/k8s:1.37.1
+              image: docker.io/alpine/k8s:1.37.2
               command: ["/bin/sh", "/scripts/check.sh"]
               env:
                 - name: GITHUB_TOKEN
