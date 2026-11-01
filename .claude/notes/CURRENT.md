@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-10-29 (security review: PSA on 13 namespaces, lifeonabike netpol, one Falco rule that was 99.8% of all detections, registry-admin creds off the public pod; localstack bump reverted — 4.14.0 is the last licence-free release)
+**Last Updated:** 2026-11-01 (a NetworkPolicy I wrote had been failing the lifeonabike SLO probe for 2.5 days with a CRITICAL alert nobody read; `exec /pause: exec format error` is Chaos Mesh pod-failure on ARM64, and its schedule collided with the 06:00 health checks monthly; 11 Renovate PRs applied)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,163 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-01: a NetworkPolicy I wrote had been failing the SLO probe for 2.5 days
+
+Sunday review plus the Renovate weekend batch. The health check had failed at
+06:00 and the alert list had a **critical** alert in it that Friday's security
+review never looked at. Both turned out to matter.
+
+**EndpointDown, critical, firing since Friday — caused by #1087.** The
+lifeonabike NetworkPolicy admitted ingress-nginx, cloudflared and uptime-kuma
+to `web:8080` and missed **blackbox-exporter**, which runs the
+`blackbox-availability-internal` SLO probe against `http://web.lifeonabike:80/`
+from `default`:
+
+```
+2026-10-29T14:22:20Z  the three NetworkPolicies created
+2026-10-29T14:23:46Z  EndpointDownWarning              (+86 seconds)
+2026-10-29T14:27:46Z  EndpointDown — CRITICAL
+2026-10-29T14:28:59Z  SLOFastBurnRate — 14.4x burn
+2026-10-29T14:48:29Z  SLOSlowBurnRate — 6x
+2026-10-29T18:28:29Z  SLOErrorBudgetExhausted — 30d availability 90.13%
+```
+
+Five alerts, one critical, for two and a half days.
+
+Why #1087's verification could not catch it: that check searched
+ServiceMonitor / PodMonitor / Probe **CRDs** and found nothing, so I wrote
+"nothing in-cluster probes lifeonabike". blackbox's targets are not a CRD —
+they are a `static_configs` list in
+`manifests/base/kube-prometheus-stack/values.yaml:1822`, which a CRD search
+structurally cannot see. And the live-traffic testing that followed could not
+catch it either: every public path and all 12 sitemap URLs returned 200 the
+whole time. **Only the internal probe was blocked** — the one thing whose
+entire job is to notice this.
+
+The deeper miss was procedural: on Friday I verified app health (38/38) and
+the site, and never re-read the firing alert list after applying the policy.
+A critical alert sat there for 2.5 days.
+
+Fixed in #1105, scoped to the blackbox-exporter pods rather than all of
+`default` (which also holds Prometheus, Grafana and node-exporter). Confirmed
+by comparison, not inference — `web.lifeonabike:80` gave `probe_success 0`
+while the other two internal SLO targets gave 1; after the fix all three
+give 1.
+
+`SLOErrorBudgetExhausted` stays until it ages out. The 90.13% is real.
+
+**`exec /pause: exec format error` — and it was not a fault at all.** Five
+pods on node04 (falco, loki-0, alloy, loki-canary, lifeonabike/web) were
+CrashLoopBackOff at 06:00, all exiting 255 with `startedAt == finishedAt`.
+Unrelated workloads, one node, instant exit, self-recovering.
+
+The chain of wrong guesses is worth recording because each looked right:
+containerd restart (it had not restarted), disk/inode exhaustion (53% and
+10%), and a "single runtime failure" reading of one `/bin/sh` error that I
+briefly treated as a separate problem. The pods' own logs settled it — all
+five said `exec /pause: exec format error`, an **architecture mismatch**.
+
+Cause: **Chaos Mesh `pod-failure` works by swapping the target container's
+image for a pause image, and the one it uses is amd64-only.** On ARM64 the
+targets do not pause cleanly, they crashloop. `pod-failure-node04`'s
+`containerRecords` named exactly those five pods plus
+publish-divergence-check — whose `/bin/sh` error was the *same* injection,
+just manifesting differently because that pod has an explicit `command`.
+
+And the schedules collided precisely:
+
+```
+pod-failure-node04        Schedule      0 12 1 * *   UTC          = 06:00 MT
+cluster-healthcheck       CronWorkflow  0 6 * * *    America/Edmonton
+velero-backup-validation  CronWorkflow  1st @ 06:00  America/Edmonton
+```
+
+Same minute, and it had fired that way **every month it has run** —
+2026-09-01, 2026-10-01, 2026-11-01, all at 12:00:00Z — producing a monthly
+false `ClusterHealthDegraded` and a lingering `ArgoWorkflowFailed`.
+
+The noise was not the worst of it. `velero-backup-validation` runs IN
+`argo-workflows`, inside this experiment's blast radius, so a chaos-killed
+verify step and a genuine backup failure were indistinguishable. The
+collision quietly undermined the one monthly DR check we have.
+
+Moved to `0 20 1 * *` (~14:00 MT) in #1106. The constraint is recorded in the
+file: any future move must avoid **both** 12:00Z and 13:00Z, because
+"06:00 America/Edmonton" is 12:00Z in summer and 13:00Z in winter — a
+schedule that looks safe in November silently collides again in March.
+
+Residual and accepted: publish-divergence-check is a 30-minute CronJob in
+argo-workflows, so a 5-minute experiment still has roughly a 1-in-6 chance of
+catching one.
+
+**Both Velero validators passed.** `velero-restore-validator` Complete in 76s
+— its first live pass at the Loki target. `velero-backup-validation`
+Succeeded. Only `cluster-healthcheck` failed, and that was the chaos.
+
+**Renovate: 13 PRs, 11 merged, 1 closed as superseded.**
+
+| | |
+|---|---|
+| Tier 1 (patch) | #1095 argocd 10.11.6 + argo-workflows 2.0.15, #1096 cloudflared 2026.10.7, #1097 uptime-kuma 2.5.9, #1099 chaos-mesh 2.8.7, #1100 falco 9.2.2, #1101 velero 12.2.2, #1102 alertmanager v0.34.2, #1103 thanos v0.42.5, #1107/#1108 alpine/k8s 1.37.2 |
+| Tier 2 (minor) | #1104 alloy 1.15.0 + kube-prometheus-stack 92.17.0, #1109 sealed-secrets 2.22.0 + trivy-operator 0.38.1 |
+| Closed | #1098 alloy 1.14.4 — superseded by #1104 from the same 1.14.3 base |
+
+Landed and verified on the running containers, not the status word:
+prometheus-operator v0.94.2, alloy v1.21.3 (5/5), falco 0.45.2 (5/5), velero
+v1.18.4, cloudflared 2026.10.7, uptime-kuma 2.5.9, argocd v3.5.6,
+sealed-secrets-controller 0.41.2, trivy-operator 0.36.1.
+
+The Friday Falco exception **survived** the 9.2.1 → 9.2.2 chart bump —
+re-verified by recompiling the rule inside the new pod: still `enabled: true`
+with the exception present in `condition_compiled`.
+
+sealed-secrets was the one I was wary of, since it holds the decryption keys.
+After the 0.40.0 → 0.41.2 controller upgrade: all **19 SealedSecrets still
+Synced**, all **10 sealing keys** intact.
+
+Three things from the batch worth remembering:
+
+- **"Synced + Healthy" lied again, exactly as REFERENCE says.** After
+  applying five Application manifests, all 38 apps reported Synced+Healthy
+  while every chart was still on the OLD revision — argocd 10.11.1, falco
+  9.2.1, velero 12.2.1, chaos-mesh 2.8.6, argo-workflows 2.0.14. A
+  `refresh=hard` was needed before any of them moved.
+- **The kps hook wedge needed both halves of the documented fix.** First
+  `waiting for completion of hook /ServiceAccount/...` — a ServiceAccount can
+  never "complete". Removing `/operation` let the hook chain actually run. For
+  the 92.17.0 bump it wedged again with 123 resources queued and the operator
+  still on v0.94.1; deleting the **completed** crds-upgrade Job plus its
+  ClusterRole and ClusterRoleBinding released it, and the operator moved to
+  v0.94.2. Worth noting I nearly deleted that Job while it was *running* —
+  checking first is what caught it, and the chain cycles roughly every two
+  minutes, so a single snapshot is misleading.
+- **Thanos was a no-op.** #1103 bumped `thanosImage` and
+  `thanosRulerSpec.image` to v0.42.5, but thanos is not deployed here — 0
+  containers, `prometheus.spec.thanos` empty. Harmless; it keeps an unused
+  value current.
+
+**Cleared along the way:** the stale `pvc-ro-remediator-29886834` Job
+(DeadlineExceeded, 2026-10-28, left over from my own remediator testing) —
+deleted after confirming no node was cordoned and the remediator has been
+completing in 5-6s since. Zero failed Jobs cluster-wide now.
+
+**Also fixed:** the trivy-operator chart pin carried
+`# Chart version (app version 0.29.0)` while the running image was 0.36.1 —
+wrong across several bumps, because Renovate updates the version it manages
+and leaves prose alone. Replaced with the command to read the real value
+rather than a number that will rot again (#1110).
+
+**End state:** 38/38 Synced+Healthy, 0 non-running pods, 5/5 nodes Ready, 8/8
+PVCs Bound, Renovate queue empty, **zero critical alerts** (down from 18
+active to 10). Remaining: `ArgoWorkflowFailed` for this morning's
+chaos-induced healthcheck (ages out with the workflow),
+`SLOErrorBudgetExhausted` (the real 90.13%), and three
+`ImageCriticalVulnerabilitiesHigh` — localstack 4.14.0 (25, unfixable, see the
+licence pin), argo-events v1.9.11 (28) and argocd v3.5.6 (16), all upstream
+base-image CVEs consistent with the Friday baseline.
+
+---
 
 ### 2026-10-29: security posture review — 8 PRs, and a bump that had to be rolled back
 
