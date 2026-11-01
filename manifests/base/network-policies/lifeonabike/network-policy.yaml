@@ -111,6 +111,29 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
+    # blackbox-exporter, in `default`, runs the SLO availability probe against
+    # http://web.lifeonabike:80/ as part of the `blackbox-availability-internal`
+    # job. Missing this rule took `probe_success` to 0 for 2.5 days and fired
+    # EndpointDown (critical), EndpointDownWarning, SLOFastBurnRate,
+    # SLOSlowBurnRate and finally SLOErrorBudgetExhausted — while the site
+    # itself served perfectly throughout.
+    #
+    # This was missed when the policy was first written because the search for
+    # in-cluster probers looked at ServiceMonitor / PodMonitor / Probe CRDs.
+    # blackbox's targets are NOT a CRD — they are a static_configs list inside
+    # kube-prometheus-stack values.yaml (`blackbox-availability-internal`), so
+    # a CRD search cannot see them. When adding a NetworkPolicy to any
+    # namespace, grep that values.yaml for the Service name too.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: blackbox-exporter
+      ports:
+        - protocol: TCP
+          port: 8080
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
