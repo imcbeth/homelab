@@ -1,0 +1,241 @@
+# lifeonabike-agent — runs in the `lifeonabike` namespace beside the site.
+# Source and docs: https://github.com/imcbeth/lifeonabike-agent (deploy/k8s is
+# the reference copy of this file).
+#
+# Built in-cluster on every push to that repo's main (WorkflowTemplate
+# lifeonabike-agent-build), which also restarts this Deployment. Reuses the
+# namespace's zot-puller-creds pull secret. Secrets: lifeonabike-agent and
+# lifeonabike-agent-strava (see lifeonabike-agent-sealed.yaml).
+#
+# Single replica with Recreate: the agent holds a state file and a rotating
+# Strava refresh token on its PVC, and two copies would race on both.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lifeonabike-agent
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent
+---
+# Read-only, and only in this namespace: what the diagnoser needs to explain
+# an outage. The agent never changes the cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: lifeonabike-agent-read
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: lifeonabike-agent-read
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: lifeonabike-agent-read
+subjects:
+  - kind: ServiceAccount
+    name: lifeonabike-agent
+    namespace: lifeonabike
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lifeonabike-agent-data
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent
+spec:
+  # retain: losing this volume means re-running `agent auth` and re-baselining.
+  storageClassName: synology-iscsi-retain
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+# The photo inbox: a Synology share, on the Mac over SMB and here over NFS.
+#   Synology: Shared Folder `lifeonabike-inbox`; NFS permission for
+#   10.0.10.0/24, read/write, squash "Map all users to admin", so files the
+#   agent writes (uid 10001) and files written over SMB are usable by both.
+# The kubelet does the mount, so every node needs an NFS client
+# (`apt install nfs-common` on Ubuntu 24.04), and NetworkPolicy doesn't
+# apply to it.
+# Retain: deleting the claim must never touch the photos.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: lifeonabike-inbox
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent
+spec:
+  capacity:
+    storage: 100Gi   # informational for NFS; the share's quota is what counts
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+  nfs:
+    server: 10.0.1.204
+    path: /volume1/lifeonabike-inbox
+  claimRef:
+    namespace: lifeonabike
+    name: lifeonabike-inbox
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lifeonabike-inbox
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent
+spec:
+  storageClassName: ""
+  volumeName: lifeonabike-inbox
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lifeonabike-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: lifeonabike-agent
+    spec:
+      serviceAccountName: lifeonabike-agent
+      imagePullSecrets:
+        - name: zot-puller-creds
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          # Built in-cluster on every push to main (WorkflowTemplate
+          # lifeonabike-agent-build in homelab), which pushes :<sha> and :latest
+          # and then restarts this Deployment — the same model as the site.
+          # Recreate + pipeline.Recover make a restart mid-draft safe: the ride
+          # is marked failed and the rider is asked to resend. To roll back,
+          # set a :<sha> tag here.
+          image: registry.k8s.n37.ca/lifeonabike/lifeonabike-agent:latest
+          imagePullPolicy: Always
+          args: ["run"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: GITHUB_REPO
+              value: imcbeth/lifeonabike.ca
+            - name: SITE_URL
+              value: https://lifeonabike.ca
+            - name: TZ_NAME
+              value: America/Edmonton
+            - name: POLL_INTERVAL
+              value: 10m
+            - name: SRE_INTERVAL
+              value: 1m
+            - name: INBOX_DIR
+              value: /inbox
+            - name: INBOX_QUIET          # no changes for this long = done copying
+              value: 10m
+            - name: INBOX_DROP_AFTER     # empty folder this long = skip the ride
+              value: 168h
+          envFrom:
+            # ANTHROPIC_API_KEY, GITHUB_TOKEN, HOME_LAT, HOME_LNG, HOME_RADIUS_M
+            - secretRef:
+                name: lifeonabike-agent
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: strava-token
+              mountPath: /secrets/strava
+              readOnly: true
+            - name: inbox
+              mountPath: /inbox
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 500m        # photo resizing is the only heavy work
+              # One photo is decoded at a time, capped at 100 MP (~400 MB
+              # decoded) by media.MaxPixels; 48–50 MP phone shots use ~200 MB.
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        # The photo inbox (PV lifeonabike-inbox below), via a claim so the pod
+        # stays within the namespace's `restricted` warn/audit profile, which
+        # rejects inline nfs volumes.
+        - name: inbox
+          persistentVolumeClaim:
+            claimName: lifeonabike-inbox
+        - name: data
+          persistentVolumeClaim:
+            claimName: lifeonabike-agent-data
+        - name: strava-token
+          secret:
+            secretName: lifeonabike-agent-strava
+            items:
+              - key: token.json
+                path: token.json
+---
+# Cluster-internal only: /status lists ride names. No Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent
+spec:
+  selector:
+    app.kubernetes.io/name: lifeonabike-agent
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

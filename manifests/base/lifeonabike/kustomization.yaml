@@ -12,3 +12,4 @@ resources:
   - zot-puller-creds-sealed.yaml
   - cloudflared.yaml
   - tunnel-credentials-sealed.yaml
+  - agent.yaml
