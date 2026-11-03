@@ -1,0 +1,173 @@
+# Build workflow for lifeonabike-agent
+#
+# Clones https://github.com/imcbeth/lifeonabike-agent (private), builds its
+# root Dockerfile with Kaniko, and pushes two tags to the local Zot registry:
+#   registry.k8s.n37.ca/lifeonabike/lifeonabike-agent:<git-sha>
+#   registry.k8s.n37.ca/lifeonabike/lifeonabike-agent:latest
+# then restarts deployment/agent in lifeonabike if it exists.
+#
+# Same shape as lifeonabike-build, and reuses its secrets
+# (lifeonabike-registry-creds, github-clone-token) and RBAC
+# (lifeonabike-deployer can patch any Deployment in lifeonabike).
+#
+# Triggered by Argo Events on push to main (Sensor lifeonabike-agent-build).
+# Manual run:
+#   argo submit --from workflowtemplate/lifeonabike-agent-build -n argo-workflows
+#
+# MEMORY: Gatekeeper's container-limits constraint caps every container at
+# 2Gi. Compiling the Anthropic Go SDK peaks at ~2.5 GB with default settings,
+# so the agent's Dockerfile builds with `go build -p 1` under GOMEMLIMIT=1200MiB
+# (~1.6 GB peak), and Kaniko runs with --compressed-caching=false, which keeps
+# it from holding compressed layers in memory. If this step is OOMKilled,
+# lower GOMEMLIMIT in the Dockerfile before reaching for the constraint.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: lifeonabike-agent-build
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent-build
+    app.kubernetes.io/component: ci
+spec:
+  entrypoint: build-and-push
+  serviceAccountName: argo-workflow   # created by the argo-workflows Helm chart
+
+  arguments:
+    parameters:
+      - name: revision
+        value: main
+
+  volumeClaimTemplates:
+    - metadata:
+        name: workspace
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: synology-iscsi-delete-ssd
+        resources:
+          requests:
+            storage: 2Gi
+
+  volumes:
+    - name: registry-creds
+      secret:
+        secretName: lifeonabike-registry-creds
+        items:
+          - key: .dockerconfigjson
+            path: config.json
+
+  # Required by Gatekeeper require-labels constraint (all workflow pods).
+  # ambient.istio.io/redirection: disabled — ztunnel resets TLS connections to
+  # non-mesh destinations (Zot registry via MetalLB, GitHub); bypass interception.
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: lifeonabike-agent-build
+    annotations:
+      ambient.istio.io/redirection: disabled
+
+  # Default resource limits applied to all step containers (Gatekeeper: require-resource-limits)
+  templateDefaults:
+    container:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+  ttlStrategy:
+    secondsAfterSuccess: 3600    # 1h
+    secondsAfterFailure: 28800   # 8h
+
+  templates:
+    - name: build-and-push
+      steps:
+        - - name: clone
+            template: git-clone
+        - - name: build
+            template: kaniko-build
+            arguments:
+              parameters:
+                - name: image-tag
+                  value: "{{steps.clone.outputs.parameters.sha}}"
+        - - name: deploy
+            template: rollout-restart
+
+    # ── Step 1: shallow-clone the agent repo, capture git SHA ────────────────
+    - name: git-clone
+      outputs:
+        parameters:
+          - name: sha
+            valueFrom:
+              path: /tmp/sha
+      container:
+        image: alpine/git:v2.54.0
+        command: [sh, -c]
+        args:
+          - |
+            git clone https://x-access-token:${GITHUB_TOKEN}@github.com/imcbeth/lifeonabike-agent.git /workspace \
+              --branch {{workflow.parameters.revision}} \
+              --single-branch \
+              --depth 1 && \
+            git -C /workspace remote set-url origin https://github.com/imcbeth/lifeonabike-agent.git && \
+            git -C /workspace rev-parse --short HEAD > /tmp/sha
+        env:
+          - name: GITHUB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: github-clone-token
+                key: token
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+
+    # ── Step 2: build image with Kaniko, push sha + latest tags ──────────────
+    - name: kaniko-build
+      inputs:
+        parameters:
+          - name: image-tag
+      container:
+        image: gcr.io/kaniko-project/executor:v1.24.0
+        # A Go compile, not a static-site build: give it the full 2Gi the
+        # container-limits constraint allows (see MEMORY above).
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        args:
+          - --dockerfile=/workspace/Dockerfile
+          - --context=/workspace
+          - --build-arg=VERSION={{inputs.parameters.image-tag}}
+          # Push directly to Zot's in-cluster ClusterIP over HTTP — pod-to-MetalLB
+          # HTTPS is broken in-cluster. Kubelet pulls (node-level) still use the
+          # external registry.k8s.n37.ca hostname and are unaffected.
+          - --insecure
+          - --destination=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike-agent:{{inputs.parameters.image-tag}}
+          - --destination=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike-agent:latest
+          - --cache=true
+          - --cache-repo=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike-agent/cache
+          - --compressed-caching=false
+          - --insecure-pull
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+          - name: registry-creds
+            mountPath: /kaniko/.docker
+
+    # ── Step 3: restart the agent so it pulls the new :latest ────────────────
+    # Skipped (successfully) until deployment/agent exists: the agent's
+    # manifests aren't in this repo yet, and the build is useful before then.
+    - name: rollout-restart
+      container:
+        image: alpine/k8s:1.37.2
+        command: [sh, -c]
+        args:
+          - |
+            if kubectl get deployment/agent -n lifeonabike >/dev/null 2>&1; then
+              kubectl rollout restart deployment/agent -n lifeonabike
+            else
+              echo "deployment/agent not found in lifeonabike; image pushed, nothing to restart"
+            fi
