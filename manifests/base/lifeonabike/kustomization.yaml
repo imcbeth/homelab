@@ -13,3 +13,4 @@ resources:
   - cloudflared.yaml
   - tunnel-credentials-sealed.yaml
   - agent.yaml
+  - lifeonabike-agent-strava-sealed.yaml
