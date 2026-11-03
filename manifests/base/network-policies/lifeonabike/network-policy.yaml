@@ -190,7 +190,7 @@ spec:
           port: 12000
 ---
 # lifeonabike-agent: egress only.
-#   443 to the internet  mcp.strava.com / Strava API, api.anthropic.com,
+#   443 to the internet  www.strava.com (API v3), api.anthropic.com,
 #                        api.github.com, and lifeonabike.ca itself through
 #                        Cloudflare (the SRE checks go the way readers do).
 #                        RFC1918 excluded, as for cloudflared.
