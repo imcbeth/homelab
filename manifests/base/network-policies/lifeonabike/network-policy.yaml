@@ -11,6 +11,8 @@
 #
 #   web          static nginx serving the site. Takes traffic on 8080; makes
 #                no outbound calls of its own.
+#   agent        lifeonabike-agent: polls Strava, drafts posts, watches the
+#                site. Egress only (policy at the end of this file).
 #   cloudflared  outbound-only tunnel to the Cloudflare edge. Takes no
 #                inbound cluster traffic at all — it dials out and the edge
 #                rides that connection back in.
@@ -186,3 +188,63 @@ spec:
       ports:
         - protocol: TCP
           port: 12000
+---
+# lifeonabike-agent: egress only.
+#   443 to the internet  www.strava.com (API v3), api.anthropic.com,
+#                        api.github.com, and lifeonabike.ca itself through
+#                        Cloudflare (the SRE checks go the way readers do).
+#                        RFC1918 excluded, as for cloudflared.
+#   Alertmanager         alert posts to its v2 API in `default`; the matching
+#                        ingress rule is in network-policies/default.
+#   API server           read-only diagnosis (Role lifeonabike-agent-read):
+#                        the Service VIP and the control-plane :6443, as in
+#                        the loki and strimzi policies.
+# The NFS photo inbox is mounted by the kubelet, not the pod, so it needs no
+# rule here. Nothing calls the agent, so it has no ingress rule.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lifeonabike-agent
+  namespace: lifeonabike
+  labels:
+    app.kubernetes.io/name: lifeonabike-agent
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: lifeonabike-agent
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alertmanager
+      ports:
+        - protocol: TCP
+          port: 9093
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 10.0.10.0/24
+      ports:
+        - protocol: TCP
+          port: 6443

@@ -70,6 +70,20 @@ spec:
         - protocol: TCP
           port: 9093   # alertmanager
 
+    # lifeonabike-agent posts its own alerts (LifeonabikeSiteDown,
+    # LifeonabikeCertExpiring, LifeonabikeAgent*Failing) to the v2 API, for
+    # the same reason as above: they are about state Prometheus can't see.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: lifeonabike
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: lifeonabike-agent
+      ports:
+        - protocol: TCP
+          port: 9093   # alertmanager
+
     # Uptime Kuma health monitoring
     - from:
         - namespaceSelector:

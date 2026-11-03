@@ -12,3 +12,6 @@ resources:
   - zot-puller-creds-sealed.yaml
   - cloudflared.yaml
   - tunnel-credentials-sealed.yaml
+  - agent.yaml
+  - lifeonabike-agent-strava-sealed.yaml
+  - lifeonabike-agent-sealed.yaml
