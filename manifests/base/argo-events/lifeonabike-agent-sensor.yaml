@@ -1,0 +1,51 @@
+# Sensor for the lifeonabike-agent build pipeline.
+#
+# Fires on the lifeonabike-agent-push event (push to main on
+# imcbeth/lifeonabike-agent) and submits a Workflow from the
+# lifeonabike-agent-build WorkflowTemplate in argo-workflows.
+#
+# Reuses lifeonabike-sensor-sa: the lifeonabike-workflow-submitter Role in
+# argo-workflows already lets it create Workflows there.
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: lifeonabike-agent-build
+  namespace: argo-events
+spec:
+  template:
+    serviceAccountName: lifeonabike-sensor-sa
+    container:
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+  dependencies:
+    - name: push-event
+      eventSourceName: lifeonabike-github
+      eventName: lifeonabike-agent-push
+  triggers:
+    - template:
+        name: build-trigger
+        argoWorkflow:
+          operation: submit
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: lifeonabike-agent-build-
+                namespace: argo-workflows
+              spec:
+                workflowTemplateRef:
+                  name: lifeonabike-agent-build
+                arguments:
+                  parameters:
+                    - name: revision
+                      value: main
+      retryStrategy:
+        steps: 3
+        duration: 10s
+        factor: 2

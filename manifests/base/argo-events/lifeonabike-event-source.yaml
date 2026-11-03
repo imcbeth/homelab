@@ -1,7 +1,19 @@
-# GitHub EventSource for lifeonabike.ca build pipeline.
+# GitHub EventSource for the lifeonabike build pipelines.
 #
-# Listens for push events on the imcbeth/lifeonabike.ca repo (main branch only)
-# and fires an event that the lifeonabike-build Sensor picks up.
+# Listens for push events (main branch only) on two repos and fires one event
+# per repo:
+#   lifeonabike-push        imcbeth/lifeonabike.ca     -> Sensor lifeonabike-build
+#   lifeonabike-agent-push  imcbeth/lifeonabike-agent  -> Sensor lifeonabike-agent-build
+#
+# Both share this EventSource's server on port 12000, the HMAC secret, and the
+# public hostname; they differ by path. The agent's path is /push/agent rather
+# than /push-agent so the internal Ingress's `/push` Prefix rule (path-element
+# matching) covers it too. The Cloudflare tunnel route is path-agnostic.
+#
+# imcbeth/lifeonabike-agent is PRIVATE: github-access-token must be able to
+# manage hooks on it (classic PAT with admin:repo_hook, or a fine-grained PAT
+# that includes the repo with Webhooks: read/write), and github-clone-token in
+# argo-workflows must be able to read it.
 #
 # Prerequisites (one-time cluster setup):
 #   # GitHub PAT with repo scope + admin:repo_hook for auto-registration
@@ -32,6 +44,26 @@ spec:
             - lifeonabike.ca
       webhook:
         endpoint: /push
+        port: "12000"
+        method: POST
+        url: https://build-webhook.n37.ca
+      events:
+        - push
+      apiToken:
+        name: github-access-token
+        key: token
+      webhookSecret:
+        name: github-lifeonabike-webhook-secret
+        key: secret
+      filter:
+        expression: "body.ref == 'refs/heads/main'"
+    lifeonabike-agent-push:
+      repositories:
+        - owner: imcbeth
+          names:
+            - lifeonabike-agent
+      webhook:
+        endpoint: /push/agent
         port: "12000"
         method: POST
         url: https://build-webhook.n37.ca
