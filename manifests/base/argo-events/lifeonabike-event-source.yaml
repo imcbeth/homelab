@@ -15,6 +15,12 @@
 # that includes the repo with Webhooks: read/write), and github-clone-token in
 # argo-workflows must be able to read it.
 #
+# `active: true` is required on every event. Argo Events creates the GitHub
+# hook with the `active` flag from the spec, which defaults to false — the
+# lifeonabike-agent hook was created inactive (2026-11-03) and received no
+# deliveries. The site's hook was only active because it had been switched on
+# by hand; declaring it here keeps a re-created hook working.
+#
 # Prerequisites (one-time cluster setup):
 #   # GitHub PAT with repo scope + admin:repo_hook for auto-registration
 #   kubectl create secret generic github-access-token \
@@ -49,6 +55,7 @@ spec:
         url: https://build-webhook.n37.ca
       events:
         - push
+      active: true
       apiToken:
         name: github-access-token
         key: token
@@ -69,6 +76,7 @@ spec:
         url: https://build-webhook.n37.ca
       events:
         - push
+      active: true
       apiToken:
         name: github-access-token
         key: token
