@@ -37,7 +37,15 @@ spec:
       containers:
         - name: cloudflared
           image: cloudflare/cloudflared:2026.10.7
-          args: ["tunnel", "--config", "/etc/cloudflared/config/config.yaml", "run"]
+          # --metrics pins the metrics server to 8080. Without it cloudflared
+          # takes the first free port in 20241-20245, which a PodMonitor and a
+          # NetworkPolicy can't follow. 8080 is the port Prometheus's egress
+          # policy in `default` already allows to every namespace.
+          args: ["tunnel", "--config", "/etc/cloudflared/config/config.yaml", "--metrics", "0.0.0.0:8080", "run"]
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
           resources:
             requests:
               cpu: 10m

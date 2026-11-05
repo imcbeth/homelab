@@ -150,7 +150,22 @@ spec:
     matchLabels:
       app.kubernetes.io/name: cloudflared
   policyTypes:
+    - Ingress
     - Egress
+  # The only inbound traffic is Prometheus scraping the metrics port (see
+  # lifeonabike/cloudflared-podmonitor.yaml). Tunnel traffic itself arrives
+  # over cloudflared's own outbound connection, so it needs no ingress rule.
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8080
   egress:
     # The Cloudflare edge. 7844 is the tunnel's own transport (QUIC, with a
     # TCP fallback); 443 covers registration and the HTTP/2 fallback path.
