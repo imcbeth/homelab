@@ -1,0 +1,104 @@
+---
+# Cloudflare Tunnel alerts. Two cloudflared replicas in `lifeonabike` hold the
+# only path from the internet into the cluster: lifeonabike.ca, www, and
+# build-webhook.n37.ca (GitHub -> argo-events). When the tunnel drops, the
+# public site goes dark AND merges stop deploying, while everything looks
+# healthy from the LAN, where ingress-nginx still serves the site.
+#
+# Each healthy replica holds 4 connections to the Cloudflare edge
+# (cloudflared_tunnel_ha_connections, scraped by the PodMonitor in
+# lifeonabike/cloudflared-podmonitor.yaml).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cloudflared-alerts
+  namespace: default
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+    # REQUIRED: Prometheus ruleSelector matches on this label; without it the
+    # rule is created but never loaded.
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: cloudflared
+      interval: 30s
+      rules:
+        # Pods are running but none holds an edge connection: credentials
+        # revoked, tunnel deleted, egress blocked, or a Cloudflare incident.
+        - alert: CloudflaredTunnelDown
+          expr: sum(cloudflared_tunnel_ha_connections{namespace="lifeonabike"}) == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: cloudflared
+          annotations:
+            summary: "Cloudflare Tunnel has no edge connections"
+            description: |
+              Neither cloudflared replica holds a connection to the Cloudflare
+              edge. lifeonabike.ca is unreachable from the internet and GitHub
+              webhooks are not reaching argo-events, so merges won't deploy.
+              Check `kubectl -n lifeonabike logs deploy/cloudflared` for
+              registration or auth errors.
+
+        # No replica available at all, so there is no metric to evaluate
+        # above. Uses kube-state-metrics, which doesn't depend on the scrape.
+        - alert: CloudflaredUnavailable
+          expr: kube_deployment_status_replicas_available{namespace="lifeonabike", deployment="cloudflared"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: cloudflared
+          annotations:
+            summary: "No cloudflared replicas are available"
+            description: |
+              The cloudflared Deployment has 0 available replicas, so the
+              tunnel is down: the public site and build webhooks are offline.
+              Check `kubectl -n lifeonabike get pods -l app.kubernetes.io/name=cloudflared`.
+
+        # One replica lost some or all of its edge connections. Still
+        # serving, but one more failure takes the tunnel down.
+        - alert: CloudflaredTunnelDegraded
+          expr: cloudflared_tunnel_ha_connections{namespace="lifeonabike"} < 4
+          for: 15m
+          labels:
+            severity: warning
+            component: cloudflared
+          annotations:
+            summary: "cloudflared {{ $labels.pod }} has {{ $value }} of 4 edge connections"
+            description: |
+              {{ $labels.pod }} has held fewer than 4 Cloudflare edge
+              connections for 15 minutes. The tunnel still works through the
+              remaining connections. A restart of that pod usually recovers it.
+
+        - alert: CloudflaredReplicasMissing
+          expr: |
+            kube_deployment_status_replicas_available{namespace="lifeonabike", deployment="cloudflared"}
+              < kube_deployment_spec_replicas{namespace="lifeonabike", deployment="cloudflared"}
+          for: 15m
+          labels:
+            severity: warning
+            component: cloudflared
+          annotations:
+            summary: "cloudflared is running {{ $value }} replica(s), fewer than desired"
+            description: |
+              The tunnel is up but has lost its redundancy. Check for a
+              pending, crash-looping or evicted cloudflared pod.
+
+        # The scrape itself is broken (NetworkPolicy, port, PodMonitor), which
+        # silently disables CloudflaredTunnelDown. Pods are up, metrics aren't.
+        - alert: CloudflaredMetricsMissing
+          expr: |
+            absent(up{namespace="lifeonabike", pod=~"cloudflared-.*"} == 1)
+              and on() kube_deployment_status_replicas_available{namespace="lifeonabike", deployment="cloudflared"} > 0
+          for: 15m
+          labels:
+            severity: warning
+            component: cloudflared
+          annotations:
+            summary: "Prometheus can't scrape cloudflared"
+            description: |
+              cloudflared pods are running but no metrics target is up, so
+              CloudflaredTunnelDown can't fire. Check the PodMonitor, the
+              --metrics port, and the lifeonabike-cloudflared NetworkPolicy.

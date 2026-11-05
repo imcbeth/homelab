@@ -1,0 +1,20 @@
+---
+# Scrapes cloudflared's tunnel metrics (cloudflared_tunnel_ha_connections and
+# friends) for the alerts in kube-prometheus-stack/cloudflared-alerts.yaml.
+# The tunnel carries both the public site and every GitHub build webhook, so
+# losing it is two outages at once.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cloudflared
+  namespace: lifeonabike
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/name: cloudflared
+spec:
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared

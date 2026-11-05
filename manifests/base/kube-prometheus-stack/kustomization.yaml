@@ -30,6 +30,7 @@ resources:
   - istio-alerts.yaml
   - apm-alerts.yaml
   - ingress-nginx-alerts.yaml
+  - cloudflared-alerts.yaml
   - log-pipeline-alerts.yaml
   - network-alerts.yaml
   - pi-cluster-alerts.yaml

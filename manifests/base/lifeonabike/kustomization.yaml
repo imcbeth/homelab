@@ -11,6 +11,7 @@ resources:
   - ingress.yaml
   - zot-puller-creds-sealed.yaml
   - cloudflared.yaml
+  - cloudflared-podmonitor.yaml
   - tunnel-credentials-sealed.yaml
   - agent.yaml
   - lifeonabike-agent-strava-sealed.yaml
