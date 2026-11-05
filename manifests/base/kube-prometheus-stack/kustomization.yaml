@@ -9,6 +9,7 @@ bases:
 # Note: Secrets now managed via SealedSecrets (no manual apply needed)
 resources:
   - alertmanager-smtp-sealed.yaml
+  - alertmanager-ntfy-sealed.yaml
   - snmp-exporter-sealed.yaml
   - argo-workflows-alerts.yaml
   - argocd-alerts.yaml
