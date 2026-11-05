@@ -66,21 +66,21 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 | Hostname | IP Address | MAC Address | Role | PoE Port |
 |----------|------------|-------------|------|----------|
 | control-plane | 10.0.10.214 | - | Control Plane | - |
-| node01 | 10.0.10.211 | - | Worker | - |
-| node02 | 10.0.10.212 | - | Worker | - |
-| node03 | 10.0.10.213 | - | Worker | - |
+| node01 | 10.0.10.235 | - | Worker | - |
+| node02 | 10.0.10.211 | - | Worker | - |
+| node03 | 10.0.10.244 | - | Worker | - |
 | node04 | 10.0.10.220 | - | Worker | - |
 
 **TODO:** Document MAC Address and PoE Port values for all nodes. Entries currently marked as `-` will be updated once these details are recorded for troubleshooting and physical port mapping.
-**Note:** All nodes are Raspberry Pi 5 (16GB) running Ubuntu 24.04.3 LTS with Kubernetes v1.35.0
+**Note:** All nodes are Raspberry Pi 5 (16GB) running Ubuntu 24.04.5 LTS with Kubernetes v1.36.3
 
 ### Kubernetes Networking
 
 #### CNI (Container Network Interface)
-- **Plugin:** Calico v3.31.3
+- **Plugin:** Calico v3.31.4
 - **Pod CIDR:** 192.168.0.0/16 (default Calico)
-- **Network Policy:** Enabled (not yet configured)
-- **IP-in-IP:** Enabled for cross-node pod communication
+- **Network Policy:** Enforced by Felix; NetworkPolicies in 30 namespaces, several default-deny (managed by the `network-policies` app)
+- **IP-in-IP:** `ipipMode: Always` for cross-node pod traffic (BGP enabled)
 - **Known Limitation:** Cannot route from pod network to hostNetwork pods on different nodes
 
 #### Service Network
@@ -122,6 +122,13 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 | workflows.k8s.n37.ca | argo-workflows | argo-workflows-server | 50 RPS / 20 conn | LE | Active |
 | falco.k8s.n37.ca | falco | falco-falcosidekick-ui | 50 RPS / 20 conn | LE | Active |
 | localstack.k8s.n37.ca | localstack | localstack | 50 RPS / 20 conn | LE | Active |
+| flink.k8s.n37.ca | flink-demo | kafka-to-s3-rest | - | LE | Active |
+| status.k8s.n37.ca | uptime-kuma | uptime-kuma | - | LE | Active |
+| oauth.k8s.n37.ca | oauth2-proxy | oauth2-proxy | - | LE | Active |
+| registry.k8s.n37.ca | zot | zot | - | LE | Active |
+| lifeonabike.ca, www.lifeonabike.ca | lifeonabike | web | - | LE | Active (LAN; public traffic via Cloudflare Tunnel) |
+
+oauth2-proxy (GitHub sign-in) fronts workflows, falco, flink and status. Argo CD and Grafana use their own login.
 
 #### Hardening Configuration
 

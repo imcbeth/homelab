@@ -1,6 +1,6 @@
 # Homelab Kubernetes Infrastructure
 
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.35-blue.svg)](https://kubernetes.io/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.36-blue.svg)](https://kubernetes.io/)
 [![ArgoCD](https://img.shields.io/badge/GitOps-ArgoCD-orange.svg)](https://argoproj.github.io/argo-cd/)
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-5-red.svg)](https://www.raspberrypi.com/products/raspberry-pi-5/)
 
@@ -13,7 +13,7 @@ This repository contains the complete infrastructure-as-code for a production-re
 ## Quick Start
 
 ### Prerequisites
-- Kubernetes cluster (v1.35+)
+- Kubernetes cluster (v1.36+)
 - ArgoCD deployed
 - git-crypt configured for secrets management
 
