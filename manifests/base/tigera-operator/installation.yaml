@@ -2,7 +2,7 @@
 # Tigera Calico Installation CR
 # Configures Calico CNI via the Tigera operator
 # Migrates from manifest-based Calico to operator-managed
-# Existing config: 192.168.0.0/16 with IPIP encapsulation
+# Existing config: 192.168.0.0/16, IPIP only across subnets (IPIPCrossSubnet)
 apiVersion: operator.tigera.io/v1
 kind: Installation
 metadata:
@@ -20,7 +20,14 @@ spec:
     ipPools:
       - name: default-ipv4-ippool
         cidr: 192.168.0.0/16
-        encapsulation: IPIP
+        # IPIPCrossSubnet, not IPIP (Always), since 2026-11-06. All five nodes
+        # sit in 10.0.10.0/24, so pod traffic between them is routed natively
+        # over the BGP mesh with no IP-in-IP header: less CPU per packet on the
+        # Pis, and packets on the wire carry real pod IPs. IPIP is still used
+        # if a node ever joins from another subnet. The pod MTU stays at the
+        # IPIP-safe 1480 because the pool can still tunnel.
+        # Roll back by setting this to IPIP again.
+        encapsulation: IPIPCrossSubnet
         natOutgoing: Enabled
         nodeSelector: all()
         blockSize: 26
