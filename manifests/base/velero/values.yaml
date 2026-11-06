@@ -263,6 +263,12 @@ schedules:
         # copy-on-write on the NAS, so the incremental cost is the delta
         # rather than 50Gi per night.
         - zot          # OCI registry — locally-pushed images are not reproducible
+        # lifeonabike-agent-data holds the agent's Strava token and its record
+        # of which rides it has handled; losing it means re-running
+        # `agent auth` and re-baselining. The NFS photo inbox in the same
+        # namespace is labelled velero.io/exclude-from-backup: it is a
+        # Synology share already, with no CSI driver to snapshot it.
+        - lifeonabike  # lifeonabike agent state (1Gi iSCSI)
       includeClusterResources: false
       defaultVolumesToFsBackup: false  # Disabled: Use CSI snapshots only (faster, more efficient)
       snapshotVolumes: true            # Use CSI volume snapshots via Synology CSI

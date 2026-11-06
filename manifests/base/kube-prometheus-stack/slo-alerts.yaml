@@ -108,8 +108,22 @@ spec:
             runbook_url: "https://sre.google/workbook/alerting-on-slos/"
 
         # Budget exhausted: 30d availability is already below SLO target.
+        #
+        # Temporary exclusion, expires by itself on 2026-12-01 18:00 UTC
+        # (epoch 1796148047): web.lifeonabike was never down. The
+        # lifeonabike NetworkPolicy from #1087 blocked the blackbox probe
+        # from 2026-10-29 14:30 to 2026-11-01 13:30 UTC, until #1105 fixed
+        # it. Those ~3 false-failure days hold its 30d SLI near 90% until
+        # they leave the window on 2026-12-01 13:30. The burn-rate alerts
+        # above still cover it, so a real outage in the meantime still
+        # pages. Delete the `unless` block once it has expired.
         - alert: SLOErrorBudgetExhausted
-          expr: sli:probe_success:ratio_rate_30d < 0.995
+          expr: |
+            sli:probe_success:ratio_rate_30d < 0.995
+            unless on(instance) (
+              sli:probe_success:ratio_rate_30d{instance="http://web.lifeonabike:80/"}
+              and on() (vector(time()) < 1796148047)
+            )
           for: 30m
           labels:
             severity: warning

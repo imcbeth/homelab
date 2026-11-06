@@ -74,12 +74,15 @@ spec:
 # (`apt install nfs-common` on Ubuntu 24.04), and NetworkPolicy doesn't
 # apply to it.
 # Retain: deleting the claim must never touch the photos.
+# Velero skips it (exclude-from-backup on the PV and the claim): the photos
+# already live on the NAS, and a merged post carries its own copies in git.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: lifeonabike-inbox
   labels:
     app.kubernetes.io/name: lifeonabike-agent
+    velero.io/exclude-from-backup: "true"
 spec:
   capacity:
     storage: 100Gi   # informational for NFS; the share's quota is what counts
@@ -103,6 +106,7 @@ metadata:
   namespace: lifeonabike
   labels:
     app.kubernetes.io/name: lifeonabike-agent
+    velero.io/exclude-from-backup: "true"
 spec:
   storageClassName: ""
   volumeName: lifeonabike-inbox
