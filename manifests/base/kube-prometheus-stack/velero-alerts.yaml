@@ -137,7 +137,7 @@ spec:
     - alert: PVCNotCoveredByBackup
       expr: |
         kube_persistentvolumeclaim_info{
-          namespace!~"default|loki|trivy-system|uptime-kuma|localstack|tempo|zot"
+          namespace!~"default|loki|trivy-system|uptime-kuma|localstack|tempo|zot|lifeonabike"
         }
       for: 6h
       labels:
@@ -160,7 +160,9 @@ spec:
 
           Deliberately unprotected today: localstack (test S3 emulator,
           disposable) and tempo (short-TTL traces, regenerable). Everything
-          else in the exclusion list is excluded because it IS backed up.
+          else in the exclusion list is excluded because it IS backed up
+          (lifeonabike since 2026-11-06; its NFS photo inbox is skipped by
+          label, because the photos already live on the NAS).
 
           falco was REMOVED from this list on 2026-09-09 when its Redis PVC
           was deleted (it had no persistence configured and was permanently
