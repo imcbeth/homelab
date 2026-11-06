@@ -80,7 +80,7 @@ This document describes the network architecture for the Raspberry Pi Kubernetes
 - **Plugin:** Calico v3.31.4
 - **Pod CIDR:** 192.168.0.0/16 (default Calico)
 - **Network Policy:** Enforced by Felix; NetworkPolicies in 30 namespaces, several default-deny (managed by the `network-policies` app)
-- **IP-in-IP:** `ipipMode: Always` for cross-node pod traffic (BGP enabled)
+- **IP-in-IP:** `ipipMode: CrossSubnet` — all nodes share 10.0.10.0/24, so cross-node pod traffic is routed natively over BGP; IPIP only for a node on another subnet
 - **Known Limitation:** Cannot route from pod network to hostNetwork pods on different nodes
 
 #### Service Network
