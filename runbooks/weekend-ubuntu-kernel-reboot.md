@@ -138,6 +138,49 @@ done
 # 3. Chaos-mesh next Wed audit — scripts/verify-chaos-week.sh
 ```
 
+### Rebalance pods after the cycle
+
+Kubernetes never moves running pods, so a rolling reboot leaves them wherever
+they landed: each drain dumps its pods onto whichever node came back most
+recently. After the 2026-10-26 firmware roll, node03 ended up holding 27
+non-DaemonSet pods against node01's 12 — including ingress-nginx, the MetalLB
+controller, cert-manager's webhook, oauth2-proxy and Alertmanager, all single
+replicas, all on one node.
+
+A plain `rollout restart` often puts the pod straight back on the same node
+(its images are cached there, and by *requests* it rarely looks full), so
+cordon the busiest node for the few minutes the restarts take:
+
+```bash
+# 1. Find the busiest worker (non-DaemonSet pods)
+kubectl get pods -A --field-selector=status.phase=Running \
+  -o 'custom-columns=NODE:.spec.nodeName,OWNER:.metadata.ownerReferences[0].kind' \
+  --no-headers | awk '$2!="DaemonSet"{print $1}' | sort | uniq -c
+
+# 2. List its stateless Deployments: no PVC, not owned by an operator
+#    (tigera, strimzi and argo-events reconcile their own Deployments — skip them)
+BUSY=node03
+for p in $(kubectl get pods -A --field-selector=spec.nodeName=$BUSY \
+    -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].kind=="ReplicaSet")]}{.metadata.namespace}/{.metadata.ownerReferences[0].name}{"\n"}{end}'); do
+  ns=${p%/*}; rs=${p#*/}
+  kubectl -n $ns get rs $rs -o jsonpath='{.metadata.namespace}/{.metadata.ownerReferences[0].name}{"\n"}'
+done | sort -u
+
+# 3. Cordon, restart the chosen Deployments one at a time, uncordon
+kubectl cordon $BUSY
+for d in cert-manager/cert-manager-webhook oauth2-proxy/oauth2-proxy; do   # ← your list
+  kubectl -n ${d%/*} rollout restart deploy/${d#*/}
+  kubectl -n ${d%/*} rollout status  deploy/${d#*/} --timeout=180s
+done
+kubectl uncordon $BUSY
+```
+
+Leave StatefulSets and anything with a PVC where it is (iSCSI volumes reattach
+slowly and Alertmanager loses its silences on restart). Expect an overshoot —
+the cordoned node ends up lightest — which corrects itself as later pods
+schedule. On 2026-11-06, restarting 13 Deployments off node03 took the
+non-DaemonSet counts from 12/18/27/20 to 19/20/14/24 (node01–04).
+
 ## Cluster-specific risks
 
 Same shape as the k8s 1.36 upgrade:

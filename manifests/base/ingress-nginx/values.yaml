@@ -21,6 +21,23 @@ controller:
     Referrer-Policy: "strict-origin-when-cross-origin"
     Permissions-Policy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=()"
 
+  # Two replicas on different nodes, so one node failing doesn't take down
+  # all LAN ingress (10.0.10.10). With externalTrafficPolicy: Local, MetalLB L2
+  # announces the VIP from a node that has a ready pod, so the second replica is
+  # a warm standby: the VIP moves in seconds rather than waiting ~5 min for the
+  # pod to be rescheduled. replicaCount > 1 also makes the chart create a PDB
+  # (minAvailable: 1), so drains evict one at a time.
+  replicaCount: 2
+  minAvailable: 1
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+              app.kubernetes.io/component: controller
+          topologyKey: kubernetes.io/hostname
+
   # Resource limits for cluster stability
   resources:
     requests:
