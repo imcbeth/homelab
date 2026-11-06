@@ -4,7 +4,7 @@ Thank you for contributing to the homelab Kubernetes infrastructure!
 
 ## Prerequisites
 
-- Kubernetes v1.35.x (for testing)
+- Kubernetes v1.36.x (for testing)
 - kubectl configured with cluster access
 - Helm 3.x
 - ArgoCD CLI (optional)
