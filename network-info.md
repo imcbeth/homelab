@@ -157,6 +157,12 @@ oauth2-proxy (GitHub sign-in) fronts workflows, falco, flink and status. Argo CD
   - SMB/NFS: File sharing
   - SNMP: Monitored by SNMP exporter (SNMPv3, port 161)
   - Docker: Container services (not used by K8s)
+- **Storage path:** the nodes (VLAN 10) and the NAS (VLAN 1) are on different
+  VLANs, so all iSCSI traffic is routed by the gateway (switch → gateway →
+  switch). A gateway reboot or firmware update stalls every iSCSI session. Each
+  node sets `node.session.timeo.replacement_timeout = 300` in
+  `/etc/iscsi/iscsid.conf` (default 120) so I/O pauses through a reboot of up to
+  5 min instead of failing and remounting volumes read-only.
 
 ---
 
