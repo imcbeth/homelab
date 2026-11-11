@@ -1,5 +1,11 @@
 # Claude
-.claude/
+# .claude/ is local Claude Code state, except the notes and the repo skills,
+# which are reviewed like any other file (see CLAUDE.md).
+/.claude/*
+!/.claude/notes/
+!/.claude/skills/
+# any .claude/ below the root (e.g. a stray tmp/.claude/) stays ignored entirely
+*/**/.claude/
 
 # Node.js
 node_modules/
