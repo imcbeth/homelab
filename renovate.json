@@ -38,7 +38,7 @@
       ]
     },
     {
-      "description": "argo-events on its own, outside the weekend batch. v1.9.11 carries 4 CRITICAL CVEs in vendored Go dependencies (stdlib, grpc, pgx x2) with no fixed release available as of 2026-09-11 \u2014 scanning the 31 Aug `latest` rebuild confirmed it fixes none of them and adds one. The fix can only come from upstream, so the release should surface the day it ships rather than waiting up to a week. Placed AFTER the ArgoCD ecosystem rule so it overrides the grouping, and BEFORE the major-update rule so major bumps are still held for review. vulnerabilityAlerts does not cover this: it keys off GitHub advisories for the chart, which will not fire for CVEs vendored inside the container image.",
+      "description": "argo-events on its own, outside the weekend batch. v1.9.11 carries 4 CRITICAL CVEs in vendored Go dependencies (stdlib, grpc, pgx x2) with no fixed release available as of 2026-09-11 — scanning the 31 Aug `latest` rebuild confirmed it fixes none of them and adds one. The fix can only come from upstream, so the release should surface the day it ships rather than waiting up to a week. Placed AFTER the ArgoCD ecosystem rule so it overrides the grouping, and BEFORE the major-update rule so major bumps are still held for review. vulnerabilityAlerts does not cover this: it keys off GitHub advisories for the chart, which will not fire for CVEs vendored inside the container image.",
       "matchPackageNames": [
         "argo-events"
       ],
@@ -125,6 +125,15 @@
       "automerge": false,
       "automergeType": "pr",
       "platformAutomerge": false
+    },
+    {
+      "description": "Application specs in manifests/applications/ are not deployed by Argo CD self-management (see CLAUDE.md). Without this note, a merged chart bump shows Synced while the cluster still runs the old chart, as happened with #1123-#1132 on 2026-11-11.",
+      "matchManagers": [
+        "argocd"
+      ],
+      "prBodyNotes": [
+        "**After merging, apply the Application spec by hand.** Argo CD does not deploy `manifests/applications/` itself:\n\n```bash\nkubectl diff -f manifests/applications/<app>.yaml\nkubectl apply -f manifests/applications/<app>.yaml\n```\n\nThen confirm the app is Synced and Healthy **at the new chart version**. \"Synced\" alone can mean the old version."
+      ]
     },
     {
       "description": "Hold major updates for manual review",
