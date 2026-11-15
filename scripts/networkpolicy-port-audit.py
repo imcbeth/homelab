@@ -67,8 +67,6 @@ EXPECTED = {
         "external-dns-cloudflare serves metrics on 7979 without declaring it",
     ("DEAD-PORT", "flink-operator", "flink-operator-network-policy", 8081):
         "flink-demo JobManager REST; flink-demo has no pods while the job is stopped",
-    ("DEAD-PORT", "ingress-nginx", "ingress-nginx-network-policy", 8081):
-        "flink-demo JobManager UI backend; same as above",
     ("DEAD-PORT", "synology-csi", "synology-csi-network-policy", 9808):
         "CSI liveness-probe sidecar; kubelet probes are allowed regardless",
 }
