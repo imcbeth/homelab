@@ -13,9 +13,19 @@ spec:
     - Egress
   ingress:
     # Istio ambient mesh HBONE tunnel (ztunnel rewrites dest port to 15008)
-    - ports:
+    # Restricted 2026-11-15 (O8). Between two ambient-meshed pods this is the
+    # ONLY rule NetworkPolicy evaluates -- ztunnel delivers the connection
+    # inside the pod, so the application-port rules below never see it. It
+    # used to admit 15008 from anywhere, which let any meshed pod reach any
+    # port here. Sources: every meshed namespace the rules below name, plus
+    # those seen in 14 days of ztunnel connection metrics.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: flink-operator
+      ports:
         - protocol: TCP
-          port: 15008
+          port: 15008  # HBONE mTLS tunnel
 
     # ztunnel link-local health probes
     - from:
