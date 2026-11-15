@@ -126,3 +126,20 @@ spec:
   issuerRef:
     kind: ClusterIssuer
     name: lets-encrypt-k8s-n37-ca-prod
+---
+# LAN path for lifeonabike.ca only. Public visitors reach the site through the
+# Cloudflare tunnel and never touch this gateway; LAN clients resolve the name
+# to the gateway via external-dns-unifi.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: lifeonabike-ca-gw
+  namespace: istio-system
+spec:
+  secretName: lifeonabike-ca-gw-tls
+  dnsNames:
+    - lifeonabike.ca
+    - www.lifeonabike.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
