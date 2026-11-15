@@ -1,0 +1,23 @@
+# One explicit Certificate per host on the LAN gateway, in istio-system
+# beside it (Phase 1, 2026-11-15).
+#
+# Explicit rather than cert-manager's Gateway API integration: it needs no
+# feature flag or cert-manager restart, and each host's certificate is a
+# visible resource that moves with it. The ClusterIssuer validates by DNS01,
+# so issuance and renewal do not depend on ingress-nginx.
+#
+# Why not keep reusing the Ingress's secret: those Certificates are created by
+# cert-manager's ingress-shim and owned by the Ingress, so deleting a host's
+# Ingress at cutover deletes its Certificate and renewal stops silently.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: falco-k8s-n37-ca-gw
+  namespace: istio-system
+spec:
+  secretName: falco-k8s-n37-ca-gw-tls
+  dnsNames:
+    - falco.k8s.n37.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
