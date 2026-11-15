@@ -156,3 +156,57 @@ spec:
           Ztunnel DNS proxy failure rate is {{ $value | humanize }}/s,
           significantly above the 1-hour baseline.
           Check CoreDNS health and network connectivity.
+
+    # Mesh connections refused between two KNOWN meshed namespaces.
+    #
+    # Added with O8 (2026-11-15), when every ambient namespace's HBONE (15008)
+    # ingress was narrowed from "anywhere" to the namespaces that use it. If an
+    # allowlist misses a rare flow, NetworkPolicy drops the HBONE SYN and the
+    # only trace is here: ztunnel logs "connection timed out, maybe a
+    # NetworkPolicy is blocking HBONE port 15008" and counts a failed
+    # connection. Nothing else alerts on it -- the caller's own ztunnel
+    # accepts the TCP connect locally, so the client just sees a stall.
+    #
+    # destination "unknown" is excluded: it is traffic leaving the mesh and has
+    # standing failures unrelated to policy (loki -> unknown ~6.6k/day, O11).
+    #
+    # NOT written with increase(): a blocked flow creates a NEW failure
+    # series, and increase() over a series whose first sample is already 2 or
+    # 4 returns 0 -- verified 2026-11-15, the kafka -> unipoller test drops
+    # were invisible to it. Current minus 1h ago, with a missing past sample
+    # treated as 0, counts them.
+    #
+    # >= 10 in 1h: a blocked scrape (~120 failures/h) fires in ~15 min. Over
+    # the 14 days before this change it would have fired at three moments,
+    # all real disruptions -- 2026-11-01 20:00 (four pairs at once), the
+    # 2026-11-04 network outage (default -> unipoller), and strimzi-system ->
+    # kafka on 2026-11-11. A one-off burst of a few retries (e.g. a blocked
+    # weekly CronJob) will NOT reach it; those surface as job failures.
+    - alert: IstioMeshConnectionsRefused
+      expr: |
+        (
+          sum by (source_workload_namespace, destination_workload_namespace) (
+            istio_tcp_connections_failed_total{reporter="source", destination_workload_namespace!~"unknown|"})
+          - (
+            sum by (source_workload_namespace, destination_workload_namespace) (
+              istio_tcp_connections_failed_total{reporter="source", destination_workload_namespace!~"unknown|"} offset 1h)
+            or
+            sum by (source_workload_namespace, destination_workload_namespace) (
+              istio_tcp_connections_failed_total{reporter="source", destination_workload_namespace!~"unknown|"}) * 0
+          )
+        ) >= 10
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Mesh connections {{ $labels.source_workload_namespace }} -> {{ $labels.destination_workload_namespace }} failing"
+        description: |
+          {{ $value | humanize }} mesh connections from {{ $labels.source_workload_namespace }}
+          to {{ $labels.destination_workload_namespace }} failed in the last hour.
+
+          If {{ $labels.source_workload_namespace }} is not in the destination's
+          HBONE allowlist (the 15008 ingress rule in
+          manifests/base/network-policies/{{ $labels.destination_workload_namespace }}/),
+          this is a NetworkPolicy drop: add it there. Confirm in the ztunnel log
+          on the destination's node:
+            kubectl logs -n istio-system <ztunnel pod> | grep "blocking HBONE"
