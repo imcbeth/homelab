@@ -169,3 +169,33 @@ spec:
           selector:
             matchLabels:
               kubernetes.io/metadata.name: oauth2-proxy
+    - name: https-lifeonabike
+      hostname: lifeonabike.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: lifeonabike-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: lifeonabike
+    - name: https-www-lifeonabike
+      hostname: www.lifeonabike.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: lifeonabike-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: lifeonabike
