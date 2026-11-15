@@ -21,6 +21,16 @@ spec:
         - protocol: TCP
           port: 4180
 
+    # ext_authz checks from the Istio gateway (istio-system) for the O4 Phase 0
+    # prototype (manifests/base/istio-gateway). Remove with the prototype.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 4180
+
     # Auth subrequests from ingress-nginx (nginx auth_request)
     # Same source as above — ingress-nginx sends subrequests to /oauth2/auth
     # for every protected ingress before forwarding to the backend

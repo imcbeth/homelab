@@ -1,0 +1,19 @@
+# Additive to istio-system-network-policy (policies are a union): only the
+# prototype gateway's pods accept HTTPS from outside. Egress to falco (2802)
+# and oauth2-proxy (4180) is already allowed by the namespace policy's
+# all-ports egress to in-cluster namespaces.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: proto-gateway-ingress
+  namespace: istio-system
+spec:
+  podSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: proto-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 443

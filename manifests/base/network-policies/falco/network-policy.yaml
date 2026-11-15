@@ -52,6 +52,16 @@ spec:
         - protocol: TCP
           port: 2802  # Sidekick WebUI
 
+    # Istio gateway (istio-system) for the O4 Phase 0 prototype route to the
+    # Sidekick UI (manifests/base/istio-gateway). Remove with the prototype.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 2802  # Sidekick WebUI
+
     # Uptime Kuma health monitoring
     - from:
         - namespaceSelector:
