@@ -45,6 +45,16 @@ rules:
   - apiGroups: ["externaldns.k8s.io"]
     resources: ["dnsendpoints/status"]
     verbs: ["get", "update", "patch"]
+  # Gateway API -- the `gateway-httproute` source on external-dns-unifi
+  # (2026-11-15, ingress-nginx replacement Phase 1). It reads routes, the
+  # Gateways they attach to (for the address), and namespaces (for
+  # allowedRoutes selectors). Not used by the cloudflare instance.
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways", "httproutes"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "watch", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

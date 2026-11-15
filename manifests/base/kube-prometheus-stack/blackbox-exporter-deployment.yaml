@@ -31,7 +31,9 @@ spec:
             - "grafana.k8s.n37.ca"
             - "workflows.k8s.n37.ca"
             - "localstack.k8s.n37.ca"
-            - "falco.k8s.n37.ca"
+            # falco.k8s.n37.ca removed 2026-11-15: it moved to the LAN Istio
+            # gateway, so this ClusterIP no longer serves it. It was never a
+            # probe target. Moved hosts need the gateway's ClusterIP instead.
       containers:
         - name: blackbox-exporter
           image: prom/blackbox-exporter:v0.29.1
