@@ -1,0 +1,27 @@
+# Port-level control between meshed pods (O8 step 3, pilot, 2026-11-15).
+#
+# NetworkPolicy cannot restrict ports for meshed callers: ztunnel delivers the
+# connection inside the pod, so only the 15008 (HBONE) rule is evaluated, and
+# since #1174 that admits whole namespaces. ztunnel itself enforces L4
+# AuthorizationPolicy, using the caller's mTLS identity, which is stricter
+# than a namespace: one service account, one port.
+#
+# An ALLOW policy denies every meshed caller it does not match. In 30 days of
+# ztunnel metrics unipoller's only caller was Prometheus, on 9130. It has no
+# kubelet probes. Non-meshed traffic is unaffected (ztunnel only authorizes
+# what it carries); NetworkPolicy still covers that.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: unipoller-allow
+  namespace: unipoller
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["9130"]
