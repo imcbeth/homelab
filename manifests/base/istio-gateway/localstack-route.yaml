@@ -1,0 +1,22 @@
+# localstack.k8s.n37.ca on lan-gateway (Phase 1, 2026-11-15). No forward-auth
+# (not in authz.yaml): an S3 API endpoint for non-browser clients, as on
+# ingress-nginx. nginx's per-host rate limits (50 rps / 20 conns) are dropped
+# deliberately -- LAN-only host, see the runbook.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: localstack
+  namespace: localstack
+  annotations:
+    external-dns.alpha.kubernetes.io/ttl: "300"
+spec:
+  parentRefs:
+    - name: lan-gateway
+      namespace: istio-system
+      sectionName: https-localstack
+  hostnames:
+    - localstack.k8s.n37.ca
+  rules:
+    - backendRefs:
+        - name: localstack
+          port: 4566
