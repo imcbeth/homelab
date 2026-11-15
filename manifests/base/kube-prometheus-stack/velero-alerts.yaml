@@ -134,10 +134,15 @@ spec:
     # namespace to the schedule means adding it here too — a coupled edit, and
     # an intentional one: it forces a decision about whether new stateful
     # workloads are worth protecting, rather than defaulting to silence.
+    #
+    # argo-events (added 2026-11-15, decided not to back up): its only PVC is
+    # the EventBus's JetStream store (#1171), transient by design (72h maxage).
+    # If it is lost the sensors re-create their K/V buckets on restart, and
+    # ArgoEventsSensorBucketMissing fires if one is stuck.
     - alert: PVCNotCoveredByBackup
       expr: |
         kube_persistentvolumeclaim_info{
-          namespace!~"default|loki|trivy-system|uptime-kuma|localstack|tempo|zot|lifeonabike"
+          namespace!~"default|loki|trivy-system|uptime-kuma|localstack|tempo|zot|lifeonabike|argo-events"
         }
       for: 6h
       labels:
