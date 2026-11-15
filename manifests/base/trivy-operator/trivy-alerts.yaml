@@ -14,69 +14,51 @@ spec:
   - name: trivy_rbac_security
     interval: 60s
     rules:
-    # Critical RBAC issues on ClusterRoles — AGGREGATE ONLY.
+    # REWRITTEN 2026-11-15 as a delta, replacing CriticalClusterRoleRBACIssues
+    # (`sum(...{severity="Critical"}) > 0`) and HighClusterRoleRBACIssues
+    # (`sum(...{severity="High"}) > 10`).
     #
-    # A second rule (`HighRiskRBACPermissions`, group trivy_rbac_assessment)
-    # used the same metric WITHOUT aggregation:
-    #   trivy_clusterrole_clusterrbacassessments{severity="Critical"} > 0
-    # That produced 51 per-ClusterRole alerts alongside this one aggregate —
-    # the identical signal counted twice, at two cardinalities. Removed
-    # 2026-09-07; this rule carries the same information in one alert.
+    # Both were absolute thresholds on a steady-state count. The findings are
+    # real Trivy KSV checks but largely inherent: KSV041 (can manage secrets)
+    # and KSV046 (can manage all resources) against operator ClusterRoles --
+    # ArgoCD, Gatekeeper, Velero and friends need those grants to function.
+    # So both fired continuously and never cleared (48 Critical / 23 High on
+    # 2026-11-15). They had been demoted to info (null receiver) on
+    # 2026-09-14 to stop a 24-hourly email, which also meant RBAC drift was
+    # never notified at all -- the old comment here said as much.
     #
-    # On the findings themselves: they are real Trivy KSV checks, but largely
-    # inherent rather than fixable. The 67 failing CRITICAL checks are
-    # dominated by KSV041 (can manage secrets, 38x) and KSV046 (can manage
-    # all resources, 15x) against operator ClusterRoles — ArgoCD, Gatekeeper,
-    # Velero and friends legitimately need those grants to function.
-    # Treat this alert as a "did the count change" signal, not a work queue.
-    - alert: CriticalClusterRoleRBACIssues
-      expr: sum(trivy_clusterrole_clusterrbacassessments{severity="Critical"}) > 0
-      for: 10m
+    # A ClusterRole that newly earns a Critical or High finding IS worth a
+    # look: it means a chart upgrade or a new app widened its grants. This
+    # fires on exactly that, the same 24h-offset pattern as
+    # CriticalVulnerabilitiesIncreased, and resolves on its own once the
+    # higher count is 24h old. Max delta over the 14 days before this
+    # change: 0 for both severities.
+    #
+    # The earlier per-ClusterRole duplicate (HighRiskRBACPermissions, 51
+    # alerts for the same signal) was removed 2026-09-07; this stays
+    # aggregate, one alert per severity.
+    - alert: ClusterRoleRBACIssuesIncreased
+      expr: |
+        sum by (severity) (trivy_clusterrole_clusterrbacassessments{severity=~"Critical|High"})
+        - sum by (severity) (trivy_clusterrole_clusterrbacassessments{severity=~"Critical|High"} offset 24h) > 0
+      for: 30m
       labels:
-        # info, not warning — info routes to the null receiver, so this is
-        # deliberately silent. Demoted 2026-09-14.
-        #
-        # The expression is `> 0` on a steady-state count that is mostly
-        # inherent to operators needing broad grants, so it fires continuously
-        # and never clears. As a warning it emailed every 24h since 2026-09-09
-        # saying the same thing, which trains you to ignore the channel that
-        # also carries real warnings.
-        #
-        # Matches its sibling HighClusterRoleRBACIssues, already info.
-        #
-        # NOTE: this alert's own description says to investigate when the
-        # COUNT CHANGES, not on every evaluation — and nothing implements that
-        # for RBAC. CriticalVulnerabilitiesIncreased is the delta-based
-        # equivalent for vulnerabilities; there is no RBAC counterpart. Until
-        # one exists, RBAC drift is visible only in Grafana and the reports,
-        # not by notification.
-        severity: info
+        severity: warning
       annotations:
-        summary: "Critical RBAC issues detected in ClusterRoles"
+        summary: "ClusterRole {{ $labels.severity }} RBAC findings rose by {{ $value }} in 24h"
         description: |
-          {{ $value }} ClusterRoles have CRITICAL RBAC security issues.
+          {{ $value }} more {{ $labels.severity }} RBAC findings on ClusterRoles
+          than 24 hours ago -- a chart upgrade or new app widened its grants.
 
-          Mostly inherent to operators that need broad grants (KSV041 manage
-          secrets, KSV046 manage all resources). Investigate when the COUNT
-          CHANGES, not on every evaluation.
-
-          List the failing checks:
+          List the failing checks (compare with the previous day's set):
             kubectl get clusterrbacassessmentreports -o json | jq -r '
               .items[] | .metadata.name as $n
               | .report.checks[]
-              | select(.severity=="CRITICAL" and .success==false)
-              | "\($n) \(.checkID) \(.title)"'
+              | select((.severity=="CRITICAL" or .severity=="HIGH") and .success==false)
+              | "\($n) \(.severity) \(.checkID) \(.title)"'
 
-    - alert: HighClusterRoleRBACIssues
-      expr: sum(trivy_clusterrole_clusterrbacassessments{severity="High"}) > 10
-      for: 30m
-      labels:
-        severity: info
-      annotations:
-        summary: "High number of RBAC issues in ClusterRoles"
-        description: |
-          {{ $value }} ClusterRoles have HIGH severity RBAC issues.
-          Review ClusterRbacAssessmentReports and apply principle of least privilege.
+          Inherent operator grants (KSV041, KSV046) are expected; decide
+          whether the new one is.
 
   - name: trivy_vulnerabilities
     interval: 60s
@@ -174,16 +156,29 @@ spec:
           v3.5.2 while only v3.5.2 was running. Confirm the image is live
           before chasing it:
             kubectl get pods -A -o jsonpath='{range .items[*]}{.spec.containers[*].image}{"\n"}{end}' | sort -u | grep <image>
-    - alert: HighVulnerabilityCount
-      expr: sum(trivy_image_vulnerabilities{severity=~"Critical|High"}) > 50
+    # 3. HIGH-severity drift. Replaced `sum(Critical|High) > 50` on
+    #    2026-11-15: that compared ~1,600 findings against 50, so it fired
+    #    permanently and never cleared. Criticals are covered by rule 1;
+    #    this tracks High alone. It stays info (null receiver): High counts
+    #    move with nearly every image bump (-103 on 2026-11-15 alone), so as
+    #    a warning it would email after most Renovate weekends. Visible in
+    #    the Alertmanager UI as a regression marker, nothing more.
+    - alert: HighVulnerabilitiesIncreased
+      expr: |
+        sum(trivy_image_vulnerabilities{severity="High"})
+        - sum(trivy_image_vulnerabilities{severity="High"} offset 24h) > 0
       for: 1h
       labels:
         severity: info
       annotations:
-        summary: "High total vulnerability count across cluster"
+        summary: "Cluster High CVE count rose by {{ $value }} in 24h"
         description: |
-          {{ $value }} Critical+High vulnerabilities detected across all images.
-          Review Trivy dashboard for affected images and prioritize remediation.
+          High vulnerabilities across the cluster increased by {{ $value }}
+          in the last 24 hours.
+
+          Find the change:
+            sum by (image_repository,image_tag) (trivy_image_vulnerabilities{severity="High"})
+          compared against the same query with `offset 24h`.
 
   - name: trivy_configuration_audit
     interval: 60s
@@ -227,47 +222,37 @@ spec:
   - name: trivy_compliance
     interval: 300s  # Check every 5 minutes
     rules:
-    # Compliance failures
-    - alert: CISKubernetesBenchmarkFailures
-      expr: trivy_cluster_compliance{title=~"CIS Kubernetes.*",status="Fail"} > 0
-      for: 1h
-      labels:
-        severity: info
-      annotations:
-        summary: "CIS Kubernetes Benchmark compliance failures detected"
-        description: |
-          CIS Kubernetes Benchmark ({{ $labels.title }}) has failing checks.
-          Review compliance report for details and remediation steps.
-
-    - alert: NSAKubernetesHardeningFailures
-      expr: trivy_cluster_compliance{title=~"National Security Agency.*",status="Fail"} > 0
-      for: 1h
-      labels:
-        severity: info
-      annotations:
-        summary: "NSA Kubernetes Hardening Guidance compliance failures"
-        description: |
-          NSA Kubernetes Hardening Guidance has failing checks.
-          Review compliance report for security hardening recommendations.
-
-    - alert: PSSBaselineComplianceFailures
-      expr: trivy_cluster_compliance{title=~".*PSS.*Baseline.*",status="Fail"} > 0
-      for: 1h
-      labels:
-        severity: info
-      annotations:
-        summary: "Pod Security Standards Baseline compliance failures"
-        description: |
-          PSS Baseline has failing checks.
-          Review compliance report for pod security baseline violations.
-
-    - alert: PSSRestrictedComplianceFailures
-      expr: trivy_cluster_compliance{title=~".*PSS.*Restricted.*",status="Fail"} > 0
+    # REWRITTEN 2026-11-15. Replaces four per-framework rules
+    # (CIS/NSA/PSS Baseline/PSS Restricted), each `{status="Fail"} > 0`.
+    #
+    # Two problems with those:
+    #  - Absolute thresholds on standing posture (CIS 16, NSA 7, PSS 3+3
+    #    failing controls), so they fired permanently and never cleared.
+    #  - The two PSS rules matched `title=~".*PSS.*"`, but the real titles
+    #    are "Kubernetes Pod Security Standards - Baseline" / "- Restricted".
+    #    Neither could EVER fire, including the Restricted one at warning.
+    #
+    # One rule per report `title` avoids the regex entirely, so a renamed or
+    # newly enabled framework is covered without editing this file. It fires
+    # when a framework's failing-control count rises over 24h. Aggregated by
+    # title because the raw series carry `pod`, which changes whenever
+    # trivy-operator restarts and would otherwise break the offset match.
+    # Max delta over the 14 days before this change: 0 for all four.
+    - alert: ClusterComplianceFailuresIncreased
+      expr: |
+        max by (title) (trivy_cluster_compliance{status="Fail"})
+        - max by (title) (trivy_cluster_compliance{status="Fail"} offset 24h) > 0
       for: 1h
       labels:
         severity: warning
       annotations:
-        summary: "Pod Security Standards Restricted compliance failures"
+        summary: "{{ $labels.title }}: {{ $value }} more failing controls than 24h ago"
         description: |
-          PSS Restricted has failing checks.
-          Review compliance report for pod security restricted violations.
+          {{ $labels.title }} has {{ $value }} more failing controls than it
+          did 24 hours ago.
+
+          See which controls fail now:
+            kubectl get clustercompliancereports -o json | jq -r '
+              .items[] | select(.spec.compliance.title=="{{ $labels.title }}")
+              | .status.summaryReport.controlCheck[]
+              | select(.totalFail > 0) | "\(.id) \(.severity) \(.name)"'

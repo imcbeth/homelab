@@ -363,12 +363,17 @@ alertmanager:
         # decision" look identical from the outside, and the only way to tell
         # them apart is to write the decision down.
         #
-        # The 13 info rules are standing-posture and capacity signals, all
-        # better read on a dashboard than delivered as mail:
-        #   CIS/NSA/PSS compliance counters, HighClusterRoleRBACIssues,
-        #   HighVulnerabilityCount, IstioDuplicateClusters, KubeQuota*,
+        # The 10 info rules are capacity and drift signals, all better read
+        # on a dashboard than delivered as mail:
+        #   HighVulnerabilitiesIncreased, IstioDuplicateClusters, KubeQuota*,
         #   KubeletTooManyPods, KubeNodePressure, KubeNodeEviction,
-        #   NodeCPUHighUsage, FalcoNoEvents
+        #   NodeCPUHighUsage, FalcoNoEvents, PVCWritabilityUnprobeable
+        #
+        # The Trivy standing-posture rules (CIS/NSA/PSS compliance counters,
+        # Critical/HighClusterRoleRBACIssues, HighVulnerabilityCount) used to
+        # sit here, firing permanently. On 2026-11-15 they became 24h-delta
+        # rules in trivy-operator/trivy-alerts.yaml; the RBAC and compliance
+        # ones are warnings now, because they fire only on a regression.
         #
         # WORTH RECONSIDERING: FalcoNoEvents. It fires when Falco stops
         # producing events, which is the "the watcher went silent" shape that

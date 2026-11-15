@@ -142,9 +142,10 @@ them indefinitely:
 ### Recurring, not planned
 
 - **Renovate batch lands Saturday** (weekend schedule).
-- `CriticalClusterRoleRBACIssues` is `severity: warning`, so it now emails
-  daily. It is inherent operator grants, not an incident. If it becomes
-  tiresome the honest fix is demoting it to `info` — it is standing posture.
+- Trivy RBAC and compliance alerts fire only on a 24h **increase**
+  (`ClusterRoleRBACIssuesIncreased`, `ClusterComplianceFailuresIncreased`,
+  both warning, 2026-11-15). The standing counts (48 Critical RBAC, CIS 16,
+  NSA 7, PSS 3+3) are inherent posture and are read in Grafana, not mailed.
 
 ---
 
