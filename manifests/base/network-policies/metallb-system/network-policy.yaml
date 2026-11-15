@@ -21,16 +21,6 @@ spec:
         - protocol: TCP
           port: 9120  # Controller metrics (HTTPS). Speakers are hostNetwork,
                       # so pod NetworkPolicy does not apply to their 9120.
-    # Allow internal namespace communication (speaker <-> controller memberlist)
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: metallb-system
-      ports:
-        - protocol: TCP
-          port: 7946  # Memberlist
-        - protocol: UDP
-          port: 7946  # Memberlist
     # Allow webhook validation from kube-apiserver
     - from:
         - ipBlock:
@@ -65,15 +55,8 @@ spec:
       ports:
         - protocol: TCP
           port: 6443  # API server port
-    # Allow internal namespace communication (speaker <-> controller)
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: metallb-system
-      ports:
-        - protocol: TCP
-          port: 7946  # Memberlist
-        - protocol: UDP
-          port: 7946  # Memberlist
+    # No memberlist rule: memberlist (7946) runs between the speakers, which are
+    # hostNetwork, so pod NetworkPolicy never sees it; the controller does not
+    # use memberlist.
     # Note: L2 ARP/GARP announcements operate at Layer 2 and are not affected
     # by NetworkPolicy (which operates at Layer 3/4). No additional rules needed.
