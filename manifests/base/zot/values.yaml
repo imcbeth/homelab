@@ -194,8 +194,11 @@ service:
   port: 5000
 
 # Ingress via ingress-nginx + cert-manager + external-dns
+# Served by the LAN Istio gateway since 2026-11-15
+# (manifests/base/istio-gateway/registry-route.yaml); ingress-nginx is being
+# retired. Kept (disabled) for reference until Phase 2 removes nginx.
 ingress:
-  enabled: true
+  enabled: false
   className: nginx
   annotations:
     cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
