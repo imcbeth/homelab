@@ -1,7 +1,15 @@
-# Forward-auth to oauth2-proxy for everything through the LAN gateway,
-# via the `oauth2-proxy` extensionProvider in istiod-values.yaml. This is the
-# Phase 0 result: signed out -> 302 to GitHub with an absolute return URL
-# (#1181); signed in -> the app, which needs oauth2-proxy's static://200 (#1183).
+# Forward-auth to oauth2-proxy on the LAN gateway, via the `oauth2-proxy`
+# extensionProvider in istiod-values.yaml. Phase 0 result: signed out -> 302 to
+# GitHub with an absolute return URL (#1181); signed in -> the app, which needs
+# oauth2-proxy's static://200 (#1183).
+#
+# SCOPED BY HOST. A CUSTOM policy applies to every request it matches, and the
+# gateway will carry hosts that must NOT get forward-auth: argocd and grafana
+# have their own SSO/login, localstack and registry are API endpoints used by
+# non-browser clients (docker cannot follow an OAuth redirect), and
+# oauth.k8s.n37.ca is oauth2-proxy itself. This list mirrors the Ingresses that
+# carried nginx's auth-url/auth-signin annotations; add a host here in the same
+# PR that moves it.
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
@@ -16,4 +24,7 @@ spec:
   provider:
     name: oauth2-proxy
   rules:
-    - {}
+    - to:
+        - operation:
+            hosts:
+              - falco.k8s.n37.ca
