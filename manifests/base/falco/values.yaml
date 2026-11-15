@@ -268,6 +268,11 @@ falcosidekick:
   webui:
     enabled: true
     replicaCount: 1
+    # Chart 9.2.2 defaults to 2.2.0 (2023, Go 1.20: 3 critical CVEs);
+    # 2.3.1 leaves one (labstack/echo CVE-2026-118264, no fixed release yet).
+    image:
+      repository: falcosecurity/falcosidekick-ui
+      tag: 2.3.1
     # 30d was too much: 167k events → 1.19GB in Redis (2026-07-14 profile).
     # Combined with ReJSON + RediSearch module overhead + fresh event ingest,
     # the Redis container OOMKilled repeatedly against the 2Gi Gatekeeper cap.

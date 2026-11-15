@@ -75,6 +75,12 @@ serviceMonitor:
 
 # Trivy scanner configuration
 trivy:
+  # Chart 0.38.1 defaults to 0.76.1 (brotli CVE-2026-111497); 0.76.2 scans
+  # clean (2026-11-15).
+  image:
+    repository: aquasec/trivy
+    tag: 0.76.2
+
   # Use built-in server mode
   mode: ClientServer
 

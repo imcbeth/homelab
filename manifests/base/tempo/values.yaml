@@ -3,6 +3,15 @@
 # Deployed to: tempo namespace
 
 tempo:
+  # Chart 1.24.4 is the last single-binary release and ships app v2.9.0, whose
+  # gRPC and Go stdlib carry critical CVEs (CVE-2026-33186, CVE-2025-68121).
+  # 2.10.10 scans clean (2026-11-15). Default block encoding and
+  # multitenancy_enabled: false, so the 2.10 breaking changes (vParquet2
+  # removal, tenant ID validation) do not apply. Listed with its repository so
+  # Renovate tracks it.
+  repository: grafana/tempo
+  tag: "2.10.10"
+
   # Disable anonymous telemetry reporting
   reportingEnabled: false
 
