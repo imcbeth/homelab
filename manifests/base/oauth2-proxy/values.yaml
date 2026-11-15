@@ -19,8 +19,17 @@ extraArgs:
   github-user: imcbeth
   # Allow any email domain (GitHub usernames are the primary restriction)
   email-domain: "*"
-  # Upstream: static 202 — oauth2-proxy only validates auth, doesn't proxy traffic
-  upstream: static://202
+  # Upstream: static 200 — oauth2-proxy only validates auth, doesn't proxy traffic.
+  #
+  # 200, not 202 (changed 2026-11-15). The static upstream answers any
+  # authenticated request to a non-/oauth2 path, which is exactly what an
+  # Istio/Envoy ext_authz check is. Envoy's HTTP ext_authz allows ONLY 200 --
+  # any other status, 202 included, is a denial returned to the client -- so
+  # with 202 a signed-in user got an empty 202 page instead of the app
+  # (O4 Phase 0, the prototype gateway). ingress-nginx is unaffected: every
+  # Ingress uses auth-url .../oauth2/auth, which answers 202 itself and never
+  # reaches the upstream.
+  upstream: static://200
   # Callback URL registered in the GitHub OAuth App
   redirect-url: https://oauth.k8s.n37.ca/oauth2/callback
   # Cookie scoped to all k8s.n37.ca subdomains
