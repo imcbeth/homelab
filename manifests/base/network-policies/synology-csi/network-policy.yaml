@@ -23,11 +23,6 @@ spec:
         - protocol: TCP
           port: 9808   # liveness probe
 
-    # Admission webhooks from API server (bare port for IPIP compat)
-    - ports:
-        - protocol: TCP
-          port: 9443   # snapshot-controller webhook
-
     # Prometheus scrape of pvc-mount-monitor DaemonSet (PR #734).
     # Default ns hosts kube-prometheus-stack; prometheus scrapes via
     # PodMonitor. Bare port rule matches the existing 9443 pattern —

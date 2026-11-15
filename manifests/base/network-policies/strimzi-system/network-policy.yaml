@@ -22,13 +22,6 @@ spec:
         - ipBlock:
             cidr: 169.254.7.127/32
 
-    # Strimzi webhook — Kubernetes API server calls from control-plane (hostNetwork).
-    # Calico IPIP rewrites source IP for cross-node traffic so ipBlock rules fail.
-    # Bare port rule (no from selector) allows webhook calls from any source.
-    - ports:
-        - protocol: TCP
-          port: 9443  # Strimzi admission webhook
-
   egress:
     # DNS resolution via kube-dns
     - to:
@@ -91,5 +84,3 @@ spec:
           port: 9091  # KRaft REPLICATION
         - protocol: TCP
           port: 9092  # Kafka bootstrap / AdminClient
-        - protocol: TCP
-          port: 9404  # JMX Prometheus metrics

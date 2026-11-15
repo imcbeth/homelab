@@ -64,11 +64,6 @@ spec:
         - protocol: TCP
           port: 8084   # repo-server metrics
 
-    # Admission webhooks from API server (bare port for IPIP compat)
-    - ports:
-        - protocol: TCP
-          port: 8443   # argocd webhook
-
   egress:
     # DNS resolution via kube-dns
     - to:

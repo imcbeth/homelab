@@ -46,8 +46,6 @@ spec:
           port: 9115   # blackbox-exporter
         - protocol: TCP
           port: 9116   # snmp-exporter
-        - protocol: TCP
-          port: 443    # operator webhook
 
     # Allow ingress-nginx controller to proxy external requests to Grafana UI
     - from:
@@ -190,8 +188,6 @@ spec:
           port: 15014  # istiod metrics
         - protocol: TCP
           port: 15020  # ztunnel metrics
-        - protocol: TCP
-          port: 15090  # envoy admin
         - protocol: TCP
           port: 8888   # gatekeeper metrics
         - protocol: TCP
