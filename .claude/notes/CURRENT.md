@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-15 (Argo CD 3.6's server-side diff exposed a prometheus-operator webhook NetworkPolicy that had never worked — 443 vs pod port 10250 — stalling the kps v93 upgrade for 16 min per compare, fixed in #1147; 11 Renovate PRs applied incl. Argo CD v3.6.1 and kps 93.3.0; stuck Chaos Mesh experiment cleared)
+**Last Updated:** 2026-11-15 (afternoon: MetalLB monitored for the first time — needed a ufw rule from the NODE subnet; Trivy posture alerts became 24h deltas and the PSS rules that could never fire were fixed; CVE bumps incl. NATS EventBus 10→1 critical and Calico 3.31.7; an ingress-nginx tag pin found to have been a no-op since March. Morning: Argo CD 3.6 webhook stall, #1147)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,135 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-15 (afternoon): MetalLB had never been scraped, and six alerts that could not clear
+
+Follow-up to the morning entry below. Asked to clear the alerts, monitor MetalLB,
+commit the audit script and chase patched images. Merged #1150-#1158 here and
+k8s-docs-n37 #133/#134; opened #1164 and #1165 at the end.
+
+**MetalLB was never monitored (#1150).** `metallb-metrics-yaml` enabled
+`controller.metrics`, `speaker.metrics` and `prometheus.podMonitors`, none of
+which are chart 0.16.2 values, so Helm ignored all three. The real keys are
+`prometheus.podMonitor` / `prometheusRule` / `serviceAccount` / `namespace`
+(metrics are HTTPS on 9120 with the `metallb-metrics-token` bearer token). That
+gives two PodMonitors and 6 rules (StaleConfig, ConfigNotLoaded, pool usage
+75/85/95% and exhausted). The netpols were also pointed at the real port; the
+7472/7473/7946 rules were dead.
+
+**Then 4 of 5 speakers would not scrape**, and it was not a NetworkPolicy:
+- Only the speaker on node04, Prometheus's own node, answered. The rest timed out
+  (`TLS handshake timeout` / `context deadline exceeded`).
+- Every node runs **ufw**, default-deny inbound, not managed by this repo. It
+  allowed 10250 (why kubelet scrapes work) but not 9120. hostNetwork pods are
+  outside pod NetworkPolicy entirely.
+- **My first rule, `from 192.168.0.0/16`, matched nothing.** The Calico pool has
+  `natOutgoing: true`, which masquerades pod traffic to any non-pool address —
+  other node IPs included — to the sending node's IP. `tcpdump` on node02 showed
+  the SYN from 10.0.10.220.
+- The user applied `ufw allow from 10.0.10.0/24 to any port 9120 proto tcp` on
+  all 5 nodes, and deleted the useless rule. 6/6 targets up, stable across 6
+  checks. REFERENCE row added (#1154); the full live ufw rule set is now in
+  k8s-docs-n37 `docs/kubernetes/installation.md` (#133), which was also missing
+  5473, 7946 and 15021.
+
+**The audit script is committed (#1151):** `scripts/networkpolicy-port-audit.py`.
+It flags rules for ports nothing listens on (including the Service-port
+mistake behind #1147) and webhooks/APIServices the API server cannot reach.
+`--self-test` reproduces the 443-vs-10250 bug and runs in pre-commit. Live run:
+0 unexpected findings across 36 policies, 4 documented exceptions in `EXPECTED`.
+
+**Six Trivy alerts replaced by three deltas (#1155).** All were absolute
+thresholds on inherent posture, so they fired forever: Critical RBAC 48, High
+RBAC 23, Critical+High CVEs ~1,600 against `> 50`, CIS 16, NSA 7. They were
+`info` (null receiver), so silent, but RBAC drift was never notified at all.
+Now `ClusterRoleRBACIssuesIncreased` (warning), `HighVulnerabilitiesIncreased`
+(info — High rose in 171 of 336 hours, too noisy to mail) and
+`ClusterComplianceFailuresIncreased` (warning, one alert per report `title`).
+**The two PSS rules could never fire:** they matched `title=~".*PSS.*"` but the
+titles are "Kubernetes Pod Security Standards - ...". The per-title rule needs
+no regex. All new expressions were 0 at merge, and the 14-day max of each RBAC
+and compliance delta was 0. Aggregate compliance `by (title)`: the raw series
+carry `pod`, which breaks `offset 24h` across an operator restart.
+
+**CVE bumps, each scanned with Trivy (arm64, CRITICAL) before choosing:**
+
+```
+#1152  tempo 2.9.0 -> 2.10.10 (2->0)   k8s-sidecar 2.5.0 -> 2.14.3 (3->0)
+       trivy 0.76.1 -> 0.76.2 (1->0)   falcosidekick-ui 2.2.0 -> 2.3.1 (3->1)
+#1153  alpine/git 2.54.0 -> 2.54.1 (12 HIGH -> 0)
+#1156  NATS EventBus 2.10.10 + sidecars 0.14.0 -> 2.10.29 / 0.20.3 / 0.25.0 (10->1)
+#1157  Calico 3.31.4 -> 3.31.7, tigera operator v1.40.7 -> v1.40.15 (operator 2->0,
+       calico/node 2->1 ca-certificates, other six images 0)
+```
+
+Renovate never offered any of these: the four in #1152 were chart defaults with
+no `repository` key (each override now names one); the NATS sidecars are only
+reachable via `configs.jetstream.versions`; Calico is a raw GitHub URL, now
+tracked by a regex manager limited to **patch** releases (3.33 stays Phase 1 of
+the 1.37 runbook). Earlier I said tigera v1.40.17 — wrong: each Calico release
+pins its own operator, and 3.31.7's manifest says v1.40.15.
+
+**The NATS restart broke both sensors until restarted.** `js-data` is an
+emptyDir, so the restart wiped JetStream, including each sensor's K/V bucket.
+The event source reconnected cleanly, but both sensors looped every 5 s on
+`failed to get K/V store ... nats: bucket not found`: a sensor CREATES its
+bucket only at startup, and the reconnect path only looks it up. A
+`kubectl rollout restart` of both sensor Deployments fixed it (14:57:27Z,
+"Successfully located K/V store", subscribed). No commits landed in either
+repo during the window. **Any EventBus restart needs the sensors restarted
+after it** — worth automating or at least an alert on that log line. Also:
+the NATS exporter had never been scraped (no ServiceMonitor for the EventBus,
+although the netpol admitted 7777 for it) — #1164 adds one.
+
+**ingress-nginx's `tag: "v1.14.3"` had been a no-op since March (#1158).** The
+chart renders `image:tag@digest` and the kubelet pulls by digest; chart 4.15.1
+carries the v1.15.1 digest, so the pod spec said `controller:v1.14.3@sha256:594ceea...`
+while `--version` reported v1.15.1. Adding a `repository` key (the original plan)
+would have let Renovate bump a tag the digest overrides. Removed the pin: the
+rendered diff was one line, same digest, no-downtime roll. ingress-nginx is
+retired and 1.15.1 is final; a Tier 2 TODO sizes its replacement by annotation
+use (oauth2-proxy forward-auth on 5 Ingresses is the hard part).
+
+**Argo CD said `Synced` while two WorkflowTemplates were stale.** After #1153,
+argo-workflows reported Synced/Healthy at the new revision, but both lifeonabike
+build templates still had `alpine/git:v2.54.0`; a hard refresh did not change
+it. `kubectl diff --server-side` showed the image change plainly. A manual sync
+applied it (14:59:10Z). **Root cause not found** — suspect the 3.6 server-side
+diff. After a merge, check the live object, not only the app's sync status.
+
+**Verified at the end:** MetalLB 6/6 up with 6 rules inactive; Trivy's 3 new
+rules loaded and inactive, the 6 old alerts gone and
+CriticalVulnerabilitiesIncreased resolved, leaving only Watchdog and
+ArgoWorkflowFailed (this morning's 06:00 health check ran mid-upgrade; should
+clear on tomorrow's run); EventBus `Deployed` on the new images; ingress 2/2 on
+the v1.15.1 tag, argocd/lifeonabike.ca 200 and an oauth2 host redirecting to
+sign-in; Calico `calicoVersion` v3.31.7, all three tigerastatus Available and
+not Degraded, calico-node 5/5 with typha/kube-controllers/apiserver/csi on
+v3.31.7, 5/5 nodes Ready, `up==0` empty afterwards. Mid-roll the `calico`
+tigerastatus went **Degraded** ("failed to wait for calico-node daemonset to be
+ready: context deadline exceeded") — the operator's own wait timing out while
+calico-node rolled one node at a time (`maxUnavailable: 1`, ~1 min each). It
+cleared once the DaemonSet finished; do not act on it mid-roll.
+
+**Renovate attacked the new NATS version map within an hour.** #1159-#1163
+bump image strings inside `configs.jetstream.versions` without the `version` key
+that selects them — #1161 would have run nats 2.15.3 under the entry named
+2.10.29 and rewritten the 2.10.10 rollback entry. My #1156 comment claimed
+Renovate could not see these strings; it can. #1165 disables the three NATS
+images for that one file. **Do not merge #1159-#1163**; they should auto-close
+after #1165.
+
+**Found, not fixed:** `manifests/base/argo-events/webhook-ingress.yaml`
+(`build-webhook.k8s.n37.ca`) is not in that directory's kustomization and has
+never been applied since 2026-05-31. Harmless — GitHub delivers to
+`build-webhook.n37.ca` through the Cloudflare tunnel — but it reads as live
+config. Delete it.
+
+**Still pending:** merge #1164 (NATS ServiceMonitor) and #1165; the Nov 18 Chaos
+Mesh check (cloud routine `trig_01EDjPynftajctv7QEJk53HA` opens a GitHub issue at
+11:00Z); replacing ingress-nginx (TODO); the sensor K/V gotcha above; the
+orphaned webhook-ingress file; why Argo reported the templates Synced.
 
 ### 2026-11-14/15: Argo CD 3.6 turned a hidden webhook timeout into a 16-minute stall
 
