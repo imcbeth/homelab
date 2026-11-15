@@ -5,8 +5,8 @@ the final release and still carries the CRITICAL CVEs Trivy reports, so there is
 nothing left to upgrade to.
 **Current:** chart 4.15.1, controller v1.15.1, 2 replicas, LoadBalancer `10.0.10.10`
 **Drafted:** 2026-11-15
-**Status:** plan only. Nothing here has been prototyped yet; every "verify" below
-is a Phase 0 exit criterion, not a known result.
+**Status:** Phase 0 **passed** 2026-11-15 (#1180, #1181, #1183) — see
+"Phase 0 results" below. Phase 1 not started.
 
 ## TL;DR
 
@@ -107,6 +107,35 @@ Verify, and stop if any fails:
 
 If forward-auth cannot be made to work cleanly, switch the recommendation to
 **Envoy Gateway** (native `extAuth`) and redo Phase 0 there.
+
+## Phase 0 results (2026-11-15)
+
+The prototype (`manifests/base/istio-gateway/`, Application `istio-gateway`)
+serves falco.k8s.n37.ca on 10.0.10.11. Forward-auth through Istio **works**,
+after two fixes that Phase 1 depends on:
+
+1. **The post-sign-in return URL was relative.** An ext_authz check carries only
+   the path, so oauth2-proxy encoded `/path` in `state` and the user would have
+   landed on `oauth.k8s.n37.ca/path`. Fixed by having the extension provider set
+   `x-auth-request-redirect: "https://%REQ(:authority)%%REQ(:path)%"` on every
+   check (#1181). oauth2-proxy still validates it against `--whitelist-domain`.
+2. **Envoy's HTTP ext_authz allows only `200`.** oauth2-proxy answered
+   authenticated checks from its `static://202` upstream, which Envoy treated as
+   a denial and returned to the browser (`response_code 202`,
+   `response_flags UAEX`). Fixed with `static://200` (#1183); nginx's
+   `/oauth2/auth` flow is unaffected.
+
+Verified: valid TLS from the existing certificate (ReferenceGrant), signed-out
+→ 302 to GitHub with an absolute return URL, and a real browser sign-in reached
+the Sidekick UI (gateway counters: `200` from `falco-falcosidekick-ui`). The
+gateway had to live in `istio-system`: Gatekeeper's `allowed-repos` rejects
+`registry.istio.io` elsewhere.
+
+**Testing tip:** DNS resolves every host to 10.0.10.10 (ingress-nginx), so a
+plain browser visit tests nginx, not the gateway. Without editing `/etc/hosts`:
+`open -na "Google Chrome" --args --user-data-dir=/tmp/chrome-proto-gateway --host-resolver-rules="MAP <host> 10.0.10.11" https://<host>/`.
+Envoy counters are the ground truth for where a request went:
+`kubectl exec -n istio-system <gateway pod> -- pilot-agent request GET stats | grep istio_requests_total`.
 
 ## Phase 1 — migrate host by host
 
