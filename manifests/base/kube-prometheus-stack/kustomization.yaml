@@ -29,6 +29,7 @@ resources:
   - storage-alerts.yaml
   - velero-alerts.yaml
   - istio-alerts.yaml
+  - lan-gateway-alerts.yaml
   - apm-alerts.yaml
   - cloudflared-alerts.yaml
   - log-pipeline-alerts.yaml
