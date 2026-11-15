@@ -49,8 +49,10 @@ webhook:
 #
 # Helm replaces lists, so this REPLACES the chart's versions list. `latest`
 # and `2.10.10` are kept as the chart ships them so a rollback is a one-line
-# EventBus change. Renovate does not track these (no repository/tag keys);
-# re-check when bumping the chart.
+# EventBus change. Renovate DOES see these image strings, but is disabled for
+# them in renovate.json: it bumps an image without the `version` key that
+# selects it (it once proposed nats:2.15.3 under "2.10.29"). Upgrade by adding
+# a new entry and pointing eventbus.yaml at it; re-check when bumping the chart.
 configs:
   jetstream:
     versions:

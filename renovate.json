@@ -147,6 +147,18 @@
       "enabled": false
     },
     {
+      "description": "The argo-events JetStream version map (configs.jetstream.versions) is keyed by `version`, and the EventBus selects an entry by that key. Renovate bumps the image strings without the key, so on 2026-11-15 it proposed nats:2.15.3 under the entry named 2.10.29 and rewrote the 2.10.10 rollback entry (#1159-#1163). Upgrade NATS deliberately instead: add a new version entry, then point eventbus.yaml at it",
+      "matchFileNames": [
+        "manifests/base/argo-events/values.yaml"
+      ],
+      "matchPackageNames": [
+        "nats",
+        "natsio/prometheus-nats-exporter",
+        "natsio/nats-server-config-reloader"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Hold major updates for manual review",
       "matchUpdateTypes": [
         "major"
