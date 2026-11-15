@@ -29,6 +29,11 @@ WHAT IT REPORTS
     namespace (no `from`, or an ipBlock). The API server is a hostNetwork pod,
     so a rule scoped to a namespaceSelector never matches it. This is the
     dangerous direction: something that needs to be reached is not.
+  * MISSING-NAMESPACE: a rule's namespaceSelector names a namespace
+    (`kubernetes.io/metadata.name`) that does not exist, so it admits nothing.
+    On 2026-11-15 three policies admitted Prometheus from `monitoring`; it runs
+    in `default`. The scrapes worked only because every ambient namespace
+    admitted HBONE (15008) from anywhere, which hid the typo too.
 
 Findings listed in EXPECTED are known and explained; they are reported
 separately and do not fail the run.
@@ -210,9 +215,25 @@ def blocked_webhooks(objs: dict, policies: list[dict]) -> list[tuple]:
     return findings
 
 
+def missing_namespaces(objs: dict, policies: list[dict]) -> list[tuple]:
+    live = {o["metadata"]["name"] for o in objs["namespaces"]}
+    findings = []
+    for pol in policies:
+        ns, name = pol["metadata"]["namespace"], pol["metadata"]["name"]
+        for direction, peer_key in (("ingress", "from"), ("egress", "to")):
+            for rule in pol["spec"].get(direction, []):
+                for peer in rule.get(peer_key) or []:
+                    labels = (peer.get("namespaceSelector") or {}).get("matchLabels", {})
+                    target = labels.get("kubernetes.io/metadata.name")
+                    if target and target not in live:
+                        findings.append(("MISSING-NAMESPACE", ns, name, target, direction))
+    return findings
+
+
 def audit(objs: dict) -> tuple[list, list]:
     policies = objs["networkpolicies"]
-    findings = dead_ports(policies, index(objs)) + blocked_webhooks(objs, policies)
+    findings = (dead_ports(policies, index(objs)) + blocked_webhooks(objs, policies)
+                + missing_namespaces(objs, policies))
     unexpected = [f for f in findings if f[:4] not in EXPECTED]
     expected = [f for f in findings if f[:4] in EXPECTED]
     return unexpected, expected
@@ -308,6 +329,13 @@ def self_test() -> int:
     scoped, _ = audit(namespaced)
     check("a namespace-scoped webhook rule is BLOCKED (apiserver is hostNetwork)",
           ("BLOCKED-WEBHOOK", 10250) in {(f[0], f[3]) for f in scoped}, scoped)
+
+    typo = _fixture(webhook_rule_port=10250)
+    typo["networkpolicies"][0]["spec"]["ingress"][1]["from"] = [
+        {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "monitoring"}}}]
+    missing, _ = audit(typo)
+    check("a rule naming a nonexistent namespace is flagged MISSING-NAMESPACE",
+          ("MISSING-NAMESPACE", "monitoring") in {(f[0], f[3]) for f in missing}, missing)
 
     print(f"\n{'OK' if failures == 0 else f'{failures} FAILED'}")
     return 1 if failures else 0

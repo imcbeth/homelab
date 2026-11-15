@@ -31,10 +31,14 @@ spec:
         - ipBlock:
             cidr: 169.254.7.127/32
     # Allow Prometheus to scrape metrics (non-ambient path)
+    # Prometheus runs in `default`. Until 2026-11-15 this said `monitoring`,
+    # a namespace that does not exist, so the rule admitted nothing; the
+    # scrape worked only because every ambient namespace admitted HBONE
+    # (15008) from anywhere (O8 in TODO.md).
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: monitoring
+              kubernetes.io/metadata.name: default
       ports:
         - protocol: TCP
           port: 8080   # Trivy operator metrics port
