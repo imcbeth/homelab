@@ -136,6 +136,17 @@
       ]
     },
     {
+      "description": "Calico: patch releases only. A minor bump is a CNI upgrade tied to the Kubernetes version (3.33 is planned as Phase 1 of runbooks/k8s-1.37-upgrade.md), so it is done deliberately, not proposed on a weekend. Patches still roll calico-node on every node; review before merging",
+      "matchDepNames": [
+        "projectcalico/calico"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Hold major updates for manual review",
       "matchUpdateTypes": [
         "major"
@@ -178,6 +189,18 @@
         "github\\.com/kubernetes-csi/external-snapshotter/[^?]+\\?ref=(?<currentValue>v[\\d.]+)"
       ],
       "depNameTemplate": "kubernetes-csi/external-snapshotter",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Calico (Tigera operator) is installed from a raw GitHub URL, which no built-in manager reads. Before 2026-11-15 it was never proposed: 3.31.4 sat for 9 months while 3.31.5-3.31.7 shipped CVE fixes",
+      "managerFilePatterns": [
+        "/^manifests/base/tigera-operator/kustomization\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "raw\\.githubusercontent\\.com/projectcalico/calico/(?<currentValue>v[\\d.]+)/manifests/tigera-operator\\.yaml"
+      ],
+      "depNameTemplate": "projectcalico/calico",
       "datasourceTemplate": "github-releases"
     },
     {
