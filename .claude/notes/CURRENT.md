@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-01 (a NetworkPolicy I wrote had been failing the lifeonabike SLO probe for 2.5 days with a CRITICAL alert nobody read; `exec /pause: exec format error` is Chaos Mesh pod-failure on ARM64, and its schedule collided with the 06:00 health checks monthly; 11 Renovate PRs applied)
+**Last Updated:** 2026-11-15 (Argo CD 3.6's server-side diff exposed a prometheus-operator webhook NetworkPolicy that had never worked — 443 vs pod port 10250 — stalling the kps v93 upgrade for 16 min per compare, fixed in #1147; 11 Renovate PRs applied incl. Argo CD v3.6.1 and kps 93.3.0; stuck Chaos Mesh experiment cleared)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,98 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-14/15: Argo CD 3.6 turned a hidden webhook timeout into a 16-minute stall
+
+Saturday health check, then the 11-PR Renovate weekend batch (#1133, #1137–#1146).
+The cluster itself was healthy: 5/5 nodes, 38/38 apps, no pods outside
+Running/Succeeded, all PVCs Bound.
+
+**A Chaos Mesh experiment stuck for 10 days.** The Nov 4 `network-delay-loki`
+run never recovered on `loki-canary-dhzww` (node04): "unable to flush ip sets",
+retried every ~15 min with a Warning event each time. The same run never injected
+`loki-0` at all; the October runs were clean. Deleting the canary pod (DaemonSet
+recreates it) cleared it: `AllRecovered=True`. **Watch the Nov 18 10:00Z run** —
+the first on chaos-mesh 2.8.8. If it fails the same way, it is not a one-off.
+
+**An Application spec that had been merged and never applied.** argo-events was
+live on 2.4.26 although #953 (2.4.27) had merged; #1133 took it straight to
+2.4.28. A `kubectl diff` of all 38 `manifests/applications/*.yaml` found no other
+version drift (only cosmetic diffs in cert-manager, localstack and kps
+`ignoreDifferences`).
+
+**The batch, in three waves:**
+
+```
+wave 1  #1137 uptime-kuma 2.5.11  #1138 velero 12.2.5  #1139 istio 1.30.8
+        #1140 cloudflared 2026.11.0  #1142 vpa 5.2.0
+wave 2  #1141 argo-cd 10.18.0 (Argo CD v3.5.7 → v3.6.1)
+wave 3  #1146 kube-prometheus-stack 93.3.0 (operator v0.94.2 → v0.95.2)
+        #1144 Alertmanager 0.35.0  #1145 Prometheus 3.16.0
+        #1143 alloy 1.16.0 + loki 7.6.0 (Renovate rebased it to drop kps 92.22)
+```
+
+Order mattered for wave 3: #1143 and #1146 edit the same `targetRevision` line,
+and Alertmanager 0.35 removed `--enable-feature=auto-gomemlimit`, so the newer
+operator went in first (we set no feature flags, so it was a precaution).
+
+**The stall.** After #1146 was applied, kps sat on 92.17.1, Synced and Healthy,
+for over 10 minutes. The controller log showed why:
+`compare_app_state_ms=981668` — a 16-minute comparison. Every other app took
+43–51 s.
+
+Argo CD 3.6 changed this (from `docs/operator-manual/upgrading/3.5-3.6.md`):
+`ServerSideApply=true` now **implies Server-Side Diff**, a dry-run apply of every
+resource against the API server, and validating webhooks run during that dry-run.
+All 38 of our apps use `ServerSideApply=true`.
+
+The API server log had the rest: 82 timeouts in 30 min each for
+`prometheusrulemutate` and `prometheusrulevalidate`, plus
+`webhook.argo-events.argoproj.io`. Both webhooks fail open (`failurePolicy:
+Ignore`), so every PrometheusRule apply had always succeeded — just 2×10 s
+late. Nobody saw it until Argo started doing a dry-run of ~45 PrometheusRules
+on every compare.
+
+Root cause, fixed in **#1147**:
+- `default` policy allowed the operator webhook on **443, the Service port**.
+  NetworkPolicy matches the **pod port after DNAT**, which is **10250**. The rule
+  had never worked.
+- `argo-events` had no ingress rule for `events-webhook` (listens on 443), the pod
+  that arrived with the 2.4.27/2.4.28 chart.
+
+After #1147: a PrometheusRule `--dry-run=server` returned instantly, zero
+webhook failures in the apiserver log, kps compare **981 s → 1–2 s**, argocd /
+chaos-mesh / flink-operator ~6 s. loki and argo-events still take ~40 s
+(unexplained, not blocking).
+
+**This gotcha was already in REFERENCE.md** ("NetworkPolicy ports are the
+POD's port, not the Service's", 2026-10-29, from the lifeonabike `web` 80/8080
+case). The operator rule predates that entry and nobody went back to audit the
+existing policies against it. `kubectl get endpointslices -l
+kubernetes.io/service-name=<svc>` shows the port that counts. An audit of every
+`port:` in `manifests/base/network-policies/` against its EndpointSlice is worth
+doing once.
+
+**Velero showed Degraded after the Argo upgrade.** The cause was
+`velero-daily-critical-pvcs-20261109020049`, `FailedValidation`: "BackupStorageLocation
+default is in Unavailable status". That was the Nov 9 02:00Z ISP outage, when B2
+was unreachable. Argo CD 3.6 now reports health for Velero `Backup` objects,
+which is why it surfaced six days late. The record held no data and every backup
+before and after completed, so I deleted it. The Nov 9 critical-PVC backup is
+the one lost; that is accepted.
+
+**Verified at the end:** Alertmanager v0.35.0 and Prometheus v3.16.0 running 1/1,
+CRDs at operator 0.95.2, `up==0` empty once the restarted Alertmanager was
+re-scraped, only `Watchdog` and `InfoInhibitor` firing, 38/38 Synced+Healthy.
+The kps sync's first attempt failed at 12:03Z — not on anything real: the
+Prometheus pod was mid-restart (`containers with incomplete status:
+[init-config-reloader]`) when Argo checked its health. Argo's retry then re-ran
+the CRD-upgrade hook Job (created a second time at 12:06:52Z, completed again)
+and finished `Succeeded` at 12:08:36Z, Synced+Healthy on 93.3.0. Expect a
+major kps sync to take one retry on these Pis.
+
+**Also:** `external-dns-unifi` shows 90 restarts, all from the Nov 9/10 gateway
+outages; none since.
 
 ### 2026-11-01: a NetworkPolicy I wrote had been failing the SLO probe for 2.5 days
 
