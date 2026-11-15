@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-15 (afternoon: MetalLB monitored for the first time — needed a ufw rule from the NODE subnet; Trivy posture alerts became 24h deltas and the PSS rules that could never fire were fixed; CVE bumps incl. NATS EventBus 10→1 critical and Calico 3.31.7; an ingress-nginx tag pin found to have been a no-op since March. Morning: Argo CD 3.6 webhook stall, #1147)
+**Last Updated:** 2026-11-15 (evening: worked the open-items list in TODO.md, O1-O11 — HBONE 15008 was open to every meshed pod in all 11 ambient namespaces and is now allowlisted per namespace; Argo CD reported stale WorkflowTemplates Synced (argo-cd#27625); EventBus on persistent JetStream; Loki/Alloy usage stats; argo-events pods non-root. Afternoon: MetalLB monitoring, Trivy delta alerts, CVE bumps, Calico 3.31.7)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,91 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-15 (evening): any meshed pod could reach any port, and the list that found it
+
+Asked to record what was open and work through it, adding anything found on the
+way. The list lives in TODO.md ("Open items from 2026-11-15", O1-O11; draft
+PR #1167). Merged #1168-#1177 plus k8s-docs-n37 #135.
+
+**O8 — the big one: in all 11 ambient namespaces, any meshed pod could reach
+any port on any other meshed pod.** HBONE arrives on 15008 and ztunnel delivers
+the connection *inside* the destination pod, so NetworkPolicy evaluates only the
+rule admitting 15008 — and every namespace admitted 15008 from anywhere, with 0
+AuthorizationPolicies. Application-port rules like "4222 from `podSelector: {}`"
+documented intent and enforced nothing for meshed callers. Proven from meshed
+`default/prometheus`: argo-events NATS 4222 and 8222 answered; a non-meshed
+control (cert-manager 9403, not admitted) timed out. k8s-docs-n37 said the
+opposite ("Dual Rules Required") — corrected in #135.
+
+Fixed namespace-level, as decided, in three steps:
+- **#1173** named the meshed flows no rule admitted, found by comparing 14 days of
+  ztunnel `istio_tcp_connections_opened_total{reporter="destination"}` against each
+  policy. Five: three Prometheus scrapes from a **`monitoring` namespace that does
+  not exist** (argo-workflows, trivy-system, unipoller — O10), blackbox probing
+  the argo-workflows server (~40k connections), and Loki's ruler → Alertmanager.
+  Restricting 15008 first would have silently broken all five, including every
+  Loki log alert. The audit script gained MISSING-NAMESPACE.
+- **#1174** piloted unipoller. **My first check said it had failed** — a kafka pod
+  still "CONNECTED". In ambient mode the caller's own ztunnel accepts `connect()`
+  locally, so a bare TCP connect always succeeds; the ztunnel log on both nodes
+  showed `connection timed out, maybe a NetworkPolicy is blocking HBONE port
+  15008`. Test with something the server must answer, or read ztunnel's log.
+- **#1175** did the other ten. Allowlists = meshed namespaces each policy already
+  names + every pair in **30 days** of ztunnel metrics (retention) + itself. The
+  30-day window found one more flow than 14 days: trivy-system's weekly
+  compliance-reporter posting to Alertmanager. Synced 16:15:37; 37 min later
+  `up==0` and `probe_success==0` empty, Loki ingesting, Alertmanager receiving,
+  **0 failed mesh connections between known namespaces**.
+- Added `IstioMeshConnectionsRefused`. **Not `increase()`**: a newly blocked flow
+  starts a new counter series, and `increase()` read the pilot's own drops (first
+  value 2) as 0. Current minus 1h ago, missing past = 0, `>= 10`: over the prior
+  14 days it fires only at real disruptions (Nov 1, Nov 4, Nov 11).
+
+**O2 — Argo CD reported argo-workflows Synced while two WorkflowTemplates were
+stale.** Upstream argo-cd#27625 (open). The chart's minified CRDs mark `spec`
+`x-kubernetes-map-type: atomic`, so the apiserver records argocd-controller as
+owning `f:spec: {}`; server-side diff's `removeWebhookMutation` then reverts every
+subfield to live and the diff is empty. Not a cache: Argo ran a full compare 19 s
+after #1153 merged and got it wrong. Fixed with
+`compare-options: IncludeMutationWebhook=true` (#1169), verified live — a
+hand-edit went OutOfSync in 5 s and self-healed in 16 s. argo-events CRDs are
+preserve-unknown-fields without `atomic`, so unaffected.
+
+**O1 — sensors after an EventBus restart.** #1170 alerts on the stuck-state line
+(`nats: bucket not found`, matched today's loop exactly); #1171 gives JetStream a
+2Gi `synology-iscsi-delete` PVC. The controller updates the StatefulSet in place,
+so it failed as predicted (`volumeClaimTemplates` immutable) until the user
+deleted it. Proof at 16:15: pod deleted, sensors lost NATS ~20 s (DNS
+`no such host`), then "Successfully located K/V store" and re-subscribed with no
+restart and 0 `bucket not found`.
+
+**O11 — Loki was failing ~7,200 outbound connections a day**, one every ~12 s, to
+`34.49.170.206:443` = stats.grafana.org (usage reporting), blocked by the loki
+egress policy. Alloy ~150/day. Found while baselining the new alert. Disabled in
+both (#1176); Tempo already had it off.
+
+**Smaller:** #1168 deleted `argo-events/webhook-ingress.yaml` (never in its
+kustomization since 2026-05-31) and an `uptime-kuma`-namespace metrics token
+orphaned since April (cluster copy deleted by hand, O7). #1172 is the
+ingress-nginx replacement runbook (Istio Gateway API; the public site uses the
+Cloudflare tunnel and is not affected). #1177 runs both sensors and the
+EventSource as 65534 with caps dropped (O9).
+
+**Verified at the end (17:18Z):** 38/38 Synced+Healthy; `up==0` and
+`probe_success==0` empty; 0 failed mesh connections between known namespaces;
+`IstioMeshConnectionsRefused` and `ArgoEventsSensorBucketMissing` loaded and
+inactive. Loki/Alloy failures to stats.grafana.org went from ~10/min to 0 after
+the 17:15 restart; Loki briefly ingested ~4,400 lines/s as the restarted alloy
+pods flushed their backlog (normal ~200). Both sensors and the EventSource run
+as 65534; sensors re-located their K/V stores. Firing: only Watchdog and the
+morning's ArgoWorkflowFailed.
+
+**Still open:** O9 EventBus non-root (needs a PVC reset in the same step: its
+data was written as root with 0750 dirs); O8 port-level (Istio
+AuthorizationPolicy, design with O4's Gateway); O4 Phase 0 prototype; O7 check
+Uptime Kuma API keys; O6 ArgoWorkflowFailed should clear after 2026-11-16 06:00;
+O5 Nov 18 Chaos Mesh run (routine `trig_01EDjPynftajctv7QEJk53HA`).
 
 ### 2026-11-15 (afternoon): MetalLB had never been scraped, and six alerts that could not clear
 
