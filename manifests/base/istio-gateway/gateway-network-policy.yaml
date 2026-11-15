@@ -1,5 +1,6 @@
 # Additive to istio-system-network-policy (policies are a union): only the
-# LAN gateway's pods accept HTTPS from outside. Egress to falco (2802)
+# LAN gateway's pods accept HTTPS (and HTTP, which is only redirected) from
+# outside. Egress to falco (2802)
 # and oauth2-proxy (4180) is already allowed by the namespace policy's
 # all-ports egress to in-cluster namespaces.
 apiVersion: networking.k8s.io/v1
@@ -17,3 +18,5 @@ spec:
     - ports:
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: 80   # http -> https redirect (http-redirect.yaml)
