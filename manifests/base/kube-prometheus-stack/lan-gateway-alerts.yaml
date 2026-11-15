@@ -1,0 +1,155 @@
+---
+# LAN gateway alerts (2026-11-15) -- the gateway equivalents of the seven
+# ingress-nginx rules removed with nginx in #1213. Same thresholds where they
+# translate; source metrics come from the lan-gateway PodMonitor (#1215).
+#
+# Two things differ from nginx and shape every expression:
+#  * Traffic is tiny (~0.03 req/s at night). A single 503 is a 100% error rate,
+#    so each ratio alert also requires a minimum number of matching requests in
+#    the window (the `and ... >= N` clause) -- otherwise one failed favicon pages.
+#  * Long-lived streams (101 WebSocket upgrades from grafana and uptime-kuma,
+#    response_code 0 for client-aborted streams) record their whole lifetime as
+#    request duration. The latency rules exclude them, or every open dashboard
+#    tab would push p95 past any threshold.
+#
+# response_flags="UAEX" (oauth2-proxy sending a signed-out user to sign-in) is
+# a 302 and never counts as an error.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: lan-gateway-alerts
+  namespace: default
+  labels:
+    app: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: lan_gateway_availability
+    interval: 60s
+    rules:
+    - alert: LanGatewayDown
+      expr: |
+        (min(up{namespace="istio-system", pod=~"lan-gateway-istio-.*"}) == 0)
+        or absent(up{namespace="istio-system", pod=~"lan-gateway-istio-.*"})
+      for: 5m
+      labels:
+        severity: critical
+        component: lan-gateway
+      annotations:
+        summary: "LAN gateway is down or not being scraped"
+        description: |
+          No lan-gateway-istio pod has been scrapeable for 5 minutes. Every LAN
+          host (argocd, grafana, registry, ...) goes through this gateway at
+          10.0.10.11, and node image pulls from registry.k8s.n37.ca do too.
+          Check: kubectl get pod -n istio-system -l gateway.networking.k8s.io/gateway-name=lan-gateway
+
+    - alert: LanGatewayConfigRejected
+      expr: |
+        sum(increase(envoy_listener_manager_lds_update_rejected{namespace="istio-system", pod=~"lan-gateway-istio-.*"}[10m]))
+        + sum(increase(envoy_cluster_manager_cds_update_rejected{namespace="istio-system", pod=~"lan-gateway-istio-.*"}[10m]))
+        > 0
+      for: 5m
+      labels:
+        severity: critical
+        component: lan-gateway
+      annotations:
+        summary: "LAN gateway rejected configuration from istiod"
+        description: |
+          The gateway's Envoy rejected a listener (LDS) or cluster (CDS) update
+          in the last 10 minutes -- the equivalent of nginx's failed config
+          reload. The gateway keeps serving its last good config, so a new
+          HTTPRoute, listener or certificate is probably not live.
+          Check: istioctl proxy-status, and the gateway pod's logs for "rejected".
+
+    - alert: LanGatewayHighServerErrorRate
+      expr: |
+        (
+          sum(rate(istio_requests_total{source_workload="lan-gateway-istio", reporter="source", response_code=~"5.."}[5m]))
+          / sum(rate(istio_requests_total{source_workload="lan-gateway-istio", reporter="source"}[5m]))
+        ) > 0.05
+        and sum(increase(istio_requests_total{source_workload="lan-gateway-istio", reporter="source", response_code=~"5.."}[5m])) >= 5
+      for: 5m
+      labels:
+        severity: warning
+        component: lan-gateway
+      annotations:
+        summary: "LAN gateway 5xx rate above 5%"
+        description: |
+          The gateway is returning 5xx for {{ $value | humanizePercentage }} of
+          requests. See the "LAN Gateway (Istio)" dashboard, 5xx by backend.
+
+    - alert: LanGatewayBackendHighErrorRate
+      expr: |
+        (
+          sum by (destination_service_name) (rate(istio_requests_total{source_workload="lan-gateway-istio", reporter="source", response_code=~"5.."}[5m]))
+          / sum by (destination_service_name) (rate(istio_requests_total{source_workload="lan-gateway-istio", reporter="source"}[5m]))
+        ) > 0.10
+        and sum by (destination_service_name) (increase(istio_requests_total{source_workload="lan-gateway-istio", reporter="source", response_code=~"5.."}[5m])) >= 3
+      for: 5m
+      labels:
+        severity: warning
+        component: lan-gateway
+      annotations:
+        summary: "LAN gateway backend {{ $labels.destination_service_name }} 5xx rate above 10%"
+        description: |
+          Requests to {{ $labels.destination_service_name }} through the gateway
+          return 5xx at {{ $value | humanizePercentage }}. A 503 with response
+          flag UC against an ambient backend usually means istio-system is
+          missing from that namespace's 15008 allowlist (REFERENCE.md, the
+          2026-11-15 grafana outage).
+
+    - alert: LanGatewayHighClientErrorRate
+      expr: |
+        (
+          sum(rate(istio_requests_total{source_workload="lan-gateway-istio", reporter="source", response_code=~"4.."}[5m]))
+          / sum(rate(istio_requests_total{source_workload="lan-gateway-istio", reporter="source"}[5m]))
+        ) > 0.30
+        and sum(increase(istio_requests_total{source_workload="lan-gateway-istio", reporter="source", response_code=~"4.."}[5m])) >= 20
+      for: 10m
+      labels:
+        severity: warning
+        component: lan-gateway
+      annotations:
+        summary: "LAN gateway 4xx rate above 30%"
+        description: |
+          The gateway is returning 4xx for {{ $value | humanizePercentage }} of
+          requests. Usually a misconfigured client or a broken route (404 with
+          response flag NR = no route for that host or path).
+
+  - name: lan_gateway_latency
+    interval: 60s
+    rules:
+    - alert: LanGatewayHighLatencyP95
+      expr: |
+        histogram_quantile(0.95,
+          sum by (le) (rate(istio_request_duration_milliseconds_bucket{source_workload="lan-gateway-istio", reporter="source", response_code!~"101|0"}[5m]))
+        ) > 5000
+        and sum(increase(istio_requests_total{source_workload="lan-gateway-istio", reporter="source", response_code!~"101|0"}[5m])) >= 10
+      for: 10m
+      labels:
+        severity: warning
+        component: lan-gateway
+      annotations:
+        summary: "LAN gateway p95 latency above 5 seconds"
+        description: |
+          p95 request latency through the gateway is {{ $value | humanize }}ms
+          (WebSocket upgrades and aborted streams excluded).
+
+    - alert: LanGatewayBackendHighLatencyP95
+      expr: |
+        histogram_quantile(0.95,
+          sum by (le, destination_service_name) (rate(istio_request_duration_milliseconds_bucket{source_workload="lan-gateway-istio", reporter="source", response_code!~"101|0"}[5m]))
+        ) > 10000
+        and sum by (destination_service_name) (increase(istio_requests_total{source_workload="lan-gateway-istio", reporter="source", response_code!~"101|0"}[5m])) >= 5
+      for: 10m
+      labels:
+        severity: warning
+        component: lan-gateway
+      annotations:
+        summary: "LAN gateway backend {{ $labels.destination_service_name }} p95 latency above 10 seconds"
+        description: |
+          p95 latency for {{ $labels.destination_service_name }} through the
+          gateway is {{ $value | humanize }}ms (WebSocket upgrades and aborted
+          streams excluded).
