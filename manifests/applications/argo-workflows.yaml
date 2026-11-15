@@ -5,6 +5,27 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "-8"
+    # Without this, Argo CD reports this app Synced while WorkflowTemplate /
+    # CronWorkflow specs are stale, and selfHeal never fires.
+    #
+    # Upstream argo-cd#27625 (open as of 2026-11-15). The chart's minified CRDs
+    # declare `spec` as `x-kubernetes-map-type: atomic` +
+    # `preserve-unknown-fields`, so the apiserver records argocd-controller as
+    # owning `f:spec: {}` -- one leaf, no subfields. Server-side diff's
+    # removeWebhookMutation then treats every field under spec as "not ours",
+    # reverts it to the live value, and the diff comes out empty.
+    #
+    # Seen 2026-11-15: after #1153 both lifeonabike build templates kept
+    # alpine/git:v2.54.0 under a Synced app, through a hard refresh, until a
+    # manual sync. IncludeMutationWebhook=true skips that step; writes still use
+    # ServerSideApply. Verified live: a hand-edit to hello-world's spec went
+    # OutOfSync in 5 s and was self-healed in 16 s, and the annotation alone
+    # produced no false drift. argo-events is not affected (its CRDs are
+    # preserve-unknown-fields without atomic, so fields are tracked granularly).
+    #
+    # Remove once #27625 is fixed, or if the chart moves to full CRDs
+    # (crds.full: true), which give spec a real schema.
+    argocd.argoproj.io/compare-options: IncludeMutationWebhook=true
 spec:
   project: infrastructure
   sources:
