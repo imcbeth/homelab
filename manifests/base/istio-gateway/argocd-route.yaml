@@ -1,0 +1,38 @@
+# argocd.k8s.n37.ca on lan-gateway (Phase 1, 2026-11-15). No forward-auth
+# (not in authz.yaml): Argo CD has its own SSO, as on ingress-nginx.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: argocd
+  namespace: argocd
+  annotations:
+    external-dns.alpha.kubernetes.io/ttl: "300"
+spec:
+  parentRefs:
+    - name: lan-gateway
+      namespace: istio-system
+      sectionName: https-argocd
+  hostnames:
+    - argocd.k8s.n37.ca
+  rules:
+    - backendRefs:
+        - name: argocd-server
+          port: 443
+---
+# argocd-server is not in insecure mode: it serves TLS (self-signed
+# argocd-server-tls) on 8080 behind both Service ports, which is why the nginx
+# Ingress used backend-protocol HTTPS. The gateway originates TLS the same way.
+# insecureSkipVerify because the certificate is self-signed -- the same trust
+# nginx gave it; the hop is in-cluster. Switching argocd to server.insecure
+# would break nginx mid-migration, so that waits for Phase 2.
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: argocd-server-tls-origination
+  namespace: argocd
+spec:
+  host: argocd-server.argocd.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+      insecureSkipVerify: true
