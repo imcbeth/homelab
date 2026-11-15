@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-15 (evening: worked the open-items list in TODO.md, O1-O11 — HBONE 15008 was open to every meshed pod in all 11 ambient namespaces and is now allowlisted per namespace; Argo CD reported stale WorkflowTemplates Synced (argo-cd#27625); EventBus on persistent JetStream; Loki/Alloy usage stats; argo-events pods non-root. Afternoon: MetalLB monitoring, Trivy delta alerts, CVE bumps, Calico 3.31.7)
+**Last Updated:** 2026-11-15 (late evening: ingress-nginx replacement Phase 0 PASSED — oauth2-proxy forward-auth through an Istio Gateway API gateway, after two fixes (relative return URL; Envoy ext_authz allows only 200); EventBus non-root; first port-level mesh AuthorizationPolicy (unipoller). Earlier: HBONE allowlists in all 11 ambient namespaces, Argo CD atomic-spec diff bug, MetalLB monitoring, CVE bumps)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,75 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-15 (late evening): Istio forward-auth works, after two bugs only a real sign-in found
+
+Continued down the open-items list (TODO.md O1-O11, draft PR #1167) until only
+dated or design items were left. Merged #1179-#1183; #1184 records the results
+in the runbook.
+
+**O9 closed — EventBus non-root (#1179), and no volume reset was needed.** I had
+expected one: the PVC held JetStream data written by root-run NATS with 0750
+dirs. But synology-csi's CSIDriver has `fsGroupPolicy: ReadWriteOnceWithFSType`,
+so with `fsGroup: 65534` the kubelet re-owned the volume on mount. NATS
+restored both K/V streams, `/jsz` matched the baseline exactly (3 streams / 2
+consumers / 6 msgs / 506 B), 0 restarts, sensors re-located their stores. The
+reloader still signals NATS because the controller sets
+`shareProcessNamespace` and all three containers share the UID. Every
+argo-events pod is now non-root.
+
+**O4 Phase 0 — the ingress-nginx replacement prototype passed (#1180).** An
+`istio`-class Gateway in istio-system on its own MetalLB IP (10.0.10.11)
+serving only falco.k8s.n37.ca, reusing `falco-ui-tls` via ReferenceGrant, with a
+CUSTOM AuthorizationPolicy calling a new `oauth2-proxy` `envoyExtAuthzHttp`
+extension provider. It had to be istio-system: Gatekeeper's `allowed-repos`
+rejects `registry.istio.io` everywhere except its excluded namespaces.
+
+curl showed TLS valid and a signed-out 302 to GitHub — but two bugs only
+surfaced on closer looks:
+1. **The return URL was relative** (`state=…:/some/path`): an ext_authz check
+   carries only the path, so after sign-in the user would land on
+   `oauth.k8s.n37.ca/some/path`. nginx avoids this by passing an absolute
+   `rd=`. Fixed with `includeAdditionalHeadersInCheck:
+   x-auth-request-redirect: "https://%REQ(:authority)%%REQ(:path)%"` (#1181).
+2. **A real browser sign-in got an empty page.** Gateway counters showed
+   `response_code 202, response_flags UAEX`: Envoy's HTTP ext_authz allows
+   **only 200**, and oauth2-proxy's `static://202` upstream answered the
+   authenticated check with 202, which Envoy treated as a denial. Fixed with
+   `static://200` (#1183); nginx's `/oauth2/auth` answers 202 itself and was
+   unaffected. After it: `200` from `falco-falcosidekick-ui` (17:50Z).
+
+**The first browser test silently tested the wrong thing.** The user's first
+"all works" went through ingress-nginx: `falco.k8s.n37.ca` resolves to
+10.0.10.10 and nothing points at the prototype. `sudo` cannot prompt from a `!`
+command either. Chrome `--host-resolver-rules="MAP falco.k8s.n37.ca 10.0.10.11"`
+with a throwaway `--user-data-dir` worked without touching /etc/hosts, and the
+gateway's Envoy counters (`pilot-agent request GET stats | grep
+istio_requests_total`) were the ground truth for which path a request took.
+There is no mesh access logging to check instead.
+
+**O8 port-level pilot (#1182).** NetworkPolicy can only scope meshed callers to
+namespaces (#1173-#1175). ztunnel enforces L4 AuthorizationPolicy by mTLS
+identity: unipoller now admits only
+`cluster.local/ns/default/sa/kube-prometheus-stack-prometheus` on 9130. After it
+applied, Alertmanager (same namespace) got 0 lines and ztunnel logged `allow
+policies exist, but none allowed`; Prometheus still 2,162. **Not rolled out
+further on purpose:** ztunnel's connection metrics carry the caller principal
+but no destination port, and an ALLOW policy denies every caller without a
+matching identity — every non-meshed caller (ingress-nginx, uptime-kuma, falco,
+lifeonabike, API-server webhooks) would need an `ipBlocks` rule. Design it per
+namespace alongside O4 Phase 1.
+
+**Slip:** one curl printed an `_oauth2_proxy_k8s_csrf` cookie — a single-use
+anti-CSRF nonce for that curl's own sign-in attempt, not a session; later checks
+redacted.
+
+**State at the end:** O1, O2, O3, O9, O10, O11 closed; O7 closed but for an
+Uptime Kuma API-key check; O4 Phase 0 passed, Phase 1 next (needs external-dns
+`--source=gateway-httproute` and cert-manager Gateway API support first); O8
+namespace level done, port level piloted; O6 waits for 2026-11-16 06:00; O5 for
+the Nov 18 Chaos Mesh run (routine `trig_01EDjPynftajctv7QEJk53HA`). The
+prototype gateway stays up for Phase 1.
 
 ### 2026-11-15 (evening): any meshed pod could reach any port, and the list that found it
 
