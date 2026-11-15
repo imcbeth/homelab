@@ -6,7 +6,13 @@ metadata:
 spec:
   jetstream:
     # NATS JetStream — default messaging backbone for EventSources and Sensors
-    version: "2.10.10"
+    # Resolved against configs.jetstream.versions in values.yaml, which pins
+    # patched sidecars for this entry (2026-11-15). Rollback: "2.10.10".
+    #
+    # Changing this restarts eventbus-default-js-0. Its js-data volume is an
+    # emptyDir, so the stream is recreated and the sensors re-subscribe; a
+    # GitHub push delivered during the ~1 minute restart is lost.
+    version: "2.10.29"
     replicas: 1
     # Override stream replicas: Argo Events defaults to 3, which is rejected by
     # a non-clustered (single-node) NATS server with "replicas > 1 not supported".

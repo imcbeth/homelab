@@ -34,3 +34,38 @@ webhook:
     limits:
       cpu: 100m
       memory: 128Mi
+
+# JetStream image map. The controller resolves EventBus.spec.jetstream.version
+# against this list. Overridden 2026-11-15 because every chart entry pairs NATS
+# with prometheus-nats-exporter / nats-server-config-reloader 0.14.0, which
+# carry most of the EventBus's critical CVEs. Trivy (arm64, CRITICAL):
+#
+#   nats 2.10.10 + exporter 0.14.0 + reloader 0.14.0 ... 10
+#   nats 2.10.29 + exporter 0.20.3 + reloader 0.25.0 ...  1
+#
+# Both sidecars still accept every flag the controller passes
+# (reloader: -pid -config; exporter: -connz -routez -subz -varz -prefix
+# -use_internal_server_id -jsz=all), checked against --help on 2026-11-15.
+#
+# Helm replaces lists, so this REPLACES the chart's versions list. `latest`
+# and `2.10.10` are kept as the chart ships them so a rollback is a one-line
+# EventBus change. Renovate does not track these (no repository/tag keys);
+# re-check when bumping the chart.
+configs:
+  jetstream:
+    versions:
+      - version: latest
+        natsImage: nats:2.10.29
+        metricsExporterImage: natsio/prometheus-nats-exporter:0.14.0
+        configReloaderImage: natsio/nats-server-config-reloader:0.14.0
+        startCommand: /nats-server
+      - version: 2.10.29
+        natsImage: nats:2.10.29
+        metricsExporterImage: natsio/prometheus-nats-exporter:0.20.3
+        configReloaderImage: natsio/nats-server-config-reloader:0.25.0
+        startCommand: /nats-server
+      - version: 2.10.10
+        natsImage: nats:2.10.10
+        metricsExporterImage: natsio/prometheus-nats-exporter:0.14.0
+        configReloaderImage: natsio/nats-server-config-reloader:0.14.0
+        startCommand: /nats-server
