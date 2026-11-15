@@ -9,6 +9,10 @@ metadata:
   namespace: flink-demo
   annotations:
     external-dns.alpha.kubernetes.io/ttl: "300"
+    # The backend exists only while the flink-demo job runs, so this route is
+    # ResolvedRefs=False most of the time and Argo CD would mark the whole
+    # istio-gateway app Degraded, hiding real degradation in it.
+    argocd.argoproj.io/ignore-healthcheck: "true"
 spec:
   parentRefs:
     - name: lan-gateway
