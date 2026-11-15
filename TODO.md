@@ -118,8 +118,9 @@ so it is written down rather than implied.
       each. The auth trio and the snippet are the hard part; each candidate
       (Gateway API via Istio — already deployed in ambient mode — or Envoy
       Gateway, Traefik) needs a story for forward-auth to oauth2-proxy before it
-      is chosen. Plan it as a runbook with a parallel second LoadBalancer IP and
-      a per-host cutover, not a big-bang swap.
+      is chosen. **Plan:** `runbooks/ingress-nginx-replacement.md` (2026-11-15)
+      — recommends Istio Gateway API on the existing istiod, Phase 0 prototype
+      on falco.k8s.n37.ca behind a second MetalLB IP, then per-host cutover.
 
 ### Tier 3 — worth an explicit decision, probably "no"
 
