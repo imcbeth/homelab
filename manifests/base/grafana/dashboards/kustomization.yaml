@@ -41,8 +41,8 @@ resources:
   # APM / Performance Dashboards
   - apm-dashboard.yaml
 
-  # Ingress Dashboards
-  - ingress-nginx-dashboard.yaml
+  # Ingress Dashboards (lan-gateway replaced ingress-nginx, 2026-11-15)
+  - lan-gateway-dashboard.yaml
 
   # CI/CD Dashboards
   - argo-workflows-dashboard.yaml
