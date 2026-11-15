@@ -52,8 +52,8 @@ spec:
         - protocol: TCP
           port: 2802  # Sidekick WebUI
 
-    # Istio gateway (istio-system) for the O4 Phase 0 prototype route to the
-    # Sidekick UI (manifests/base/istio-gateway). Remove with the prototype.
+    # The LAN Istio gateway (istio-system, manifests/base/istio-gateway) that
+    # replaces ingress-nginx for falco.k8s.n37.ca (O4 Phase 1).
     - from:
         - namespaceSelector:
             matchLabels:

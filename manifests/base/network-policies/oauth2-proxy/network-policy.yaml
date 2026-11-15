@@ -21,8 +21,8 @@ spec:
         - protocol: TCP
           port: 4180
 
-    # ext_authz checks from the Istio gateway (istio-system) for the O4 Phase 0
-    # prototype (manifests/base/istio-gateway). Remove with the prototype.
+    # ext_authz checks from the LAN Istio gateway (istio-system,
+    # manifests/base/istio-gateway), which replaces ingress-nginx (O4).
     - from:
         - namespaceSelector:
             matchLabels:
