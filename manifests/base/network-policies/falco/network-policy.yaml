@@ -37,8 +37,6 @@ spec:
         - podSelector: {}
       ports:
         - protocol: TCP
-          port: 5060  # gRPC (Falco to Sidekick)
-        - protocol: TCP
           port: 2801  # Sidekick HTTP
         - protocol: TCP
           port: 2802  # Sidekick WebUI
@@ -114,8 +112,6 @@ spec:
     - to:
         - podSelector: {}
       ports:
-        - protocol: TCP
-          port: 5060  # gRPC
         - protocol: TCP
           port: 2801  # Sidekick HTTP
         - protocol: TCP

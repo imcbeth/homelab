@@ -58,8 +58,6 @@ spec:
           port: 9091  # KRaft REPLICATION
         - protocol: TCP
           port: 9092  # Kafka plain listener
-        - protocol: TCP
-          port: 9404  # Prometheus JMX metrics
 
   egress:
     # DNS resolution via kube-dns

@@ -63,14 +63,6 @@ spec:
         - protocol: TCP
           port: 8081   # sealed-secrets metrics
 
-    # Kube-proxy health check
-    - from:
-        - ipBlock:
-            cidr: 10.0.10.0/24
-      ports:
-        - protocol: TCP
-          port: 10256  # kube-proxy health
-
   egress:
     # DNS resolution (CoreDNS upstream to external DNS)
     - to:
