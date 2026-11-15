@@ -39,7 +39,27 @@ spec:
       storageClassName: synology-iscsi-delete
       accessMode: ReadWriteOnce
       volumeSize: 2Gi
+    # PodSecurity `restricted` (2026-11-15, O9). None of the nats images sets
+    # a USER, so all three containers ran as root.
+    #
+    # fsGroup is what makes this safe on the existing PVC: its JetStream data
+    # was written by root-run NATS (0750 dirs), and synology-csi's
+    # fsGroupPolicy is ReadWriteOnceWithFSType, so the kubelet re-owns the
+    # volume to group 65534 and makes it group-writable on mount. The
+    # reloader signals NATS through the shared pid file (the controller sets
+    # shareProcessNamespace), which works because all three share one UID.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+      runAsGroup: 65534
+      fsGroup: 65534
+      seccompProfile:
+        type: RuntimeDefault
     containerTemplate:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
       resources:
         requests:
           cpu: 50m
@@ -48,6 +68,10 @@ spec:
           cpu: 200m
           memory: 256Mi
     reloaderContainerTemplate:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
       resources:
         requests:
           cpu: 10m
@@ -56,6 +80,10 @@ spec:
           cpu: 50m
           memory: 64Mi
     metricsContainerTemplate:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
       resources:
         requests:
           cpu: 10m
