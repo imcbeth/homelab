@@ -1,6 +1,19 @@
 controller:
-  image:
-    tag: "v1.14.3"
+  # No image override: the chart pins the controller tag AND digest together.
+  #
+  # Until 2026-11-15 this said `image.tag: "v1.14.3"`, set at the Helm
+  # migration (#441) and never moved. It had not done anything since chart
+  # 4.15.1 (#512, 2026-03-25): the chart renders `image:tag@digest`, the
+  # kubelet pulls by digest, and the digest was the chart's v1.15.1 build.
+  # The pod spec read `controller:v1.14.3@sha256:594ceea...` while
+  # `/nginx-ingress-controller --version` reported v1.15.1. The label misled
+  # every scan triage and health check that read it.
+  #
+  # Do not reintroduce a bare `tag:` here. If a pin is ever needed, set
+  # `digest` with it, or the chart's digest silently wins again.
+  #
+  # The project was retired upstream in 2026; v1.15.1 (2026-03-19) is the
+  # final release. Replacing the controller is tracked in TODO.md.
 
   # Hardening settings (previously in separate ConfigMap)
   config:

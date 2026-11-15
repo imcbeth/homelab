@@ -106,6 +106,21 @@ so it is written down rather than implied.
       it as redundant. Leaving an unverified validator running is the worst of
       the three.
 
+- [ ] **Replace ingress-nginx** *(added 2026-11-15)*. The project was retired
+      upstream; controller v1.15.1 (2026-03-19) is the final release and still
+      carries the CRITICAL CVEs Trivy reports, so there is nothing left to
+      upgrade to. It fronts every public and SSO-protected route (10 Ingresses,
+      LoadBalancer 10.0.10.10). **Size the migration by its annotations, not its
+      Ingress count** — live usage on 2026-11-15:
+      `limit-rps`/`limit-connections` 7, oauth2-proxy `auth-url`/`auth-signin`/
+      `auth-response-headers` 5, `backend-protocol` 4, proxy timeouts 3,
+      `ssl-redirect`, `server-snippets`, `rewrite-target`, `proxy-body-size` 1
+      each. The auth trio and the snippet are the hard part; each candidate
+      (Gateway API via Istio — already deployed in ambient mode — or Envoy
+      Gateway, Traefik) needs a story for forward-auth to oauth2-proxy before it
+      is chosen. Plan it as a runbook with a parallel second LoadBalancer IP and
+      a per-host cutover, not a big-bang swap.
+
 ### Tier 3 — worth an explicit decision, probably "no"
 
 These have sat on the roadmap without motion. For a 5-node homelab they look
