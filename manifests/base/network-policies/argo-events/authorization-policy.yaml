@@ -1,0 +1,51 @@
+# Port-level control between meshed pods for argo-events (O8, 2026-11-15).
+#
+# NetworkPolicy can only scope meshed callers to namespaces (ztunnel delivers
+# inside the pod; only the 15008 rule is evaluated). ztunnel enforces this L4
+# AuthorizationPolicy by mTLS identity. Before it, any meshed pod admitted by
+# the namespace allowlist could reach NATS (4222) and its monitoring port
+# (8222) -- the gap that started O8.
+#
+# Callers in 30 days of ztunnel metrics (istio_tcp_connections_opened_total,
+# reporter=destination):
+#   lifeonabike-sensor-sa (both sensors)  -> eventbus 4222   mTLS
+#   default/sa (the EventSource)          -> eventbus 4222   mTLS
+#   Prometheus                            -> 7777 metrics    mTLS
+#   cloudflared (lifeonabike, not meshed) -> EventSource 12000  plaintext
+#   API server (host network)             -> events-webhook 443 plaintext
+#
+# `notPrincipals: ["*"]` matches connections with NO mesh identity, i.e. the
+# non-meshed callers. Those are still restricted by the NetworkPolicy's
+# application-port rules, which ARE enforced for non-meshed sources; this
+# rule only stops the AuthorizationPolicy from denying them. kubelet probe
+# ports (8222 on the EventBus, 8081 on the controller) are included in case
+# probes are subject to it; NetworkPolicy limits those to 169.254.7.127.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: argo-events-allow
+  namespace: argo-events
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/argo-events/sa/lifeonabike-sensor-sa
+              - cluster.local/ns/argo-events/sa/default
+      to:
+        - operation:
+            ports: ["4222"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["7777"]
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["12000", "443", "8222", "8081"]
