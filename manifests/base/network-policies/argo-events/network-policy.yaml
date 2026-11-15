@@ -39,6 +39,12 @@ spec:
           port: 6222   # NATS cluster
         - protocol: TCP
           port: 8222   # NATS monitoring HTTP
+    # Argo Events admission webhook — Kubernetes API server calls from control-plane (hostNetwork).
+    # Calico IPIP rewrites source IP for cross-node traffic so ipBlock rules fail.
+    # Bare port rule (no from selector); the events-webhook pod listens on 443.
+    - ports:
+        - protocol: TCP
+          port: 443    # Argo Events admission webhook
     # Webhook event source — external events in via ingress-nginx or Cloudflare Tunnel (lifeonabike ns)
     - from:
         - namespaceSelector:

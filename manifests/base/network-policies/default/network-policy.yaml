@@ -105,10 +105,12 @@ spec:
         - protocol: TCP
           port: 9090   # prometheus
 
-    # Admission webhooks from API server (bare port rule for IPIP compat)
+    # Admission webhooks from API server (bare port rule for IPIP compat).
+    # NetworkPolicy matches the pod port after DNAT, not the Service port:
+    # the operator Service listens on 443 but the pod on 10250.
     - ports:
         - protocol: TCP
-          port: 443    # prometheus-operator webhook
+          port: 10250  # prometheus-operator webhook
 
   egress:
     # Allow HBONE tunnel traffic to any ambient mesh pod
