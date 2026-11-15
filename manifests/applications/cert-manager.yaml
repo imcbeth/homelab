@@ -16,7 +16,18 @@ spec:
         valuesObject:
           installCRDs: true
           extraArgs:
-            - --dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53
+            # DNS-over-HTTPS, not 1.1.1.1:53 (changed 2026-11-15). The home
+            # router intercepts outbound port-53 DNS and answers *.k8s.n37.ca
+            # from its own local zone, so the DNS01 self-check for
+            # _acme-challenge.falco.k8s.n37.ca got NXDOMAIN from "1.1.1.1"
+            # while Cloudflare (via DoH) had the record -- the challenge sat
+            # "not yet propagated" indefinitely. Renewals still worked on
+            # 2026-10-21; the next ones (argo-workflows 2026-11-20, then
+            # 11-26/27/29 incl. lifeonabike.ca) would have hung the same way.
+            # DoH on 443 cannot be intercepted; cert-manager's NetworkPolicy
+            # already allows 443 to the internet. Supported since v1.13
+            # (checked against `--help` on v1.21.3).
+            - --dns01-recursive-nameservers=https://1.1.1.1/dns-query,https://8.8.8.8/dns-query
             - --dns01-recursive-nameservers-only
             - --enable-certificate-owner-ref=true
           resources:
