@@ -21,13 +21,30 @@ spec:
         - ipBlock:
             cidr: 169.254.7.127/32
     # Allow Prometheus to scrape metrics
+    # Prometheus runs in `default`. Until 2026-11-15 this said `monitoring`,
+    # a namespace that does not exist, so the rule admitted nothing; the
+    # scrape worked only because every ambient namespace admitted HBONE
+    # (15008) from anywhere (O8 in TODO.md).
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: monitoring
+              kubernetes.io/metadata.name: default
       ports:
         - protocol: TCP
           port: 9090   # Controller metrics
+    # blackbox-exporter (default) probes the server for the SLO. Like the
+    # scrape above, this had no rule and worked only via the 15008 gap
+    # (~40k connections in the 14 days to 2026-11-15).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: blackbox-exporter
+      ports:
+        - protocol: TCP
+          port: 2746   # Server port
     # Allow ingress-nginx for UI access
     - from:
         - namespaceSelector:
