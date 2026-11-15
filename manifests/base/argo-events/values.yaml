@@ -65,7 +65,7 @@ configs:
         configReloaderImage: natsio/nats-server-config-reloader:0.25.0
         startCommand: /nats-server
       - version: 2.10.10
-        natsImage: nats:2.10.10
+        natsImage: nats:2.10.29
         metricsExporterImage: natsio/prometheus-nats-exporter:0.14.0
         configReloaderImage: natsio/nats-server-config-reloader:0.14.0
         startCommand: /nats-server
