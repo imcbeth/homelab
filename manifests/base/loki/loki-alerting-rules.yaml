@@ -205,3 +205,44 @@ data:
             annotations:
               summary: "Suspicious activity in {{ $labels.namespace }}/{{ $labels.pod }}"
               description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has logs indicating potential security concerns."
+
+      - name: event_pipeline
+        interval: 1m
+        rules:
+          # An argo-events sensor that has lost its JetStream K/V bucket never
+          # recovers on its own. The EventBus keeps js-data on an emptyDir, so
+          # ANY restart of eventbus-default-js-0 -- an upgrade, a node reboot
+          # or drain -- wipes the bucket. The sensor reconnects to NATS, finds
+          # no bucket, and retries every 5 s forever: a sensor creates its
+          # bucket only at startup, and the reconnect path only looks it up.
+          # Until it is restarted, a push to lifeonabike.ca or
+          # lifeonabike-agent triggers nothing.
+          #
+          # Seen 2026-11-15 after #1156: both sensors looped on this line from
+          # 14:56 until restarted at 14:57.
+          #
+          # Matches the stuck-state error only. "failed to reconnect to
+          # eventbus" also appears briefly from the EventSource during any
+          # restart and clears by itself (3 lines inside one minute on
+          # 2026-11-15); "bucket not found" does not clear without a restart.
+          # PublishPipelineStale catches the same failure, but only after a
+          # merge has gone unbuilt past its grace window; this fires at the
+          # restart, before a push is lost.
+          - alert: ArgoEventsSensorBucketMissing
+            expr: |
+              sum by (namespace, pod) (
+                count_over_time({namespace="argo-events"} |= "nats: bucket not found" [5m])
+              ) > 0
+            for: 3m
+            labels:
+              severity: warning
+              component: argo-events
+              alert_type: log_pattern
+            annotations:
+              summary: "Sensor {{ $labels.pod }} lost its JetStream K/V bucket"
+              description: |
+                {{ $labels.pod }} cannot re-subscribe after an EventBus restart and
+                will not trigger builds until it is restarted:
+                  kubectl rollout restart -n argo-events deploy/<sensor deployment>
+                List the sensor deployments with
+                  kubectl get deploy -n argo-events -l controller=sensor-controller
