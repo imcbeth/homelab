@@ -52,6 +52,20 @@
 
 ---
 
+## 📋 **Open items from 2026-11-15** — worked as a list
+
+Everything left open by the 2026-11-15 sessions (see CURRENT.md), plus anything
+found while working them. Each item says what closes it.
+
+| # | Item | Status |
+|---|------|--------|
+| O1 | **Sensors break after any EventBus restart.** JetStream's `js-data` is an emptyDir, so a restart wipes each sensor's K/V bucket; sensors create it only at startup and loop on `nats: bucket not found` until restarted (2026-11-15, after #1156). Closes when the bucket survives a restart, or a stuck sensor is detected. | open |
+| O2 | **Argo CD reported two WorkflowTemplates `Synced` while live still had `alpine/git:v2.54.0`** after #1153; hard refresh did not change it, a manual sync applied it. Closes with a root cause, or a check that catches it. | open |
+| O3 | **`manifests/base/argo-events/webhook-ingress.yaml` was never applied** (not in the kustomization since 2026-05-31). GitHub delivers via the Cloudflare tunnel, so it is dead config. Closes when deleted. | open |
+| O4 | **Replace ingress-nginx** (retired upstream; v1.15.1 final). Full entry in Tier 2 below. Closes with a chosen replacement and a cutover runbook; the migration itself is a separate project. | open |
+| O5 | **Nov 18 Chaos Mesh run** (`network-delay-loki`, first on 2.8.8). Cloud routine `trig_01EDjPynftajctv7QEJk53HA` opens a GitHub issue at 11:00Z. Closes when that run is checked. | waiting (2026-11-18) |
+| O6 | **`ArgoWorkflowFailed` firing** from the 2026-11-15 06:00 health check, which ran mid-upgrade. Closes when the 2026-11-16 run passes and the alert resolves. | waiting (2026-11-16) |
+
 ## 🧭 **Next Up** — reviewed 2026-09-10
 
 Ordered by value, not by section. The reasoning matters more than the order,
