@@ -8,6 +8,7 @@ resources:
   - unipoller/authorization-policy.yaml
   # Phase 2: Monitoring namespaces
   - loki/network-policy.yaml
+  - loki/authorization-policy.yaml
   - trivy-system/network-policy.yaml
   # Runtime security & policy enforcement
   - falco/network-policy.yaml

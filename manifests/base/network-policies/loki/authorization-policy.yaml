@@ -1,0 +1,50 @@
+# Port-level control between meshed pods for loki (O8, 2026-11-15). ztunnel
+# enforces this L4 AuthorizationPolicy by mTLS identity; NetworkPolicy alone
+# could only scope meshed callers to namespaces.
+#
+# Callers in 30 days of ztunnel metrics, by service account:
+#   alloy, loki-canary          -> loki 3100 (push, canary queries)
+#   Grafana                     -> loki 3100 (datasource)
+#   Prometheus                  -> loki 3100, alloy 12345, loki-canary 3500
+#   loki itself                 -> 3100/7946/9095 (ruler, memberlist, gRPC),
+#                                  in case its own-IP traffic is captured
+# Non-meshed callers -- uptime-kuma, falco's sidekick (log push), kubelet
+# probes -- match `notPrincipals: ["*"]` and stay restricted by NetworkPolicy.
+# Alloy's OTLP receivers (4317/4318) had no meshed callers; non-meshed only.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: loki-allow
+  namespace: loki
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/loki/sa/alloy
+              - cluster.local/ns/loki/sa/loki-canary
+              - cluster.local/ns/default/sa/kube-prometheus-stack-grafana
+      to:
+        - operation:
+            ports: ["3100"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["3100", "12345", "3500"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/loki/sa/loki
+      to:
+        - operation:
+            ports: ["3100", "7946", "9095"]
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["3100", "3500", "12345", "4317", "4318"]
