@@ -135,6 +135,11 @@ resultsCache:
   replicas: 0
 
 sidecar:
+  # Chart 7.6.0 defaults to 2.5.0 (3 critical CVEs: openssl, certifi);
+  # 2.14.3 scans clean (2026-11-15).
+  image:
+    repository: kiwigrid/k8s-sidecar
+    tag: 2.14.3
   resources:
     requests:
       cpu: 10m
