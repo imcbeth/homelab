@@ -21,9 +21,23 @@ spec:
     spec:
       restartPolicy: OnFailure
       serviceAccountName: default
+      # flink-demo ENFORCES PodSecurity restricted. Without this the hook's
+      # pods were refused ("violates PodSecurity restricted:latest") and every
+      # flink-demo sync hung on the hook (found 2026-11-15, when a sync could
+      # not prune the old Ingress). bitnami/kubectl runs as UID 1001.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: setup
           image: registry.k8s.n37.ca/bitnami/kubectl:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           resources:
             requests:
               cpu: 50m
