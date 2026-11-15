@@ -18,6 +18,27 @@ spec:
     # a non-clustered (single-node) NATS server with "replicas > 1 not supported".
     streamConfig: |
       replicas: 1
+    # Persistent JetStream storage (2026-11-15). Without it js-data is an
+    # emptyDir, so every restart of eventbus-default-js-0 -- upgrade, node
+    # reboot, drain -- wiped JetStream, including each sensor's K/V bucket.
+    # Sensors create that bucket only at startup, so they looped on
+    # "nats: bucket not found" and triggered no builds until restarted
+    # (after #1156; alerted on by ArgoEventsSensorBucketMissing, #1170).
+    #
+    # Sized from measured use: 506 bytes across 3 streams on 2026-11-15,
+    # stream cap 1GB (maxbytes). The controller's default is 20Gi.
+    # synology-iscsi-delete because the data is transient (72h maxage) and the
+    # controller deletes this PVC itself if the EventBus is ever removed.
+    #
+    # Rolling this out needs ONE manual step: the controller updates the
+    # StatefulSet in place, and volumeClaimTemplates is immutable, so the
+    # update is rejected until the StatefulSet is deleted and recreated:
+    #   kubectl delete sts -n argo-events eventbus-default-js
+    # The new PVC starts empty, so restart both sensors once afterwards.
+    persistence:
+      storageClassName: synology-iscsi-delete
+      accessMode: ReadWriteOnce
+      volumeSize: 2Gi
     containerTemplate:
       resources:
         requests:
