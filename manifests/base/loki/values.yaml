@@ -8,6 +8,14 @@ deploymentMode: SingleBinary
 loki:
   auth_enabled: false
 
+  # No anonymous usage stats to stats.grafana.org (2026-11-15, O11). The
+  # NetworkPolicy only allows egress 443 to the API server, so every report
+  # timed out after 10 s: loki-0 made ~7,200 failed connections a day to
+  # 34.49.170.206:443 and alloy ~150, seen in ztunnel's failed-connection
+  # metrics. Tempo already sets reportingEnabled: false.
+  analytics:
+    reporting_enabled: false
+
   commonConfig:
     replication_factor: 1
 
