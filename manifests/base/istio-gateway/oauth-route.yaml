@@ -1,0 +1,20 @@
+# oauth.k8s.n37.ca (oauth2-proxy's own sign-in and callback) on lan-gateway
+# (Phase 1). Never forward-authed -- this IS the auth endpoint.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: oauth2-proxy
+  namespace: oauth2-proxy
+  annotations:
+    external-dns.alpha.kubernetes.io/ttl: "300"
+spec:
+  parentRefs:
+    - name: lan-gateway
+      namespace: istio-system
+      sectionName: https-oauth
+  hostnames:
+    - oauth.k8s.n37.ca
+  rules:
+    - backendRefs:
+        - name: oauth2-proxy
+          port: 4180
