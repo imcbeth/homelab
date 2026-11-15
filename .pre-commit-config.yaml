@@ -112,6 +112,16 @@ repos:
         files: ^scripts/cluster-restarts\.py$
         pass_filenames: false
 
+      # The live audit needs a cluster; its fixtures do not. They reproduce the
+      # 2026-11-15 webhook rule that named the Service port (443) instead of the
+      # pod port (10250) and assert it is flagged.
+      - id: networkpolicy-port-audit-self-test
+        name: networkpolicy-port-audit self-test
+        entry: scripts/networkpolicy-port-audit.py --self-test
+        language: system
+        files: ^scripts/networkpolicy-port-audit\.py$
+        pass_filenames: false
+
       - id: configmap-embedded
         name: Validate YAML/JSON inside ConfigMaps
         entry: scripts/validate-configmap-embedded.py
