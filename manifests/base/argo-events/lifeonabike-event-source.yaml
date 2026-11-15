@@ -38,6 +38,21 @@ metadata:
   name: lifeonabike-github
   namespace: argo-events
 spec:
+  template:
+    # PodSecurity `restricted` (2026-11-15, O9). The argo-events image sets
+    # no USER, so this ran as root. The binary is static and needs nothing
+    # privileged; verified running as 65534 with all capabilities dropped.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+      runAsGroup: 65534
+      seccompProfile:
+        type: RuntimeDefault
+    container:
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
   service:
     ports:
       - port: 12000
