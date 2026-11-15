@@ -21,16 +21,10 @@ spec:
         prometheus.io/port: "9115"
         prometheus.io/path: "/metrics"
     spec:
-      # Resolve internal hostnames to ingress ClusterIP to avoid hairpin NAT
-      # Note: Update this IP if ingress-nginx-controller service is recreated
-      # Get current IP: kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.clusterIP}'
+      # Resolve the externally-probed hostnames to the LAN gateway's ClusterIP
+      # to avoid pod-to-MetalLB-VIP hairpin NAT. (They pointed at
+      # ingress-nginx's ClusterIP until every host moved, 2026-11-15.)
       hostAliases:
-        - ip: "10.98.168.24"  # ingress-nginx-controller ClusterIP (stable unless service recreated)
-          hostnames:
-            - "workflows.k8s.n37.ca"
-            # falco.k8s.n37.ca removed 2026-11-15: it moved to the LAN Istio
-            # gateway, so this ClusterIP no longer serves it. It was never a
-            # probe target. Moved hosts need the gateway's ClusterIP instead.
         # lan-gateway-istio ClusterIP, for hosts moved off ingress-nginx
         # (O4 Phase 1). Changes if the Gateway is renamed or recreated:
         #   kubectl get svc -n istio-system lan-gateway-istio -o jsonpath='{.spec.clusterIP}'

@@ -82,8 +82,11 @@ service:
   type: ClusterIP
   port: 3001
 
+# Served by the LAN Istio gateway since 2026-11-15
+# (manifests/base/istio-gateway/status-route.yaml); ingress-nginx is being
+# retired. Kept (disabled) for reference until Phase 2 removes nginx.
 ingress:
-  enabled: true
+  enabled: false
   # className key not supported in this chart version — use annotation
   annotations:
     kubernetes.io/ingress.class: nginx
