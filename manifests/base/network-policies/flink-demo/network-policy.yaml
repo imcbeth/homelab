@@ -40,14 +40,6 @@ spec:
         - ipBlock:
             cidr: 169.254.7.127/32
 
-    # Flink UI from ingress-nginx (browsing flink.k8s.n37.ca)
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 8081  # Flink REST API / UI
 
     # Uptime Kuma health monitoring
     - from:

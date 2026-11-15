@@ -3,7 +3,7 @@
 # only path from the internet into the cluster: lifeonabike.ca, www, and
 # build-webhook.n37.ca (GitHub -> argo-events). When the tunnel drops, the
 # public site goes dark AND merges stop deploying, while everything looks
-# healthy from the LAN, where ingress-nginx still serves the site.
+# healthy from the LAN, where the LAN gateway still serves the site.
 #
 # Each healthy replica holds 4 connections to the Cloudflare edge
 # (cloudflared_tunnel_ha_connections, scraped by the PodMonitor in

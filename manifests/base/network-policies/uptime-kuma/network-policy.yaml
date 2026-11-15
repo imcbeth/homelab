@@ -9,14 +9,6 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # UI traffic from ingress-nginx
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 3001
     # Prometheus pod metrics (kube-state-metrics covers pod health)
     - from:
         - namespaceSelector:

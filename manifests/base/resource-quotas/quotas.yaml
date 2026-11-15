@@ -67,19 +67,6 @@ apiVersion: v1
 kind: ResourceQuota
 metadata:
   name: object-count-quota
-  namespace: ingress-nginx
-spec:
-  hard:
-    count/pods: "15"
-    count/persistentvolumeclaims: "5"
-    count/services: "10"
-    count/configmaps: "20"
-    count/secrets: "20"
----
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: object-count-quota
   namespace: lifeonabike
 spec:
   hard:

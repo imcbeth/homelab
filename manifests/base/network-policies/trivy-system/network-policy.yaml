@@ -98,13 +98,10 @@ spec:
     # registry.k8s.n37.ca resolves to the LAN gateway's MetalLB IP, which falls
     # in the private range excluded below -- this explicit rule is required for
     # local image scans. It was ingress-nginx's 10.0.10.10 until 2026-11-15,
-    # when the host moved to lan-gateway (10.0.10.11); .10 stays until nginx is
-    # removed (O4 Phase 2).
+    # when the host moved to lan-gateway (10.0.10.11) and nginx was removed.
     - to:
         - ipBlock:
             cidr: 10.0.10.11/32  # lan-gateway MetalLB LoadBalancer IP
-        - ipBlock:
-            cidr: 10.0.10.10/32  # ingress-nginx MetalLB IP (until Phase 2)
       ports:
         - protocol: TCP
           port: 443

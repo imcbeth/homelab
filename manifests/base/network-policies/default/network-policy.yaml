@@ -78,14 +78,6 @@ spec:
         - protocol: TCP
           port: 9116   # snmp-exporter
 
-    # Allow ingress-nginx controller to proxy external requests to Grafana UI
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 3000   # grafana
 
     # lan-gateway (istio-system) for grafana.k8s.n37.ca (O4 Phase 1). Not
     # evaluated while default is ambient (the gateway arrives over HBONE on

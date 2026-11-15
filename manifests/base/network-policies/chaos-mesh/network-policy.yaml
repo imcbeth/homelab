@@ -53,14 +53,6 @@ spec:
         - protocol: TCP
           port: 2333   # dashboard UI
 
-    # Allow ingress-nginx for dashboard UI
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 2333
 
     # HBONE for Istio Ambient mesh (if chaos-mesh namespace is ever enrolled)
     - ports:

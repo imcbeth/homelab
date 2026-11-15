@@ -85,14 +85,6 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    # Public path one: ingress-nginx, for the lifeonabike.ca / www Ingress.
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 8080
     # LAN path via the Istio gateway (istio-system), replacing ingress-nginx
     # for lifeonabike.ca on the LAN (O4 Phase 1). lifeonabike is not ambient,
     # so the gateway connects directly to the pod port.

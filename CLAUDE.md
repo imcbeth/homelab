@@ -108,7 +108,7 @@ All 38 Applications, by `argocd.argoproj.io/sync-wave`. Generated from
  -40  network-policies
  -38  resource-quotas
  -35  metal-lb
- -30  ingress-nginx-config, synology-csi
+ -30  synology-csi
  -25  sealed-secrets
  -20  unipoller
  -15  kube-prometheus-stack
@@ -119,7 +119,7 @@ All 38 Applications, by `argocd.argoproj.io/sync-wave`. Generated from
   -7  localstack
   -6  gatekeeper                           (+ its ConstraintTemplates)
   -5  falco, gatekeeper-policies, velero
-  -4  vpa
+  -4  istio-gateway, vpa                (LAN gateway; replaced ingress-nginx)
   -3  chaos-mesh, flink-operator, oauth2-proxy
   -2  strimzi-operator, zot
    0  trivy-operator, uptime-kuma

@@ -1,9 +1,9 @@
 # The LAN gateway replacing ingress-nginx (runbooks/ingress-nginx-replacement.md,
 # O4). Phase 0 proved oauth2-proxy forward-auth through it (2026-11-15) under
 # its prototype name; renamed for Phase 1, where hosts move onto it one at a
-# time. It has its own MetalLB address (10.0.10.11); ingress-nginx stays on
-# 10.0.10.10 until the last host has moved. Until a host's DNS record moves,
-# test it with (a listener with no route answers 404)
+# time. It has its own MetalLB address (10.0.10.11). Every LAN host moved by
+# 2026-11-15 and ingress-nginx was removed (Phase 2); 10.0.10.10 is free.
+# To test a new host before its DNS record exists:
 #   curl --resolve <host>:443:10.0.10.11 https://<host>/
 #
 # Lives in istio-system because the proxy image comes from registry.istio.io,

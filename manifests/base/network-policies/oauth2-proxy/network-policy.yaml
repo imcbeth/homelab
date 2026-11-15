@@ -12,14 +12,6 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Public HTTPS traffic via ingress-nginx (OAuth callback + sign-in page)
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 4180
 
     # ext_authz checks from the LAN Istio gateway (istio-system,
     # manifests/base/istio-gateway), which replaces ingress-nginx (O4).

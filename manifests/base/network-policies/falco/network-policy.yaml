@@ -43,14 +43,6 @@ spec:
         - protocol: TCP
           port: 6379  # Redis (Sidekick UI)
 
-    # Allow ingress-nginx for UI access
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 2802  # Sidekick WebUI
 
     # The LAN Istio gateway (istio-system, manifests/base/istio-gateway) that
     # replaces ingress-nginx for falco.k8s.n37.ca (O4 Phase 1).

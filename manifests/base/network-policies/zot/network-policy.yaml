@@ -16,14 +16,6 @@ spec:
     - Egress
 
   ingress:
-    # Allow ingress-nginx to reach Zot registry (UI + API on port 5000)
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 5000
 
     # Allow Prometheus to scrape metrics (port 5000 /metrics endpoint)
     - from:
