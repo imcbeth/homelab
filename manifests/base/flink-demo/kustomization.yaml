@@ -15,4 +15,3 @@ resources:
   - flink-file-to-kafka.yaml
   - flink-kafka-to-s3.yaml
   # Ingress: flink.k8s.n37.ca -> file-to-kafka Flink UI (oauth2-proxy SSO)
-  - ingress.yaml
