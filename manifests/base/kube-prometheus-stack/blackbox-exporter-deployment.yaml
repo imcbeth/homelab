@@ -27,7 +27,6 @@ spec:
       hostAliases:
         - ip: "10.98.168.24"  # ingress-nginx-controller ClusterIP (stable unless service recreated)
           hostnames:
-            - "argocd.k8s.n37.ca"
             - "workflows.k8s.n37.ca"
             # falco.k8s.n37.ca removed 2026-11-15: it moved to the LAN Istio
             # gateway, so this ClusterIP no longer serves it. It was never a
@@ -38,6 +37,7 @@ spec:
         - ip: "10.96.28.68"
           hostnames:
             - "grafana.k8s.n37.ca"
+            - "argocd.k8s.n37.ca"
       containers:
         - name: blackbox-exporter
           image: prom/blackbox-exporter:v0.29.1
