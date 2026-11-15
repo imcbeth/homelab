@@ -144,11 +144,16 @@ flink, workflows, status (WebSockets — test a live dashboard), argocd (HTTPS
 backend; also check the argocd CLI/gRPC path), registry (large pushes — push a
 multi-GB image), oauth (last of the auth hosts' dependencies), lifeonabike LAN.
 
-Per host:
-1. Add the `HTTPRoute` (and `BackendTLSPolicy` / timeouts as needed).
-2. Move the DNS record to the new IP (external-dns, once it reads HTTPRoutes).
-3. Test from a LAN client; keep the Ingress in place for instant rollback.
-4. After a day without issues, delete the Ingress.
+Per host (revised 2026-11-15 after the grafana outage, see REFERENCE.md):
+1. **Policy first.** Ambient backend namespace: add `istio-system` to its 15008
+   (HBONE) allowlist -- the gateway always tunnels to ambient pods. Non-meshed
+   backend: an app-port ingress rule from `istio-system`.
+2. Add the `HTTPRoute` **keeping the Ingress**. external-dns-unifi then
+   publishes both 10.0.10.10 and 10.0.10.11; both serve, so this is safe.
+3. Verify the gateway path: `curl --resolve <host>:443:10.0.10.11 ...`, and
+   that the gateway's Envoy endpoint for the backend is healthy.
+4. Only then delete the Ingress; DNS settles on 10.0.10.11 after the TTL.
+   Clients (browsers, macOS) cache the old address for up to the TTL too.
 
 Rollback for any host: point its record back at `10.0.10.10`.
 
