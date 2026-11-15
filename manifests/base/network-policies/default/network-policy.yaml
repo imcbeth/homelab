@@ -225,8 +225,6 @@ spec:
         - protocol: TCP
           port: 10250  # kubelet metrics
         - protocol: TCP
-          port: 10254  # ingress-nginx metrics
-        - protocol: TCP
           port: 10255  # kubelet read-only
         - protocol: TCP
           port: 10257  # kube-controller-manager
