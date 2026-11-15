@@ -35,7 +35,12 @@ fi
 # -ignore-missing-schemas: Don't fail on CRDs or resources without schemas
 # -summary: Show summary of results
 # -output json: Machine-readable output for debugging
+# -strict: reject fields the schema does not define (2026-11-15). Without it a
+#   NetworkPolicy rule with `from:` placed in the egress list validated
+#   cleanly; only the API server's strict decoding refused it, at sync time.
+#   Turning it on found 0 invalid manifests.
 echo "$manifests" | xargs kubeconform \
+  -strict \
   -summary \
   -output json \
   -ignore-missing-schemas
