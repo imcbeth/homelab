@@ -29,6 +29,13 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: localstack
+        # lan-gateway (istio-system). Istio's gateway reaches ambient backends
+        # over HBONE (Envoy endpoint `envoy://connect_originate/<pod>:4566`),
+        # so it must be here. Removing it in #1193 broke localstack through
+        # the gateway (503 UC) until #1195.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
       ports:
         - protocol: TCP
           port: 15008  # HBONE mTLS tunnel
@@ -77,9 +84,9 @@ spec:
         - protocol: TCP
           port: 4566   # LocalStack health endpoint
     # lan-gateway (istio-system) for localstack.k8s.n37.ca (O4 Phase 1),
-    # replacing the ingress-nginx rule. The gateway reaches this ambient
-    # backend over plain TCP, not HBONE (Envoy stats: no mTLS, no destination
-    # principal), so no 15008 entry is needed.
+    # replacing the ingress-nginx rule. Not evaluated while localstack is
+    # ambient (the gateway arrives over HBONE on 15008, above); kept so the
+    # route still works if the namespace ever leaves the mesh.
     - from:
         - namespaceSelector:
             matchLabels:
