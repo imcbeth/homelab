@@ -28,3 +28,4 @@ spec:
         - operation:
             hosts:
               - falco.k8s.n37.ca
+              - workflows.k8s.n37.ca
