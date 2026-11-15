@@ -39,8 +39,8 @@ spec:
         # lan-gateway (istio-system). It reaches grafana over HBONE
         # (Envoy cluster endpoint `envoy://connect_originate/<pod>:3000`), so it
         # must be on this list; without it every request was 503 UC
-        # (2026-11-15, the grafana cutover). It reached localstack over plain
-        # TCP instead, so do not assume either way per backend.
+        # (2026-11-15, the grafana cutover). It uses HBONE for every ambient
+        # backend -- localstack too, which was misread at first.
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: istio-system
@@ -87,10 +87,9 @@ spec:
         - protocol: TCP
           port: 3000   # grafana
 
-    # lan-gateway (istio-system) for grafana.k8s.n37.ca (O4 Phase 1). The
-    # gateway reaches ambient backends over plain TCP, not HBONE (observed on
-    # localstack, 2026-11-15), so this application-port rule is the one that
-    # applies to it.
+    # lan-gateway (istio-system) for grafana.k8s.n37.ca (O4 Phase 1). Not
+    # evaluated while default is ambient (the gateway arrives over HBONE on
+    # 15008); kept so the route still works if the namespace leaves the mesh.
     - from:
         - namespaceSelector:
             matchLabels:
