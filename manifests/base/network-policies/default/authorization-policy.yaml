@@ -1,0 +1,62 @@
+# Port-level control between meshed pods for the default namespace -- the
+# monitoring stack (O8, 2026-11-15). NetworkPolicy can only scope meshed
+# callers to namespaces; ztunnel enforces this L4 AuthorizationPolicy by mTLS
+# identity. Before it, any pod in an allowed meshed namespace could reach
+# Prometheus' admin API (9090), Alertmanager (9093) and Grafana (3000).
+#
+# Callers in 30 days of ztunnel metrics (istio_tcp_connections_opened_total,
+# reporter=destination), by service account:
+#   Prometheus             -> every scrape target here (ports below)
+#   Grafana                -> Prometheus 9090 (datasource)
+#   loki, argo-workflows/default (publish-divergence-check),
+#   trivy-system/compliance-reporter          -> Alertmanager 9093
+#   lan-gateway (istio-system, over HBONE)    -> Grafana 3000
+# Non-meshed callers -- uptime-kuma (Prometheus, Grafana), ingress-nginx
+# (Grafana), the lifeonabike agent (Alertmanager), the API server (operator
+# webhook 10250) -- carry no identity and match `notPrincipals: ["*"]`; they
+# stay restricted by the NetworkPolicy's application-port rules. That rule also
+# covers kubelet probe ports.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: default-allow
+  namespace: default
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["3000", "8080", "8081", "9090", "9093", "9100", "9115", "9116", "10250"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/kube-prometheus-stack-grafana
+      to:
+        - operation:
+            ports: ["9090", "9093"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/loki/sa/loki
+              - cluster.local/ns/argo-workflows/sa/default
+              - cluster.local/ns/trivy-system/sa/compliance-reporter
+      to:
+        - operation:
+            ports: ["9093"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/istio-system/sa/lan-gateway-istio
+      to:
+        - operation:
+            ports: ["3000"]
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["3000", "8080", "8081", "9090", "9093", "9100", "9115", "9116", "10250"]
