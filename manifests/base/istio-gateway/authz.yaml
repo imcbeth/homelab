@@ -1,0 +1,19 @@
+# Forward-auth to oauth2-proxy for everything through the prototype gateway,
+# via the `oauth2-proxy` extensionProvider in istiod-values.yaml. This is the
+# Phase 0 unknown: an unauthenticated request must come back as a 302 to
+# https://oauth.k8s.n37.ca/oauth2/start, and a signed-in one must reach falco.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: proto-gateway-oauth2
+  namespace: istio-system
+spec:
+  targetRefs:
+    - kind: Gateway
+      group: gateway.networking.k8s.io
+      name: proto-gateway
+  action: CUSTOM
+  provider:
+    name: oauth2-proxy
+  rules:
+    - {}

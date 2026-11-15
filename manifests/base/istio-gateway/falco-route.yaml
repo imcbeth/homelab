@@ -1,0 +1,32 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: falco-ui
+  namespace: falco
+spec:
+  parentRefs:
+    - name: proto-gateway
+      namespace: istio-system
+      sectionName: https-falco
+  hostnames:
+    - falco.k8s.n37.ca
+  rules:
+    - backendRefs:
+        - name: falco-falcosidekick-ui
+          port: 2802
+---
+# Lets the istio-system Gateway read the falco-ui-tls certificate.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: proto-gateway-tls
+  namespace: falco
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: istio-system
+  to:
+    - group: ""
+      kind: Secret
+      name: falco-ui-tls

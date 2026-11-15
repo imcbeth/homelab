@@ -33,3 +33,30 @@ affinity: {}
 
 # Revision tag (empty for default)
 revision: ""
+
+# Forward-auth provider for Gateway API gateways (O4 Phase 0, 2026-11-15).
+# Does nothing until a CUSTOM AuthorizationPolicy names it
+# (manifests/base/istio-gateway/authz.yaml). oauth2-proxy already runs with
+# upstream static://202 and a .k8s.n37.ca cookie, which is the shape Envoy
+# ext_authz expects: 2xx = allow, anything else is returned to the client.
+meshConfig:
+  extensionProviders:
+    - name: oauth2-proxy
+      envoyExtAuthzHttp:
+        service: oauth2-proxy.oauth2-proxy.svc.cluster.local
+        port: 4180
+        includeRequestHeadersInCheck:
+          - authorization
+          - cookie
+          - x-forwarded-proto
+          - x-forwarded-host
+        headersToUpstreamOnAllow:
+          - authorization
+          - x-auth-request-user
+          - x-auth-request-email
+        headersToDownstreamOnDeny:
+          - content-type
+          - set-cookie
+          - location
+        headersToDownstreamOnAllow:
+          - set-cookie

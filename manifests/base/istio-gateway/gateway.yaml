@@ -1,0 +1,42 @@
+# Phase 0 prototype from runbooks/ingress-nginx-replacement.md (O4).
+#
+# An Istio Gateway API gateway on its OWN MetalLB address (10.0.10.11), serving
+# one host -- falco.k8s.n37.ca -- so ingress-nginx on 10.0.10.10 is untouched.
+# Nothing points DNS at it; test with
+#   curl --resolve falco.k8s.n37.ca:443:10.0.10.11 https://falco.k8s.n37.ca/
+#
+# Lives in istio-system because the proxy image comes from registry.istio.io,
+# which the Gatekeeper allowed-repos constraint rejects everywhere except the
+# namespaces excluded from it (istio-system is one). The default proxy
+# resources carry limits (2 CPU / 1Gi), which require-resource-limits needs.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: proto-gateway
+  namespace: istio-system
+spec:
+  gatewayClassName: istio
+  infrastructure:
+    annotations:
+      metallb.io/loadBalancerIPs: 10.0.10.11
+    labels:
+      app.kubernetes.io/name: proto-gateway
+  listeners:
+    - name: https-falco
+      hostname: falco.k8s.n37.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          # Reuses the certificate cert-manager already issues for the
+          # ingress-nginx Ingress; falco-referencegrant.yaml allows the read.
+          - kind: Secret
+            name: falco-ui-tls
+            namespace: falco
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: falco
