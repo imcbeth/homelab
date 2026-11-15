@@ -66,6 +66,13 @@ spec:
         # Source configuration - watch both Ingress and LoadBalancer services
         - --source=ingress
         - --source=service
+        # HTTPRoutes on the LAN Istio gateway (lan-gateway, 10.0.10.11) that
+        # replaces ingress-nginx host by host (2026-11-15). A host moves when
+        # its HTTPRoute is added and its Ingress removed IN THE SAME CHANGE:
+        # with both present external-dns would publish both 10.0.10.10 and
+        # 10.0.10.11 for the name. Not on the cloudflare instance, which also
+        # excludes 10.0.0.0/8 targets.
+        - --source=gateway-httproute
         # DNSEndpoint CRs — internal infrastructure records declared in git
         # (see internal-records.yaml). Deliberately NOT added to
         # deployment-cloudflare.yaml: that instance publishes to public DNS
