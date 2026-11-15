@@ -148,6 +148,8 @@ spec:
           port: 10257  # kube-controller-manager metrics (host network)
         - protocol: TCP
           port: 10259  # kube-scheduler metrics (host network)
+        - protocol: TCP
+          port: 9120   # metallb speaker metrics (host network)
 
     # Prometheus scrapes targets across all namespaces
     # Allow egress to all cluster pods for scraping
@@ -172,6 +174,8 @@ spec:
           port: 9115   # blackbox-exporter
         - protocol: TCP
           port: 9116   # snmp-exporter
+        - protocol: TCP
+          port: 9120   # metallb controller metrics
         - protocol: TCP
           port: 9130   # unipoller
         - protocol: TCP

@@ -1,6 +1,5 @@
 # metallb-values.yaml
 
-# Enable metrics for the controller and speaker components
 controller:
   # Resource limits for MetalLB controller
   resources:
@@ -10,14 +9,6 @@ controller:
     limits:
       cpu: 100m
       memory: 128Mi
-  metrics:
-    enabled: true
-    serviceMonitor:
-      # Set this to false as we want to use PodMonitor instead
-      enabled: false
-    podMonitor:
-      # Enable the PodMonitor resource creation by the Helm chart
-      enabled: true
 
 speaker:
   # Resource limits for MetalLB speaker (runs on each node)
@@ -77,14 +68,6 @@ speaker:
         limits:
           cpu: 25m
           memory: 32Mi
-  metrics:
-    enabled: true
-    serviceMonitor:
-      # Set this to false as we want to use PodMonitor instead
-      enabled: false
-    podMonitor:
-      # Enable the PodMonitor resource creation by the Helm chart
-      enabled: true
 
 # Disable frr-k8s backend — cluster uses L2 mode only (no BGP).
 # frr-k8s DaemonSet has init containers with no chart-level resource config,
@@ -92,6 +75,25 @@ speaker:
 frrk8s:
   enabled: false
 
+# Monitoring. The chart only reads these keys under `prometheus:` — the
+# `controller.metrics` / `speaker.metrics` / `prometheus.podMonitors` blocks
+# that used to be here are not chart values and were silently ignored, so
+# MetalLB went unscraped until 2026-11-15.
+#
+# Metrics are HTTPS on 9120 and need a bearer token: the chart creates the
+# metallb-metrics-token Secret, and rbacPrometheus grants the Prometheus
+# service account below what it needs.
 prometheus:
-  podMonitors:
+  serviceAccount: kube-prometheus-stack-prometheus
+  namespace: default
+  podMonitor:
     enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+  prometheusRule:
+    enabled: true
+    additionalLabels:
+      release: kube-prometheus-stack
+    # L2 mode only — there are no BGP sessions to watch.
+    bgpSessionDown:
+      enabled: false
