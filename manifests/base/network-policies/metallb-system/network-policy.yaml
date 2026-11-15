@@ -19,9 +19,8 @@ spec:
               kubernetes.io/metadata.name: default
       ports:
         - protocol: TCP
-          port: 7472  # Controller metrics
-        - protocol: TCP
-          port: 7473  # Speaker metrics
+          port: 9120  # Controller metrics (HTTPS). Speakers are hostNetwork,
+                      # so pod NetworkPolicy does not apply to their 9120.
     # Allow internal namespace communication (speaker <-> controller memberlist)
     - from:
         - namespaceSelector:
@@ -32,10 +31,6 @@ spec:
           port: 7946  # Memberlist
         - protocol: UDP
           port: 7946  # Memberlist
-        - protocol: TCP
-          port: 7472  # Controller metrics
-        - protocol: TCP
-          port: 7473  # Speaker metrics
     # Allow webhook validation from kube-apiserver
     - from:
         - ipBlock:
@@ -80,9 +75,5 @@ spec:
           port: 7946  # Memberlist
         - protocol: UDP
           port: 7946  # Memberlist
-        - protocol: TCP
-          port: 7472  # Controller metrics
-        - protocol: TCP
-          port: 7473  # Speaker metrics
     # Note: L2 ARP/GARP announcements operate at Layer 2 and are not affected
     # by NetworkPolicy (which operates at Layer 3/4). No additional rules needed.
