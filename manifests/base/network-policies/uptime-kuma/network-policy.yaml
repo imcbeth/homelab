@@ -36,6 +36,16 @@ spec:
       ports:
         - protocol: TCP
           port: 3001
+    # lan-gateway (istio-system) for status.k8s.n37.ca (O4 Phase 1). This namespace is
+    # not ambient, so the gateway connects directly and this app-port rule
+    # applies.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 3001
   egress:
     # DNS resolution
     - to:
