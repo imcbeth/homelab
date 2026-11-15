@@ -3,7 +3,7 @@
 # its prototype name; renamed for Phase 1, where hosts move onto it one at a
 # time. It has its own MetalLB address (10.0.10.11); ingress-nginx stays on
 # 10.0.10.10 until the last host has moved. Until a host's DNS record moves,
-# test it with
+# test it with (a listener with no route answers 404)
 #   curl --resolve <host>:443:10.0.10.11 https://<host>/
 #
 # Lives in istio-system because the proxy image comes from registry.istio.io,
@@ -40,3 +40,123 @@ spec:
           selector:
             matchLabels:
               kubernetes.io/metadata.name: falco
+    - name: https-localstack
+      hostname: localstack.k8s.n37.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: localstack-k8s-n37-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: localstack
+    - name: https-grafana
+      hostname: grafana.k8s.n37.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: grafana-k8s-n37-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+    - name: https-flink
+      hostname: flink.k8s.n37.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: flink-k8s-n37-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: flink-demo
+    - name: https-workflows
+      hostname: workflows.k8s.n37.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: workflows-k8s-n37-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-workflows
+    - name: https-status
+      hostname: status.k8s.n37.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: status-k8s-n37-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: uptime-kuma
+    - name: https-argocd
+      hostname: argocd.k8s.n37.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: argocd-k8s-n37-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: argocd
+    - name: https-registry
+      hostname: registry.k8s.n37.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: registry-k8s-n37-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: zot
+    - name: https-oauth
+      hostname: oauth.k8s.n37.ca
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: oauth-k8s-n37-ca-gw-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: oauth2-proxy

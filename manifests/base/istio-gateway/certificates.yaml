@@ -1,5 +1,6 @@
 # One explicit Certificate per host on the LAN gateway, in istio-system
-# beside it (Phase 1, 2026-11-15).
+# beside it (Phase 1, 2026-11-15). Issued for every remaining host BEFORE
+# its cutover, so the listener already has a certificate when DNS moves.
 #
 # Explicit rather than cert-manager's Gateway API integration: it needs no
 # feature flag or cert-manager restart, and each host's certificate is a
@@ -18,6 +19,110 @@ spec:
   secretName: falco-k8s-n37-ca-gw-tls
   dnsNames:
     - falco.k8s.n37.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: localstack-k8s-n37-ca-gw
+  namespace: istio-system
+spec:
+  secretName: localstack-k8s-n37-ca-gw-tls
+  dnsNames:
+    - localstack.k8s.n37.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grafana-k8s-n37-ca-gw
+  namespace: istio-system
+spec:
+  secretName: grafana-k8s-n37-ca-gw-tls
+  dnsNames:
+    - grafana.k8s.n37.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: flink-k8s-n37-ca-gw
+  namespace: istio-system
+spec:
+  secretName: flink-k8s-n37-ca-gw-tls
+  dnsNames:
+    - flink.k8s.n37.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: workflows-k8s-n37-ca-gw
+  namespace: istio-system
+spec:
+  secretName: workflows-k8s-n37-ca-gw-tls
+  dnsNames:
+    - workflows.k8s.n37.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: status-k8s-n37-ca-gw
+  namespace: istio-system
+spec:
+  secretName: status-k8s-n37-ca-gw-tls
+  dnsNames:
+    - status.k8s.n37.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: argocd-k8s-n37-ca-gw
+  namespace: istio-system
+spec:
+  secretName: argocd-k8s-n37-ca-gw-tls
+  dnsNames:
+    - argocd.k8s.n37.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: registry-k8s-n37-ca-gw
+  namespace: istio-system
+spec:
+  secretName: registry-k8s-n37-ca-gw-tls
+  dnsNames:
+    - registry.k8s.n37.ca
+  issuerRef:
+    kind: ClusterIssuer
+    name: lets-encrypt-k8s-n37-ca-prod
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: oauth-k8s-n37-ca-gw
+  namespace: istio-system
+spec:
+  secretName: oauth-k8s-n37-ca-gw-tls
+  dnsNames:
+    - oauth.k8s.n37.ca
   issuerRef:
     kind: ClusterIssuer
     name: lets-encrypt-k8s-n37-ca-prod
