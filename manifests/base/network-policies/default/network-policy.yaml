@@ -79,6 +79,18 @@ spec:
         - protocol: TCP
           port: 3000   # grafana
 
+    # lan-gateway (istio-system) for grafana.k8s.n37.ca (O4 Phase 1). The
+    # gateway reaches ambient backends over plain TCP, not HBONE (observed on
+    # localstack, 2026-11-15), so this application-port rule is the one that
+    # applies to it.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 3000   # grafana
+
     # publish-divergence-check (argo-workflows) posts PublishPipelineStale
     # directly to the AlertManager v2 API. It bypasses Prometheus on purpose:
     # argo_workflows_gauge carries no per-workflow label, so a PromQL rule

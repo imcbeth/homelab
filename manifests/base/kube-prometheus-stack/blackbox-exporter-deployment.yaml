@@ -28,11 +28,16 @@ spec:
         - ip: "10.98.168.24"  # ingress-nginx-controller ClusterIP (stable unless service recreated)
           hostnames:
             - "argocd.k8s.n37.ca"
-            - "grafana.k8s.n37.ca"
             - "workflows.k8s.n37.ca"
             # falco.k8s.n37.ca removed 2026-11-15: it moved to the LAN Istio
             # gateway, so this ClusterIP no longer serves it. It was never a
             # probe target. Moved hosts need the gateway's ClusterIP instead.
+        # lan-gateway-istio ClusterIP, for hosts moved off ingress-nginx
+        # (O4 Phase 1). Changes if the Gateway is renamed or recreated:
+        #   kubectl get svc -n istio-system lan-gateway-istio -o jsonpath='{.spec.clusterIP}'
+        - ip: "10.96.28.68"
+          hostnames:
+            - "grafana.k8s.n37.ca"
       containers:
         - name: blackbox-exporter
           image: prom/blackbox-exporter:v0.29.1

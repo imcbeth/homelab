@@ -29,11 +29,6 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: localstack
-        # lan-gateway (istio-system) reaching localstack over HBONE, if the
-        # gateway tunnels to ambient backends (O4 Phase 1).
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: istio-system
       ports:
         - protocol: TCP
           port: 15008  # HBONE mTLS tunnel
@@ -82,8 +77,9 @@ spec:
         - protocol: TCP
           port: 4566   # LocalStack health endpoint
     # lan-gateway (istio-system) for localstack.k8s.n37.ca (O4 Phase 1),
-    # replacing the ingress-nginx rule. Plain TCP case; whichever of this and
-    # the 15008 entry goes unused is removed after the cutover is observed.
+    # replacing the ingress-nginx rule. The gateway reaches this ambient
+    # backend over plain TCP, not HBONE (Envoy stats: no mTLS, no destination
+    # principal), so no 15008 entry is needed.
     - from:
         - namespaceSelector:
             matchLabels:
