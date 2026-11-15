@@ -48,8 +48,15 @@ meshConfig:
         includeRequestHeadersInCheck:
           - authorization
           - cookie
-          - x-forwarded-proto
-          - x-forwarded-host
+        # oauth2-proxy builds the post-sign-in return URL from `rd`, then
+        # X-Auth-Request-Redirect, then the bare request path. nginx passes
+        # an absolute `rd`; an ext_authz check carries only the path, so
+        # without this header the user came back to oauth.k8s.n37.ca/<path>
+        # instead of the protected host (found in the Phase 0 test,
+        # 2026-11-15). The gateway only terminates HTTPS, hence the literal
+        # scheme. oauth2-proxy still checks it against --whitelist-domain.
+        includeAdditionalHeadersInCheck:
+          x-auth-request-redirect: "https://%REQ(:authority)%%REQ(:path)%"
         headersToUpstreamOnAllow:
           - authorization
           - x-auth-request-user
