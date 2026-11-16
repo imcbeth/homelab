@@ -10,6 +10,7 @@ resources:
   - loki/network-policy.yaml
   - loki/authorization-policy.yaml
   - trivy-system/network-policy.yaml
+  - trivy-system/authorization-policy.yaml
   # Runtime security & policy enforcement
   - falco/network-policy.yaml
   - gatekeeper-system/network-policy.yaml

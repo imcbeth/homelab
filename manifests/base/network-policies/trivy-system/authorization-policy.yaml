@@ -1,0 +1,40 @@
+# Port-level control between meshed pods for trivy-system (O8, 2026-11-15).
+# ztunnel enforces this L4 AuthorizationPolicy by mTLS identity; NetworkPolicy
+# alone could only scope meshed callers to namespaces.
+#
+# Callers in 30 days of ztunnel metrics, by service account:
+#   Prometheus      -> trivy-operator 8080 (metrics)
+#   trivy-operator  -> trivy-server 4954 (the operator and its scan Jobs share
+#                      this service account)
+# Kubelet probes (trivy-operator's 9090 health port) come from the link-local
+# address, which ztunnel does not capture, so they need no rule here. The
+# compliance-reporter Job is not meshed; it and any other non-meshed caller
+# match `notPrincipals: ["*"]` and stay restricted by NetworkPolicy.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: trivy-system-allow
+  namespace: trivy-system
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["8080"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/trivy-system/sa/trivy-operator
+      to:
+        - operation:
+            ports: ["4954"]
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["4954", "8080"]
