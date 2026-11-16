@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   # Phase 1: Low-risk namespaces
   - localstack/network-policy.yaml
+  - localstack/authorization-policy.yaml
   - unipoller/network-policy.yaml
   - unipoller/authorization-policy.yaml
   # Phase 2: Monitoring namespaces
@@ -18,6 +19,7 @@ resources:
   - velero/network-policy.yaml
   # CI/CD namespaces
   - argo-workflows/network-policy.yaml
+  - argo-workflows/authorization-policy.yaml
   - argo-events/network-policy.yaml
   - argo-events/authorization-policy.yaml
   # Phase 4: Core infrastructure namespaces
@@ -33,15 +35,18 @@ resources:
   # Kafka operator
   - strimzi-system/namespace.yaml
   - strimzi-system/network-policy.yaml
+  - strimzi-system/authorization-policy.yaml
   # Flink operator
   - flink-operator/namespace.yaml
   - flink-operator/network-policy.yaml
   # Kafka message broker
   - kafka/namespace.yaml
   - kafka/network-policy.yaml
+  - kafka/authorization-policy.yaml
   # Flink streaming jobs
   - flink-demo/namespace.yaml
   - flink-demo/network-policy.yaml
+  - flink-demo/authorization-policy.yaml
   # Authentication proxy
   - oauth2-proxy/namespace.yaml
   - oauth2-proxy/network-policy.yaml

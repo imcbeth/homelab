@@ -1,0 +1,42 @@
+# Port-level control between meshed pods for flink-demo (O8, 2026-11-16).
+# ztunnel enforces this L4 AuthorizationPolicy by mTLS identity; NetworkPolicy
+# alone could only scope meshed callers to namespaces. Callers from
+# count_over_time over 30 days of ztunnel metrics (which, unlike increase(),
+# keeps short-lived Job and workflow pods) and ports from 24h of ztunnel
+# access logs (dst.hbone_addr), 2026-11-16.
+# The observation window is short for this namespace: kafka-to-s3 was FAILED
+# from 2026-08-15 until it was restarted on 2026-11-16 (O14).
+#
+#   flink-demo/flink-demo -> JobManager 6123 (RPC), 6124 (blob), 8081 (REST);
+#                            TaskManager 6122 (RPC). JM and TM share this SA.
+#   lan-gateway           -> JobManager 8081 (flink.k8s.n37.ca)
+# The Flink operator is NOT meshed (flink-operator is dataplane-mode none), so
+# its REST calls to 8081 carry no identity and match notPrincipals.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: flink-demo-allow
+  namespace: flink-demo
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/flink-demo/sa/flink-demo
+      to:
+        - operation:
+            ports: ["6122", "6123", "6124", "8081"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/istio-system/sa/lan-gateway-istio
+      to:
+        - operation:
+            ports: ["8081"]
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["8081"]

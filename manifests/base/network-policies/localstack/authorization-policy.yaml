@@ -1,0 +1,41 @@
+# Port-level control between meshed pods for localstack (O8, 2026-11-16).
+# ztunnel enforces this L4 AuthorizationPolicy by mTLS identity; NetworkPolicy
+# alone could only scope meshed callers to namespaces. Callers from
+# count_over_time over 30 days of ztunnel metrics (which, unlike increase(),
+# keeps short-lived Job and workflow pods) and ports from 24h of ztunnel
+# access logs (dst.hbone_addr), 2026-11-16.
+#
+# localstack listens only on 4566, so this narrows by identity, not port:
+#   argo-workflows (whole namespace) -> artifact and archived-log uploads. Every
+#                     workflow's executor writes here (seen: argo-workflow,
+#                     cluster-healthcheck, velero-validator) and the server
+#                     reads back, so the namespace is the caller, not one SA.
+#   flink-demo/default     -> the localstack-flink-setup hook (creates the bucket)
+#   flink-demo/flink-demo  -> kafka-to-s3's S3 sink (restarted 2026-11-16, O14)
+#   lan-gateway            -> localstack.k8s.n37.ca
+# uptime-kuma is not meshed and matches notPrincipals.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: localstack-allow
+  namespace: localstack
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces: ["argo-workflows"]
+        - source:
+            principals:
+              - cluster.local/ns/flink-demo/sa/default
+              - cluster.local/ns/flink-demo/sa/flink-demo
+              - cluster.local/ns/istio-system/sa/lan-gateway-istio
+      to:
+        - operation:
+            ports: ["4566"]
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["4566"]

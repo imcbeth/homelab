@@ -1,0 +1,42 @@
+# Port-level control between meshed pods for argo-workflows (O8, 2026-11-16).
+# ztunnel enforces this L4 AuthorizationPolicy by mTLS identity; NetworkPolicy
+# alone could only scope meshed callers to namespaces. Callers from
+# count_over_time over 30 days of ztunnel metrics (which, unlike increase(),
+# keeps short-lived Job and workflow pods) and ports from 24h of ztunnel
+# access logs (dst.hbone_addr), 2026-11-16.
+#
+#   default/default (blackbox-exporter) -> server 2746 (internal availability probe)
+#   lan-gateway                         -> server 2746 (workflows.k8s.n37.ca)
+#   Prometheus                          -> workflow-controller 9090 (metrics)
+# uptime-kuma is not meshed and matches notPrincipals. Kubelet probes (6060)
+# come from the link-local address, which ztunnel does not capture. Workflow
+# pods only call out (API server, localstack, Alertmanager), never in.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: argo-workflows-allow
+  namespace: argo-workflows
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/default
+              - cluster.local/ns/istio-system/sa/lan-gateway-istio
+      to:
+        - operation:
+            ports: ["2746"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["9090"]
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["2746", "9090"]
