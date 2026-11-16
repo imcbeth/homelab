@@ -1,0 +1,31 @@
+# Overrides for the Deployment and PDB that Istio generates for lan-gateway
+# (Gateway spec.infrastructure.parametersRef). Each key is a strategic merge
+# patch over the generated resource; a PodDisruptionBudget is created only
+# because the key is present.
+#
+# Carries over what ingress-nginx had since 2026-11-06 and Phase 1 dropped:
+# two replicas on different nodes, so one node failing does not take down all
+# LAN access, and minAvailable 1, so a drain evicts one at a time. The Service
+# keeps externalTrafficPolicy Cluster, so the MetalLB VIP (10.0.10.11) does
+# not have to move when one replica goes away -- kube-proxy sends to the other.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lan-gateway-options
+  namespace: istio-system
+data:
+  deployment: |
+    spec:
+      replicas: 2
+      template:
+        spec:
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      gateway.networking.k8s.io/gateway-name: lan-gateway
+                  topologyKey: kubernetes.io/hostname
+  podDisruptionBudget: |
+    spec:
+      minAvailable: 1
