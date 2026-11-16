@@ -15,6 +15,23 @@ spec:
   hostnames:
     - oauth.k8s.n37.ca
   rules:
-    - backendRefs:
+    - filters:
+        # Security headers ingress-nginx added to every response (gateway.yaml)
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: max-age=31536000; includeSubDomains
+              - name: X-Frame-Options
+                value: DENY
+              - name: X-Content-Type-Options
+                value: nosniff
+              - name: Referrer-Policy
+                value: strict-origin-when-cross-origin
+              - name: Permissions-Policy
+                value: camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=()
+            remove:
+              - X-Powered-By
+      backendRefs:
         - name: oauth2-proxy
           port: 4180
