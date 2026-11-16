@@ -1,0 +1,52 @@
+# Port-level control between meshed pods for kafka (O8, 2026-11-16).
+# ztunnel enforces this L4 AuthorizationPolicy by mTLS identity; NetworkPolicy
+# alone could only scope meshed callers to namespaces. Callers from
+# count_over_time over 30 days of ztunnel metrics (which, unlike increase(),
+# keeps short-lived Job and workflow pods) and ports from 24h of ztunnel
+# access logs (dst.hbone_addr), 2026-11-16.
+#
+#   strimzi-cluster-operator -> 9090 (KRaft controller), 9091 (replication,
+#                               admin), 8443 (KafkaAgent readiness)
+#   entity-operator          -> 9091 (topic operator, internal TLS listener)
+#   flink-demo/flink-demo    -> 9092 (the "plain" client listener; both jobs)
+#   kafka-cluster-kafka      -> 9090/9091 (the combined node's own controller
+#                               and replication traffic, in case captured)
+# Long-lived connections (Flink's consumer, the topic operator) are logged by
+# ztunnel only when they close, so 9091/9092 for those come from the
+# listener definitions in the Kafka resource. Nothing else is meshed-and-calling.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: kafka-allow
+  namespace: kafka
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/strimzi-system/sa/strimzi-cluster-operator
+      to:
+        - operation:
+            ports: ["9090", "9091", "8443"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/kafka/sa/kafka-cluster-entity-operator
+      to:
+        - operation:
+            ports: ["9091"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/flink-demo/sa/flink-demo
+      to:
+        - operation:
+            ports: ["9092"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/kafka/sa/kafka-cluster-kafka
+      to:
+        - operation:
+            ports: ["9090", "9091"]

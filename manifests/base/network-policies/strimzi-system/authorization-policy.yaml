@@ -1,0 +1,25 @@
+# Port-level control between meshed pods for strimzi-system (O8, 2026-11-16).
+# ztunnel enforces this L4 AuthorizationPolicy by mTLS identity; NetworkPolicy
+# alone could only scope meshed callers to namespaces. Callers from
+# count_over_time over 30 days of ztunnel metrics (which, unlike increase(),
+# keeps short-lived Job and workflow pods) and ports from 24h of ztunnel
+# access logs (dst.hbone_addr), 2026-11-16.
+#
+# No meshed pod called the operator in 30 days. Its only port is 8080
+# (health/metrics); kubelet probes come from the link-local address, which
+# ztunnel does not capture. So this admits no meshed caller at all; non-meshed
+# callers keep NetworkPolicy's scope.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: strimzi-system-allow
+  namespace: strimzi-system
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["8080"]
