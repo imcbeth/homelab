@@ -22,6 +22,11 @@ spec:
       metallb.io/loadBalancerIPs: 10.0.10.11
     labels:
       app.kubernetes.io/name: lan-gateway
+    # Two replicas on different nodes plus a PDB (gateway-options.yaml).
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: lan-gateway-options
   listeners:
     # Plain HTTP on 80 for every host, answered only by http-redirect.yaml
     # (301 to https). ingress-nginx did this by default for every TLS
