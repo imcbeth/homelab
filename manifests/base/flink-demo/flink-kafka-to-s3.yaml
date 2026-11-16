@@ -16,6 +16,12 @@ spec:
     rootLogger.level: INFO
     # No checkpointing for this demo — restarts replay from EARLIEST offset
     # For production: enable checkpointing with a persistent state backend
+    #
+    # Without checkpointing Flink's default restart strategy is "none", so one
+    # lost TaskManager ended this job for good: it sat FAILED from 2026-08-15
+    # ("TaskManager ... is no longer reachable", NoRestartBackoffTimeStrategy)
+    # until 2026-11-16 (O14). Retry with backoff instead.
+    restart-strategy.type: exponential-delay
 
   serviceAccount: flink-demo
 
@@ -32,6 +38,16 @@ spec:
   # Mount pipeline script from ConfigMap
   podTemplate:
     spec:
+      # flink-demo enforces PodSecurity "restricted" since 2026-10-29 (#1086),
+      # after this job last ran; without these the operator's JobManager and
+      # TaskManager pods are refused. 9999 is the flink user in apache/flink.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 9999
+        runAsGroup: 9999
+        fsGroup: 9999
+        seccompProfile:
+          type: RuntimeDefault
       volumes:
         - name: pipeline-script
           configMap:
@@ -39,6 +55,10 @@ spec:
             defaultMode: 0755
       containers:
         - name: flink-main-container
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           volumeMounts:
             - name: pipeline-script
               mountPath: /opt/flink/scripts
@@ -59,6 +79,10 @@ spec:
               value: "test"
             - name: AWS_SECRET_ACCESS_KEY
               value: "test"
+
+  # Bump to force a redeploy (operator compares it with the last deployed
+  # spec). 1: restart after the August failure (O14).
+  restartNonce: 1
 
   job:
     jarURI: local:///opt/flink/opt/flink-python.jar
