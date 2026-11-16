@@ -209,6 +209,64 @@
 
 ## Recent Sessions
 
+### 2026-11-15 night → 2026-11-16: nginx gone, O8 finished, and two things Phase 1 quietly dropped
+
+**Night of 11-15 (#1213-#1221).** Phase 2 removed ingress-nginx (#1213, #1214;
+the namespace and `ingress-nginx-config` Application were deleted by hand, and
+10.0.10.10 is free). A PodMonitor and the "LAN Gateway (Istio)" dashboard
+replaced nginx's (#1215), and `lan-gateway-alerts` replaced its 7 rules (#1216).
+Every rate rule has a minimum count, because at ~0.03 req/s one 503 is a 100%
+error rate, and latency excludes codes 101/0 (WebSockets, aborted streams).
+argocd-server went to insecure mode, with native gRPC routed by content-type to
+the chart's h2c port 8080 (#1217). O8 policies cover trivy-system (#1218) and
+kafka, strimzi-system, localstack, flink-demo and argo-workflows (#1221).
+flink-operator has none because it isn't meshed.
+
+**The caller query missed short-lived pods.** `increase(istio_tcp_connections_opened_total[30d]) > 0`
+drops a series scraped only once or twice (Jobs, workflow steps), because
+`increase` needs two samples; `count_over_time` doesn't. Re-auditing every O8
+namespace with it found one real gap: the daily cluster-healthcheck → Alertmanager
+:9093, which the next failing run would have hit (#1220). In REFERENCE.md.
+
+**O14: kafka-to-s3 had been FAILED since 2026-08-15** (found because flink-demo
+had no callers in 30 days). With checkpointing off, Flink's restart strategy
+is none, so one lost TaskManager ended the job. A redeploy would also have
+been refused by PodSecurity restricted (#1086). Fixed with exponential-delay
+restarts and a restricted securityContext (#1219); an event went Kafka → Flink
+→ S3 end to end.
+
+**11-16 morning: O6 closed.** The 12:00Z health check passed (06:00 MST is
+12:00Z, not 13:00Z) and `ArgoWorkflowFailed` resolved. O5 prep: the 11-11
+`network-delay-loki` run never fired, because `concurrencyPolicy: Forbid`
+blocked it while the stuck 11-04 record was still active. All its records now
+read AllRecovered, so 11-18 should fire. **Mistake worth remembering:** I first
+said `pod-kill-prometheus` had also skipped 11-11, from a `| tail -8` that cut
+the newest records off the listing. It fired, twice (09:00:00 and 09:00:01).
+Pod-kill records always read `AllRecovered=False`, and Forbid ignores that.
+Check a whole listing before concluding something is missing.
+
+**Writing the docs found three gaps from the migration (O16, O17).**
+1. The gateway ran **1 replica, no PDB**; nginx had 2 + required
+   anti-affinity + PDB since 11-06. Fix: #1222, via the Gateway's
+   `infrastructure.parametersRef` ConfigMap (`deployment` + `podDisruptionBudget`
+   keys; Istio creates a PDB only if the key exists).
+2. **No security headers**: falco, status and registry sent none, while the
+   runbook said to carry them over. Fix: #1223, a `ResponseHeaderModifier` on all
+   11 route rules (Gateway API has no gateway-wide setting). TLS 1.2+ held (Envoy
+   default).
+3. **gateway → argocd-server is plaintext.** #1217 assumed HBONE, but `argocd`
+   isn't ambient and the gateway pod is `dataplane-mode: none`. Envoy speaks
+   HBONE only to ambient destinations (default, argo-workflows, flink-demo,
+   localstack). Under nginx the hop was HTTPS. Needs a decision: mesh argocd,
+   or TLS to the backend again.
+Lesson: "the mesh encrypts it" is a claim to check per namespace
+(`istio.io/dataplane-mode` plus ztunnel logs for the pod IP), not to assume.
+
+Docs: k8s-docs-n37 #136 (new lan-gateway page, ingress-nginx retired, oauth2-proxy
+rewritten for ext_authz, ~30 pages updated). Open: O5 (11-18 run), O15 (Uptime
+Kuma ArgoCD monitor URL, UI only), O16 (merge #1222/#1223), O17 (decision),
+O18 (leftover lifeonabike cert + agent prompt text).
+
 ### 2026-11-15 (late evening): Istio forward-auth works, after two bugs only a real sign-in found
 
 Continued down the open-items list (TODO.md O1-O11, draft PR #1167) until only
