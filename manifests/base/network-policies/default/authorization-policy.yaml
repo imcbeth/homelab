@@ -9,7 +9,12 @@
 #   Prometheus             -> every scrape target here (ports below)
 #   Grafana                -> Prometheus 9090 (datasource)
 #   loki, argo-workflows/default (publish-divergence-check),
+#   argo-workflows/cluster-healthcheck (the daily CronWorkflow's evaluate step),
 #   trivy-system/compliance-reporter          -> Alertmanager 9093
+# cluster-healthcheck was added the same day, after a re-audit: the first
+# caller list came from increase(...[30d]) > 0, which drops a short-lived pod's
+# series (it is scraped once or twice, and increase() needs two samples).
+# Callers are now taken from count_over_time(...[30d]) instead.
 #   lan-gateway (istio-system, over HBONE)    -> Grafana 3000
 # Non-meshed callers -- uptime-kuma (Prometheus, Grafana), ingress-nginx
 # (Grafana), the lifeonabike agent (Alertmanager), the API server (operator
@@ -43,6 +48,7 @@ spec:
             principals:
               - cluster.local/ns/loki/sa/loki
               - cluster.local/ns/argo-workflows/sa/default
+              - cluster.local/ns/argo-workflows/sa/cluster-healthcheck
               - cluster.local/ns/trivy-system/sa/compliance-reporter
       to:
         - operation:
