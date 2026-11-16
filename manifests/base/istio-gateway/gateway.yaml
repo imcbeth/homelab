@@ -10,6 +10,16 @@
 # which the Gatekeeper allowed-repos constraint rejects everywhere except the
 # namespaces excluded from it (istio-system is one). The default proxy
 # resources carry limits (2 CPU / 1Gi), which require-resource-limits needs.
+#
+# Hardening carried over from ingress-nginx's controller-wide config:
+# - TLS 1.2+ only: Envoy's default for listeners (TLS 1.1 is refused).
+# - Security headers (HSTS 1y + includeSubDomains, X-Frame-Options DENY,
+#   nosniff, Referrer-Policy, Permissions-Policy; X-Powered-By removed): a
+#   ResponseHeaderModifier filter on every rule of every *-route.yaml, since
+#   Gateway API has no gateway-wide header setting. `set`, not `add`, so a
+#   backend's own value is replaced rather than sent twice. Phase 1 dropped
+#   these; restored 2026-11-16. A new route must copy the filter.
+# - Server version: Envoy sends `server: istio-envoy`, with no version.
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
