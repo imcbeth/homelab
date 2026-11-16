@@ -1,5 +1,11 @@
 # argocd.k8s.n37.ca on lan-gateway (Phase 1, 2026-11-15). No forward-auth
 # (not in authz.yaml): Argo CD has its own SSO, as on ingress-nginx.
+#
+# argocd-server runs with server.insecure since 2026-11-15, so the gateway
+# talks plain HTTP to it (inside HBONE mTLS) -- no TLS origination and no
+# DestinationRule. Native gRPC from the argocd CLI (content-type
+# application/grpc, not grpc-web) needs HTTP/2 to the backend, so it goes to
+# the h2c port `http2` (8080); the UI, REST API and grpc-web use `http` (80).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -15,24 +21,14 @@ spec:
   hostnames:
     - argocd.k8s.n37.ca
   rules:
+    - matches:
+        - headers:
+            - name: content-type
+              type: RegularExpression
+              value: "^application/grpc(\\+.*)?$"
+      backendRefs:
+        - name: argocd-server
+          port: 8080
     - backendRefs:
         - name: argocd-server
-          port: 443
----
-# argocd-server is not in insecure mode: it serves TLS (self-signed
-# argocd-server-tls) on 8080 behind both Service ports, which is why the nginx
-# Ingress used backend-protocol HTTPS. The gateway originates TLS the same way.
-# insecureSkipVerify because the certificate is self-signed -- the same trust
-# nginx gave it; the hop is in-cluster. Switching argocd to server.insecure
-# would break nginx mid-migration, so that waits for Phase 2.
-apiVersion: networking.istio.io/v1
-kind: DestinationRule
-metadata:
-  name: argocd-server-tls-origination
-  namespace: argocd
-spec:
-  host: argocd-server.argocd.svc.cluster.local
-  trafficPolicy:
-    tls:
-      mode: SIMPLE
-      insecureSkipVerify: true
+          port: 80

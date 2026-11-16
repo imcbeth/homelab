@@ -1800,12 +1800,12 @@ prometheus:
         scrape_interval: 60s
         scrape_timeout: 10s
 
-      # Blackbox exporter - HTTPS availability probes via ingress-nginx
+      # Blackbox exporter - HTTPS availability probes via lan-gateway
       # (SLO inputs). Uses https_2xx (success = actual 2xx response).
       #
-      # Restricted to services whose ingresses can be probed end-to-end:
-      #   - argocd: TLS-passthrough, argocd-server serves its own 200
-      #   - grafana: TLS-termination, returns 200 on /
+      # Restricted to hosts that can be probed end-to-end without sign-in:
+      #   - argocd: the UI's / returns 200
+      #   - grafana: returns 200 on /
       #
       # Other services hit the kube-proxy MetalLB VIP hairpin or auth
       # redirects — they are probed via blackbox-availability-internal below.

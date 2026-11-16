@@ -10,6 +10,12 @@ global:
 server:
   service:
     type: ClusterIP # Expose Argo CD server via a ClusterIP
+    # h2c port for native gRPC (the argocd CLI without --grpc-web), added
+    # with server.insecure (2026-11-15). Same container port as `http`; the
+    # name `http2` makes Istio speak HTTP/2 to it, which gRPC needs and the
+    # `http` port (HTTP/1.1 for the UI) cannot carry. The lan-gateway route
+    # sends application/grpc here.
+    servicePortHttp2: 8080
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-internal: "true" # Example for AWS internal load balancer
   # Resource limits for ArgoCD server (actual usage ~100Mi)
@@ -115,6 +121,13 @@ dex:
       memory: 128Mi
 
 configs:
+  # TLS terminates at lan-gateway (istio-system), and the hop to argocd-server
+  # is mTLS over HBONE, so argocd-server serves plain HTTP (2026-11-15). Until
+  # then it served a self-signed certificate and the gateway re-encrypted with
+  # a DestinationRule that skipped verification -- a holdover from
+  # ingress-nginx, which needed backend-protocol HTTPS.
+  params:
+    server.insecure: true
   cm:
     url: https://argocd.k8s.n37.ca
     accounts.mcp: apiKey
