@@ -120,19 +120,21 @@ spec:
           command: [bash]
           source: |
             set -uo pipefail
-            DEGRADED=$(kubectl get applications -n argocd \
-              -o jsonpath='{range .items[?(@.status.sync.status!="Synced")]}{.metadata.name}{"\n"}{end}' \
-              2>/dev/null || echo "")
-            UNHEALTHY=$(kubectl get applications -n argocd \
-              -o jsonpath='{range .items[?(@.status.health.status!="Healthy")]}{.metadata.name}{"/"}{.status.health.status}{"\n"}{end}' \
-              2>/dev/null || echo "")
-            ISSUES=""
-            [ -n "$DEGRADED" ] && ISSUES="OutOfSync: $(echo $DEGRADED | tr '\n' ' ')"
-            [ -n "$UNHEALTHY" ] && ISSUES="$ISSUES Unhealthy: $(echo $UNHEALTHY | tr '\n' ' ')"
-            if [ -z "$ISSUES" ]; then
-              echo "OK: all 26 apps Synced+Healthy"
+            # Fail closed: a kubectl error or an empty list is an issue, not
+            # "OK" (until 2026-11-17 both printed a hardcoded "all 26 apps").
+            if ! APPS=$(kubectl get applications -n argocd -o json 2>/tmp/err); then
+              echo "ISSUES: cannot list Applications: $(head -1 /tmp/err)"; exit 0
+            fi
+            TOTAL=$(echo "$APPS" | jq '.items | length')
+            BAD=$(echo "$APPS" | jq -r '.items[]
+              | select(.status.sync.status != "Synced" or .status.health.status != "Healthy")
+              | "\(.metadata.name)=\(.status.sync.status)/\(.status.health.status)"' | tr '\n' ' ')
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "ISSUES: no Applications found in argocd"
+            elif [ -n "$BAD" ]; then
+              echo "ISSUES: $BAD"
             else
-              echo "ISSUES: $ISSUES"
+              echo "OK: all $TOTAL apps Synced+Healthy"
             fi
 
       # -----------------------------------------------------------------------
@@ -174,22 +176,24 @@ spec:
             #   Pending  — only after 5 minutes (avoids false positives from transient
             #              workflow step pods still pulling images on startup)
             #   Failed / Unknown — flagged immediately (genuine failure states)
-            BAD=$(kubectl get pods --all-namespaces \
-              --field-selector='status.phase!=Running,status.phase!=Succeeded' \
-              -o json 2>/dev/null | \
-              jq -r '.items[] |
-                select(
-                  .status.phase != "Pending" or
-                  (now - (.metadata.creationTimestamp | fromdateiso8601)) > 300
-                ) |
-                "\(.metadata.namespace)/\(.metadata.name)=\(.status.phase)"' \
-              2>/dev/null | grep -v "^$" || echo "")
-            # Also catch CrashLoopBackOff / Error pods that show as Running
-            CRASH=$(kubectl get pods --all-namespaces \
-              -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{@.state.waiting.reason}{"/"}{@.restartCount}{"@"}{end}{.metadata.namespace}{"/"}{.metadata.name}{"\n"}{end}' \
-              2>/dev/null | grep -E "^CrashLoopBackOff|^Error|^OOMKilled" | head -10 || echo "")
-            if [ -z "$BAD" ] && [ -z "$CRASH" ]; then
-              echo "OK: all pods healthy"
+            # Also CrashLoopBackOff / Error / OOMKilled containers in Running pods.
+            # Fails closed if the pod list can't be read.
+            if ! PODS=$(kubectl get pods --all-namespaces -o json 2>/tmp/err); then
+              echo "ISSUES: cannot list pods: $(head -1 /tmp/err)"; exit 0
+            fi
+            TOTAL=$(echo "$PODS" | jq '.items | length')
+            BAD=$(echo "$PODS" | jq -r '.items[]
+              | select(.status.phase != "Running" and .status.phase != "Succeeded")
+              | select(.status.phase != "Pending" or
+                  (now - (.metadata.creationTimestamp | fromdateiso8601)) > 300)
+              | "\(.metadata.namespace)/\(.metadata.name)=\(.status.phase)"')
+            CRASH=$(echo "$PODS" | jq -r '.items[] | . as $p | .status.containerStatuses[]?
+              | select((.state.waiting.reason // "") | test("^(CrashLoopBackOff|Error|OOMKilled)$"))
+              | "\(.state.waiting.reason)/\(.restartCount)@\($p.metadata.namespace)/\($p.metadata.name)"' | head -10)
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "ISSUES: no pods found"
+            elif [ -z "$BAD" ] && [ -z "$CRASH" ]; then
+              echo "OK: all $TOTAL pods healthy"
             else
               echo "ISSUES: bad_pods=$(echo $BAD | tr '\n' '|') crash=$(echo $CRASH | tr '\n' '|')"
             fi
@@ -204,14 +208,18 @@ spec:
           command: [bash]
           source: |
             set -uo pipefail
-            RELEASED=$(kubectl get pv \
-              -o jsonpath='{range .items[?(@.status.phase=="Released")]}{.metadata.name}{"\n"}{end}' \
-              2>/dev/null || echo "")
-            FAILED=$(kubectl get pv \
-              -o jsonpath='{range .items[?(@.status.phase=="Failed")]}{.metadata.name}{"\n"}{end}' \
-              2>/dev/null || echo "")
-            if [ -z "$RELEASED" ] && [ -z "$FAILED" ]; then
-              echo "OK: no orphaned PVs"
+            # Fails closed if the PV list can't be read or is empty (every
+            # stateful app here is on iSCSI PVs, so zero means a broken read).
+            if ! PVS=$(kubectl get pv -o json 2>/tmp/err); then
+              echo "ISSUES: cannot list PVs: $(head -1 /tmp/err)"; exit 0
+            fi
+            TOTAL=$(echo "$PVS" | jq '.items | length')
+            RELEASED=$(echo "$PVS" | jq -r '.items[] | select(.status.phase == "Released") | .metadata.name')
+            FAILED=$(echo "$PVS" | jq -r '.items[] | select(.status.phase == "Failed") | .metadata.name')
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "ISSUES: no PVs found"
+            elif [ -z "$RELEASED" ] && [ -z "$FAILED" ]; then
+              echo "OK: $TOTAL PVs, none orphaned"
             else
               echo "ISSUES: released=$(echo $RELEASED | tr '\n' '|') failed=$(echo $FAILED | tr '\n' '|')"
             fi
@@ -226,14 +234,18 @@ spec:
           command: [bash]
           source: |
             set -uo pipefail
+            # A schedule with no backups at all, or a failed read, is an issue
+            # (until 2026-11-17 both passed as "OK").
             ISSUES=""
             for SCHEDULE in velero-daily-critical-pvcs velero-daily-argocd velero-weekly-cluster-resources; do
-              # Get the most recent backup for this schedule
-              LATEST=$(kubectl get backups -n velero \
-                -l "velero.io/schedule-name=${SCHEDULE}" \
-                --sort-by=.metadata.creationTimestamp \
-                -o jsonpath='{.items[-1:].status.phase}' 2>/dev/null || echo "Unknown")
-              if [ "$LATEST" != "Completed" ] && [ "$LATEST" != "" ]; then
+              if ! LATEST=$(kubectl get backups -n velero \
+                  -l "velero.io/schedule-name=${SCHEDULE}" \
+                  --sort-by=.metadata.creationTimestamp \
+                  -o jsonpath='{.items[-1:].status.phase}' 2>/dev/null); then
+                ISSUES="$ISSUES ${SCHEDULE}=unreadable"
+              elif [ -z "$LATEST" ]; then
+                ISSUES="$ISSUES ${SCHEDULE}=no-backups"
+              elif [ "$LATEST" != "Completed" ]; then
                 ISSUES="$ISSUES ${SCHEDULE}=${LATEST}"
               fi
             done
@@ -253,17 +265,18 @@ spec:
           command: [bash]
           source: |
             set -uo pipefail
-            # Sum totalViolations across all constraint kinds
-            TOTAL=0
-            for KIND in $(kubectl get crds -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
-              2>/dev/null | grep "constraints.gatekeeper.sh" || echo ""); do
-              COUNT=$(kubectl get "$KIND" --all-namespaces \
-                -o jsonpath='{range .items[*]}{.status.totalViolations}{"\n"}{end}' \
-                2>/dev/null | awk '{s+=$1} END {print s+0}')
-              TOTAL=$((TOTAL + COUNT))
-            done
-            if [ "$TOTAL" -eq 0 ]; then
-              echo "OK: 0 Gatekeeper violations"
+            # `kubectl get constraints` lists every constraint kind through the
+            # category, which the SA's RBAC allows. Until 2026-11-17 this listed
+            # CRDs first, which the SA may not, so it always summed 0 and said OK.
+            if ! CONSTRAINTS=$(kubectl get constraints -o json 2>/tmp/err); then
+              echo "ISSUES: cannot list Gatekeeper constraints: $(head -1 /tmp/err)"; exit 0
+            fi
+            COUNT=$(echo "$CONSTRAINTS" | jq '.items | length')
+            TOTAL=$(echo "$CONSTRAINTS" | jq '[.items[].status.totalViolations // 0] | add // 0')
+            if [ "$COUNT" -eq 0 ]; then
+              echo "ISSUES: no Gatekeeper constraints found"
+            elif [ "$TOTAL" -eq 0 ]; then
+              echo "OK: 0 violations across $COUNT constraints"
             else
               echo "ISSUES: ${TOTAL} Gatekeeper violations"
             fi
