@@ -28,6 +28,15 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    # Enrols argocd in the Istio ambient mesh (O17, 2026-11-17), so the hop
+    # from lan-gateway to argocd-server (plain HTTP since server.insecure) and
+    # argocd's internal traffic run inside HBONE mTLS. Set here rather than in
+    # a Namespace manifest, which some other app would own and could prune.
+    # The NetworkPolicy and AuthorizationPolicy that admit HBONE are in
+    # manifests/base/network-policies/argocd/ and must be live first.
+    managedNamespaceMetadata:
+      labels:
+        istio.io/dataplane-mode: ambient
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true

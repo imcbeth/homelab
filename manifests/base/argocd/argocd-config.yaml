@@ -125,7 +125,10 @@ configs:
   # is mTLS over HBONE, so argocd-server serves plain HTTP (2026-11-15). Until
   # then it served a self-signed certificate and the gateway re-encrypted with
   # a DestinationRule that skipped verification -- a holdover from
-  # ingress-nginx, which needed backend-protocol HTTPS.
+  # ingress-nginx, which needed backend-protocol HTTPS. The HBONE half was
+  # wrong until 2026-11-17: argocd was not meshed, so the hop was plaintext
+  # until the namespace was enrolled (managedNamespaceMetadata in
+  # manifests/applications/argocd.yaml, O17).
   params:
     server.insecure: true
   cm:
