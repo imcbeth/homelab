@@ -188,34 +188,18 @@ externalSecrets:
   - secretName: zot-htpasswd
     mountPath: /secret
 
-# Service — ClusterIP, ingress-nginx handles external access
+# Service — ClusterIP; the LAN Istio gateway handles external access
+# (manifests/base/istio-gateway/registry-route.yaml)
 service:
   type: ClusterIP
   port: 5000
 
-# Ingress via ingress-nginx + cert-manager + external-dns
-# Served by the LAN Istio gateway since 2026-11-15
-# (manifests/base/istio-gateway/registry-route.yaml); ingress-nginx is being
-# retired. Kept (disabled) for reference until Phase 2 removes nginx.
+# No chart Ingress: registry.k8s.n37.ca is served by the LAN Istio gateway
+# since 2026-11-15 (registry-route.yaml; its certificate is
+# istio-system/registry-k8s-n37-ca-gw). The disabled ingress-nginx block that
+# stood here was removed with nginx (O18).
 ingress:
   enabled: false
-  className: nginx
-  annotations:
-    cert-manager.io/cluster-issuer: lets-encrypt-k8s-n37-ca-prod
-    external-dns.alpha.kubernetes.io/hostname: registry.k8s.n37.ca
-    external-dns.alpha.kubernetes.io/ttl: "300"
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-  hosts:
-    - host: registry.k8s.n37.ca
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: zot-tls
-      hosts:
-        - registry.k8s.n37.ca
 
 # Prometheus ServiceMonitor
 metrics:
