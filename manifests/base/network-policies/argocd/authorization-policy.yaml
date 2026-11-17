@@ -1,0 +1,45 @@
+# Port-level control for argocd-server, the only argocd pod in the ambient
+# mesh (O17, 2026-11-17). ztunnel enforces this L4 AuthorizationPolicy by
+# mTLS identity; NetworkPolicy alone could only scope meshed callers to
+# namespaces. The controller, repo-server, redis and dex are deliberately not
+# meshed (see network-policy.yaml), so the selector keeps this to the server.
+# Callers from count_over_time over 30 days of ztunnel metrics (source side;
+# argocd was not meshed) and the argocd NetworkPolicy:
+#
+#   lan-gateway  -> 8080 (argocd.k8s.n37.ca: UI, API, gRPC)
+#   Prometheus   -> 8083 (metrics)
+# Plaintext callers match notPrincipals: uptime-kuma (not meshed) and the
+# other argocd pods. blackbox reaches argocd through the gateway VIP, not
+# directly. Kubelet probes come from the link-local address, which ztunnel
+# does not capture.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: argocd-server-allow
+  namespace: argocd
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/istio-system/sa/lan-gateway-istio
+      to:
+        - operation:
+            ports: ["8080"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["8083"]
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["8080"]

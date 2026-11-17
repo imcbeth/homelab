@@ -13,9 +13,38 @@ spec:
     - Egress
   ingress:
 
-    # lan-gateway (istio-system) for argocd.k8s.n37.ca (O4 Phase 1). argocd is
-    # not ambient, so the gateway connects directly and this app-port rule
-    # applies.
+    # HBONE (15008) for argocd-server, the only argocd pod in the ambient
+    # mesh (O17; pod label in manifests/base/argocd/argocd-config.yaml).
+    # Between meshed pods this is the only rule NetworkPolicy evaluates --
+    # ztunnel delivers the connection inside the pod -- so the app-port rules
+    # below stop applying to these callers; authorization-policy.yaml does the
+    # port-level scoping. Sources: lan-gateway in istio-system, whose Envoy
+    # speaks HBONE to ambient pods, and Prometheus in default (30 days of
+    # ztunnel metrics, 2026-11-17). The controller, repo-server and redis stay
+    # out of the mesh so that Argo CD can still deploy a fix when the mesh
+    # itself is broken; see the service mesh section of disaster-recovery.md
+    # in k8s-docs-n37.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS tunnel
+
+    # Kubelet probes for argocd-server, which ztunnel SNATs to this
+    # link-local address.
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+
+    # lan-gateway (istio-system) for argocd.k8s.n37.ca (O4 Phase 1). The
+    # gateway arrives on 15008 above while argocd-server is meshed; this rule
+    # is the path when it is not (before O17, or after a break-glass
+    # un-enrolment), so keep it.
     - from:
         - namespaceSelector:
             matchLabels:
