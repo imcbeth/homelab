@@ -5,7 +5,6 @@ namespace: lifeonabike
 
 resources:
   - namespace.yaml
-  - certificate.yaml
   - deployment.yaml
   - service.yaml
   - zot-puller-creds-sealed.yaml
