@@ -2,8 +2,9 @@
 # (not in authz.yaml): Argo CD has its own SSO, as on ingress-nginx.
 #
 # argocd-server runs with server.insecure since 2026-11-15, so the gateway
-# talks plain HTTP to it (inside HBONE mTLS) -- no TLS origination and no
-# DestinationRule. Native gRPC from the argocd CLI (content-type
+# talks plain HTTP to it (inside HBONE mTLS, since argocd-server joined the
+# ambient mesh on 2026-11-17 -- before that the hop was plaintext, O17) -- no TLS
+# origination and no DestinationRule. Native gRPC from the argocd CLI (content-type
 # application/grpc, not grpc-web) needs HTTP/2 to the backend, so it goes to
 # the h2c port `http2` (8080); the UI, REST API and grpc-web use `http` (80).
 apiVersion: gateway.networking.k8s.io/v1

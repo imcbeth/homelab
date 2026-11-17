@@ -18,6 +18,16 @@ server:
     servicePortHttp2: 8080
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-internal: "true" # Example for AWS internal load balancer
+  # Only argocd-server is in the Istio ambient mesh (O17, 2026-11-17), so the
+  # hop from lan-gateway (plain HTTP since server.insecure) runs inside HBONE
+  # mTLS. The controller, repo-server, redis and dex stay out on purpose: Argo
+  # CD deploys Istio and the NetworkPolicies, so its deploy path must keep
+  # working when the mesh is broken. Break-glass if the mesh takes the server
+  # down: kubectl label pod -n argocd -l app.kubernetes.io/name=argocd-server
+  # istio.io/dataplane-mode- (k8s-docs-n37 disaster-recovery.md, service mesh
+  # section). HBONE is admitted by manifests/base/network-policies/argocd/.
+  podLabels:
+    istio.io/dataplane-mode: ambient
   # Resource limits for ArgoCD server (actual usage ~100Mi)
   resources:
     requests:
@@ -125,7 +135,9 @@ configs:
   # is mTLS over HBONE, so argocd-server serves plain HTTP (2026-11-15). Until
   # then it served a self-signed certificate and the gateway re-encrypted with
   # a DestinationRule that skipped verification -- a holdover from
-  # ingress-nginx, which needed backend-protocol HTTPS.
+  # ingress-nginx, which needed backend-protocol HTTPS. The HBONE half was
+  # wrong until 2026-11-17: argocd was not meshed, so the hop was plaintext
+  # until argocd-server joined the mesh (server.podLabels above, O17).
   params:
     server.insecure: true
   cm:
