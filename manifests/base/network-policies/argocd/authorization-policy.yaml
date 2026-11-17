@@ -1,23 +1,26 @@
-# Port-level control between meshed pods for argocd, ahead of enrolling the
-# namespace in the ambient mesh (O17, 2026-11-17). ztunnel enforces this L4
-# AuthorizationPolicy by mTLS identity; NetworkPolicy alone could only scope
-# meshed callers to namespaces. Until the namespace is meshed nothing enforces
-# it. Callers from count_over_time over 30 days of ztunnel metrics (source
-# side; argocd itself was not meshed) and the argocd NetworkPolicy:
+# Port-level control for argocd-server, the only argocd pod in the ambient
+# mesh (O17, 2026-11-17). ztunnel enforces this L4 AuthorizationPolicy by
+# mTLS identity; NetworkPolicy alone could only scope meshed callers to
+# namespaces. The controller, repo-server, redis and dex are deliberately not
+# meshed (see network-policy.yaml), so the selector keeps this to the server.
+# Callers from count_over_time over 30 days of ztunnel metrics (source side;
+# argocd was not meshed) and the argocd NetworkPolicy:
 #
-#   lan-gateway   -> argocd-server 8080 (argocd.k8s.n37.ca, UI/API/gRPC)
-#   Prometheus    -> metrics 8082 (controller), 8083 (server), 8084 (repo-server)
-#   argocd pods   -> repo-server 8081, redis 6379, dex 5556/5557,
-#                    applicationset 7000, server 8080
-# uptime-kuma is not meshed and matches notPrincipals. blackbox reaches argocd
-# through the gateway VIP, not directly. Kubelet probes come from the
-# link-local address, which ztunnel does not capture.
+#   lan-gateway  -> 8080 (argocd.k8s.n37.ca: UI, API, gRPC)
+#   Prometheus   -> 8083 (metrics)
+# Plaintext callers match notPrincipals: uptime-kuma (not meshed) and the
+# other argocd pods. blackbox reaches argocd through the gateway VIP, not
+# directly. Kubelet probes come from the link-local address, which ztunnel
+# does not capture.
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
-  name: argocd-allow
+  name: argocd-server-allow
   namespace: argocd
 spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
   action: ALLOW
   rules:
     - from:
@@ -33,13 +36,7 @@ spec:
               - cluster.local/ns/default/sa/kube-prometheus-stack-prometheus
       to:
         - operation:
-            ports: ["8082", "8083", "8084"]
-    - from:
-        - source:
-            namespaces: ["argocd"]
-      to:
-        - operation:
-            ports: ["8080", "8081", "6379", "5556", "5557", "7000"]
+            ports: ["8083"]
     - from:
         - source:
             notPrincipals: ["*"]

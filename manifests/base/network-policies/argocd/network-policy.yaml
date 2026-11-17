@@ -13,17 +13,18 @@ spec:
     - Egress
   ingress:
 
-    # HBONE (15008), ahead of enrolling argocd in the ambient mesh (O17).
+    # HBONE (15008) for argocd-server, the only argocd pod in the ambient
+    # mesh (O17; pod label in manifests/base/argocd/argocd-config.yaml).
     # Between meshed pods this is the only rule NetworkPolicy evaluates --
     # ztunnel delivers the connection inside the pod -- so the app-port rules
     # below stop applying to these callers; authorization-policy.yaml does the
-    # port-level scoping. Sources: argocd itself (repo-server, redis, dex),
-    # Prometheus in default (30 days of ztunnel metrics, 2026-11-17), and
-    # lan-gateway in istio-system, whose Envoy speaks HBONE to ambient pods.
+    # port-level scoping. Sources: lan-gateway in istio-system, whose Envoy
+    # speaks HBONE to ambient pods, and Prometheus in default (30 days of
+    # ztunnel metrics, 2026-11-17). The controller, repo-server and redis stay
+    # out of the mesh so that Argo CD can still deploy a fix when the mesh
+    # itself is broken; see the service mesh section of disaster-recovery.md
+    # in k8s-docs-n37.
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: argocd
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: default
@@ -34,14 +35,16 @@ spec:
         - protocol: TCP
           port: 15008  # HBONE mTLS tunnel
 
-    # Kubelet probes, which ztunnel SNATs to this link-local address once
-    # the namespace is meshed.
+    # Kubelet probes for argocd-server, which ztunnel SNATs to this
+    # link-local address.
     - from:
         - ipBlock:
             cidr: 169.254.7.127/32
 
-    # lan-gateway (istio-system) for argocd.k8s.n37.ca (O4 Phase 1). Used
-    # until argocd is meshed; after that the gateway arrives on 15008 above.
+    # lan-gateway (istio-system) for argocd.k8s.n37.ca (O4 Phase 1). The
+    # gateway arrives on 15008 above while argocd-server is meshed; this rule
+    # is the path when it is not (before O17, or after a break-glass
+    # un-enrolment), so keep it.
     - from:
         - namespaceSelector:
             matchLabels:
@@ -121,17 +124,6 @@ spec:
       ports:
         - protocol: TCP
           port: 6443
-
-    # HBONE to the other argocd pods once the namespace is meshed (O17):
-    # ztunnel sends meshed-to-meshed traffic to port 15008, so the app-port
-    # rule below only covers the unmeshed case.
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: argocd
-      ports:
-        - protocol: TCP
-          port: 15008  # HBONE mTLS tunnel
 
     # Intra-namespace communication
     - to:
