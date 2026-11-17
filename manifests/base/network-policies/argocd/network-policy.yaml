@@ -13,9 +13,35 @@ spec:
     - Egress
   ingress:
 
-    # lan-gateway (istio-system) for argocd.k8s.n37.ca (O4 Phase 1). argocd is
-    # not ambient, so the gateway connects directly and this app-port rule
-    # applies.
+    # HBONE (15008), ahead of enrolling argocd in the ambient mesh (O17).
+    # Between meshed pods this is the only rule NetworkPolicy evaluates --
+    # ztunnel delivers the connection inside the pod -- so the app-port rules
+    # below stop applying to these callers; authorization-policy.yaml does the
+    # port-level scoping. Sources: argocd itself (repo-server, redis, dex),
+    # Prometheus in default (30 days of ztunnel metrics, 2026-11-17), and
+    # lan-gateway in istio-system, whose Envoy speaks HBONE to ambient pods.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argocd
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS tunnel
+
+    # Kubelet probes, which ztunnel SNATs to this link-local address once
+    # the namespace is meshed.
+    - from:
+        - ipBlock:
+            cidr: 169.254.7.127/32
+
+    # lan-gateway (istio-system) for argocd.k8s.n37.ca (O4 Phase 1). Used
+    # until argocd is meshed; after that the gateway arrives on 15008 above.
     - from:
         - namespaceSelector:
             matchLabels:
@@ -95,6 +121,17 @@ spec:
       ports:
         - protocol: TCP
           port: 6443
+
+    # HBONE to the other argocd pods once the namespace is meshed (O17):
+    # ztunnel sends meshed-to-meshed traffic to port 15008, so the app-port
+    # rule below only covers the unmeshed case.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argocd
+      ports:
+        - protocol: TCP
+          port: 15008  # HBONE mTLS tunnel
 
     # Intra-namespace communication
     - to:

@@ -1,0 +1,48 @@
+# Port-level control between meshed pods for argocd, ahead of enrolling the
+# namespace in the ambient mesh (O17, 2026-11-17). ztunnel enforces this L4
+# AuthorizationPolicy by mTLS identity; NetworkPolicy alone could only scope
+# meshed callers to namespaces. Until the namespace is meshed nothing enforces
+# it. Callers from count_over_time over 30 days of ztunnel metrics (source
+# side; argocd itself was not meshed) and the argocd NetworkPolicy:
+#
+#   lan-gateway   -> argocd-server 8080 (argocd.k8s.n37.ca, UI/API/gRPC)
+#   Prometheus    -> metrics 8082 (controller), 8083 (server), 8084 (repo-server)
+#   argocd pods   -> repo-server 8081, redis 6379, dex 5556/5557,
+#                    applicationset 7000, server 8080
+# uptime-kuma is not meshed and matches notPrincipals. blackbox reaches argocd
+# through the gateway VIP, not directly. Kubelet probes come from the
+# link-local address, which ztunnel does not capture.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: argocd-allow
+  namespace: argocd
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/istio-system/sa/lan-gateway-istio
+      to:
+        - operation:
+            ports: ["8080"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/default/sa/kube-prometheus-stack-prometheus
+      to:
+        - operation:
+            ports: ["8082", "8083", "8084"]
+    - from:
+        - source:
+            namespaces: ["argocd"]
+      to:
+        - operation:
+            ports: ["8080", "8081", "6379", "5556", "5557", "7000"]
+    - from:
+        - source:
+            notPrincipals: ["*"]
+      to:
+        - operation:
+            ports: ["8080"]

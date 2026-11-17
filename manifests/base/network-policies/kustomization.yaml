@@ -61,6 +61,7 @@ resources:
   - default/authorization-policy.yaml
   - default/calico-network-policy-allow-egress-icmp.yaml
   - argocd/network-policy.yaml
+  - argocd/authorization-policy.yaml
   - synology-csi/network-policy.yaml
   - kube-system/network-policy.yaml
   - tigera-operator/network-policy.yaml
