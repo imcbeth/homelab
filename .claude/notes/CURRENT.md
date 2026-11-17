@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-15 (late evening: ingress-nginx replacement Phase 0 PASSED — oauth2-proxy forward-auth through an Istio Gateway API gateway, after two fixes (relative return URL; Envoy ext_authz allows only 200); EventBus non-root; first port-level mesh AuthorizationPolicy (unipoller). Earlier: HBONE allowlists in all 11 ambient namespaces, Argo CD atomic-spec diff bug, MetalLB monitoring, CVE bumps)
+**Last Updated:** 2026-11-17 (morning: gateway HA + headers verified (O16); argocd-server alone meshed, deploy path kept out of the mesh, DR service-mesh section (O17); nginx leftovers removed (O18); daily healthcheck made fail-closed (O19); O15 confirmed. Only O5 open: loki chaos run 2026-11-18 10:00Z)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,60 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-17 (morning): argocd-server meshed, the deploy path deliberately not; the healthcheck was failing open
+
+**O16 closed.** #1222/#1223 had been merged the night before. Verified: two
+gateway pods on node01/node03, PDB `lan-gateway-istio` (1 allowed disruption),
+the 5 security headers on all 11 hosts, X-Powered-By gone, registry `/v2/` and
+argocd gRPC fine. The pod-delete failover probe was left to the user (cluster
+deletes are theirs). Docs #136 merged and deployed.
+
+**O17: mesh argocd, but only argocd-server.** The user chose meshing over TLS
+to the backend. A side note then pointed out the cycle: Argo CD deploys Istio
+and every policy, so a meshed Argo CD can't deploy the fix for a broken mesh.
+Final design: pod label `istio.io/dataplane-mode: ambient` on argocd-server
+only (`server.podLabels` in `argocd-config.yaml`; istio-cni's
+`AMBIENT_ENABLEMENT_SELECTOR` enrols labelled pods in unlabelled namespaces).
+The controller, repo-server, redis and dex stay TCP, so a mesh outage costs the
+UI at most. Two PRs in order: #1224 (HBONE 15008 from istio-system + default,
+169.254.7.127/32, `argocd-server-allow` AuthorizationPolicy selected onto the
+server), then #1225 (the label). Verified: ztunnel shows only argocd-server as
+HBONE; gateway → server connections are `mutual_tls` as
+`istio-system/sa/lan-gateway-istio`; UI, both gRPC modes, Uptime Kuma, all
+scrape targets and 38/38 apps fine; no RBAC denials. The `manifests/base/argocd`
+directory is only a Helm values `ref`, not rendered, so a Namespace file there
+would never have been applied. DR: k8s-docs-n37 #137 adds "Service mesh (Istio
+ambient) failure" to disaster-recovery.md, with break-glass commands and which
+namespace labels self-heal back from git.
+
+**`argocd --core` needs the kube context namespace to be argocd**, or it
+fails with `configmap "argocd-cm" not found`. Tested with an overlay
+kubeconfig that only sets the namespace; the DR doc uses `kubectl config
+set-context --current --namespace=argocd`.
+
+**O15 confirmed** from kuma.db (read-only): monitor 1 is
+`http://argocd-server.argocd:80/healthz`, UP since 11-16 03:32Z, and it held
+through the server's move into the mesh.
+
+**O18 closed.** #1226 removed the `lifeonabike-ca-tls` Certificate (its Secret
+is owner-referenced, so it went too) and zot's disabled nginx Ingress block.
+lifeonabike-agent #9 fixed the diagnose prompt and the cert-expiry alert. The
+alert was wrong before the migration too: the probes resolve over DoH, so
+they check **Cloudflare's edge certificate** (different issuer and expiry),
+not cert-manager's. The LAN hairpin now answers 10.0.10.11.
+
+**O19, found by the user: the daily healthcheck failed open.** "all 26 apps"
+was a hardcoded string (there are 38). The real problem was worse: every check
+turned a kubectl error or an empty list into OK. The Gatekeeper check listed
+CRDs, which its SA may not do, so it had always reported 0 violations (real
+count was 0, so nothing was missed). #1227 reads once, fails closed with the
+kubectl error, prints real counts, and flags a Velero schedule with no backups.
+Tested by impersonating the SA and an unprivileged SA; an in-cluster run
+reported 38 apps, 174 pods, 11 PVs, 5 constraints.
+
+Open: O5 only (`network-delay-loki` 2026-11-18 10:00Z; cloud routine opens an
+issue at 11:00Z if no record appears).
 
 ### 2026-11-15 night → 2026-11-16: nginx gone, O8 finished, and two things Phase 1 quietly dropped
 

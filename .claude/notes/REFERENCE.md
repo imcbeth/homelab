@@ -475,3 +475,24 @@ import json,sys
 print([n['metadata']['name'] for n in json.load(sys.stdin)['items']
        if (n['metadata'].get('labels') or {}).get('istio.io/dataplane-mode')=='ambient'])"
 ```
+
+### Keep Argo CD's deploy path out of the mesh
+
+Argo CD deploys istiod, ztunnel, istio-cni and every NetworkPolicy and
+AuthorizationPolicy. If its controller, repo-server or redis were meshed, a
+broken mesh would also stop Argo CD from syncing the revert. Only
+**argocd-server** is meshed (pod label via `server.podLabels`, 2026-11-17),
+because the gateway → server hop carries session tokens. Do not label the
+`argocd` namespace. Break-glass and `argocd --core` steps are in k8s-docs-n37
+`operations/disaster-recovery.md` ("Service mesh (Istio ambient) failure").
+
+### A check that turns errors into "OK" is worse than no check
+
+`VAR=$(kubectl get ... 2>/dev/null || echo "")` followed by "empty means
+healthy" reports OK when the API, RBAC or network fails. The daily
+cluster-healthcheck did this in all five checks until #1227 (2026-11-17), and
+its Gatekeeper check listed CRDs its SA couldn't read, so it never counted
+anything. Capture the exit status, report a failed read as ISSUES with the
+error, treat an empty result as suspicious, and print the count you checked.
+Test both paths by impersonating the SA and an unprivileged one:
+`kubectl --as=system:serviceaccount:<ns>:<sa>` via a PATH shim.
