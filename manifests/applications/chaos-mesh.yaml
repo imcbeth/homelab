@@ -31,9 +31,10 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: chaos-mesh
-  # Ignore cert/webhook fields auto-populated by chaos-mesh controller
+  # Ignore cert/webhook fields the chart regenerates on every render (Helm
+  # genCA). RespectIgnoreDifferences below keeps the live values on sync.
   ignoreDifferences:
-    # TLS certificates generated and populated by the chaos-mesh controller
+    # TLS certificates (Helm-generated; must stay one CA across all pods)
     - kind: Secret
       name: chaos-mesh-chaosd-client-certs
       jsonPointers:
@@ -88,6 +89,15 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      # Keep the live values of every ignoreDifferences field on sync. The
+      # chart generates a new CA and certs on every render, and without this
+      # each sync (e.g. the 2.8.8 upgrade, 2026-11-11) rewrote the cert
+      # secrets after the pods had started. The daemons kept serving certs
+      # from the old CA; when the controller next restarted (2026-11-17) it
+      # loaded the new one and rejected them all ("x509: certificate signed
+      # by unknown authority"), so the 2026-11-18 network-delay-loki run
+      # injected nothing. ignoreDifferences alone only hides the drift.
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
