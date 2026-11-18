@@ -496,3 +496,14 @@ anything. Capture the exit status, report a failed read as ISSUES with the
 error, treat an empty result as suspicious, and print the count you checked.
 Test both paths by impersonating the SA and an unprivileged one:
 `kubectl --as=system:serviceaccount:<ns>:<sa>` via a PATH shim.
+
+### ignoreDifferences hides drift; it does not stop a sync writing it
+
+For charts that generate secrets on every render (Helm `genCA`/`randAlphaNum`, e.g.
+chaos-mesh certs), `ignoreDifferences` keeps the app Synced but every sync still
+applies the freshly rendered values. Add `RespectIgnoreDifferences=true` to
+`syncOptions` so the live values are kept. Without it chaos-mesh got a new CA
+under running daemons (2026-11-11), and that only surfaced a week later when
+the controller restarted and nothing could inject (2026-11-18, #1228). Symptom:
+"unable to flush ip sets", with x509 "unknown authority" in the controller log.
+Fix in place: restart the side that still has the old certs.

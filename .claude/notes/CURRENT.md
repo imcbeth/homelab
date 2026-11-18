@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-17 (morning: gateway HA + headers verified (O16); argocd-server alone meshed, deploy path kept out of the mesh, DR service-mesh section (O17); nginx leftovers removed (O18); daily healthcheck made fail-closed (O19); O15 confirmed. Only O5 open: loki chaos run 2026-11-18 10:00Z)
+**Last Updated:** 2026-11-18 (O5: loki chaos run failed on a chaos-mesh CA mismatch; daemons restarted, #1228 RespectIgnoreDifferences; re-check 2026-11-25 10:00Z. O20 nginx2root: only nginx is lifeonabike web, not reachable, lifeonabike.ca #32 bumps to 1.31.9. Cloudflare HSTS/TLS 1.2/Always-HTTPS steps handed to the user)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,41 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-18: the chaos run failed on a CA swap nobody saw; nginx2root reviewed
+
+**O5: the Nov 18 `network-delay-loki` run injected nothing.** `-ntvbh`:
+`AllInjected=False`, 0/5 records (loki-0 too), "unable to flush ip sets" every
+retry. The controller log had the cause: `x509: certificate signed by unknown
+authority "chaos-mesh-ca"`. The chart generates a new CA on every render, and
+the 2.8.8 sync (11-11) wrote it into the cert secrets about 2 minutes after the
+pods had restarted. The daemons kept serving old-CA certs, which went unnoticed
+until the controller crashed and restarted on 11-17 10:04Z and loaded the new
+CA. `ignoreDifferences` on the secrets hid the drift but did not stop the sync
+writing them. The user restarted `ds/chaos-daemon` (auto mode blocked it for me),
+and the controller's next retry (12:01:58Z) recovered all 5. **#1228**
+adds `RespectIgnoreDifferences=true`; merged, applied, CA unchanged. The issue
+stays open; **re-check the 2026-11-25 10:00Z run.**
+
+**O20: nginx2root.** Five nginx CVEs fixed in 1.31.9, chained with a kernel
+SCTP bug. ingress-nginx is gone, so only lifeonabike `web` (nginx 1.27.5) is
+affected. It's public, but HTTP/1.1-only with none of the vulnerable features.
+**lifeonabike.ca #32** moves it to `nginx:1.31.9-alpine` with an explicit
+`http2 off;` (nothing depends on HTTP/2: Cloudflare and Envoy terminate it).
+SCTP is not loaded on any node but can still autoload; blacklisting it is the
+user's call.
+
+**Cloudflare edge settings (scanner findings):** public traffic goes Cloudflare →
+tunnel → service and bypasses lan-gateway, so its HSTS and TLS 1.2 minimum
+don't apply. All three hosts accepted TLS 1.0/1.1 and sent no HSTS;
+build-webhook.n37.ca had no HTTP→HTTPS redirect. These are zone settings with
+no IaC or API token here, so the dashboard steps went to the user: min TLS 1.2
+on both zones, HSTS 6 months (includeSubDomains off for n37.ca), Always Use HTTPS
+on n37.ca. Not yet confirmed.
+
+**PRs:** homelab #1228 (merged). lifeonabike.ca #32 (open).
+
+---
 
 ### 2026-11-17 (morning): argocd-server meshed, the deploy path deliberately not; the healthcheck was failing open
 
