@@ -507,3 +507,16 @@ under running daemons (2026-11-11), and that only surfaced a week later when
 the controller restarted and nothing could inject (2026-11-18, #1228). Symptom:
 "unable to flush ip sets", with x509 "unknown authority" in the controller log.
 Fix in place: restart the side that still has the old certs.
+
+### "Succeeded to publish" does not mean an event bus kept the event
+
+On 2026-11-18 the argo-events NATS filestore went corrupt (`[WRN] Filestore
+[default] indexCacheBuf corrupt record state`). From then on the event source
+logged every publish as successful while the `default` stream stayed at
+`first_seq 1, last_seq 0, messages 0`: the events were lost and no build ran.
+Nothing alerted. Check the stream itself (port-forward 8222,
+`/jsz?consumers=true`): messages/last_seq should move on a publish, and each
+sensor's consumer should show `num_waiting: 1`. Restarting `eventbus-default-js-0`
+made NATS rebuild the index. A sensor can also stop fetching after an EventBus
+restart (11-15) and still look healthy, so after any EventBus restart check
+`num_waiting` for every consumer.

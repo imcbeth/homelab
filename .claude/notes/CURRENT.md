@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-18 (O5: loki chaos run failed on a chaos-mesh CA mismatch; daemons restarted, #1228 RespectIgnoreDifferences; re-check 2026-11-25 10:00Z. O20 nginx2root: only nginx is lifeonabike web, not reachable, lifeonabike.ca #32 bumps to 1.31.9. Cloudflare HSTS/TLS 1.2/Always-HTTPS steps handed to the user)
+**Last Updated:** 2026-11-19 00:20Z (O5: chaos-mesh CA mismatch fixed (#1228), re-check 2026-11-25 10:00Z. O20 closed: lifeonabike web on nginx 1.31.9 + http2 off, SCTP blocked on all nodes. O21 open: NATS filestore silently dropped events; EventBus restarted, cause + alert to do. Cloudflare HSTS/TLS/HTTPS steps with the user, unconfirmed)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -209,7 +209,7 @@
 
 ## Recent Sessions
 
-### 2026-11-18: the chaos run failed on a CA swap nobody saw; nginx2root reviewed
+### 2026-11-18: the chaos run failed on a CA swap nobody saw; nginx2root closed; NATS was dropping events
 
 **O5: the Nov 18 `network-delay-loki` run injected nothing.** `-ntvbh`:
 `AllInjected=False`, 0/5 records (loki-0 too), "unable to flush ip sets" every
@@ -240,7 +240,37 @@ no IaC or API token here, so the dashboard steps went to the user: min TLS 1.2
 on both zones, HSTS 6 months (includeSubDomains off for n37.ca), Always Use HTTPS
 on n37.ca. Not yet confirmed.
 
-**PRs:** homelab #1228 (merged). lifeonabike.ca #32 (open).
+**O20 closed (evening).** SCTP is blocked on all 5 nodes with
+`/etc/modprobe.d/disable-sctp.conf` (`install sctp /bin/false`), after checking
+nothing uses SCTP: no Services, pod ports, NetPols, Calico policies or open
+sockets. conntrack/IPVS SCTP support is built in, `=y`. An unprivileged SCTP
+`socket()` now fails with EPROTONOSUPPORT. Documented in k8s-docs-n37 #138.
+PR #32 then deployed: `web` runs nginx 1.31.9, `http2 off;`, both hosts 200.
+
+**O21: the site build never ran, and the cause was NATS, not the sensor.** The
+PR #32 webhook arrived (200) and the event source logged "Succeeded to publish",
+but no Workflow appeared.
+1. The `lifeonabike-build` sensor had logged nothing since the 11-15 EventBus
+   restart, and its consumer had `num_waiting: 0`. The user restarted it, and it
+   began fetching again.
+2. Still nothing arrived. After a 17:32Z `Filestore [default] indexCacheBuf
+   corrupt record state` warning, the `default` stream read
+   `first_seq 1, last_seq 0, messages 0`: publishes were acknowledged and then
+   lost. The agent build path was broken the same way.
+3. The user deleted `eventbus-default-js-0`. NATS rebuilt the index ("Stream
+   state outdated ... will rebuild"), both consumers went to `num_waiting: 1`, I
+   redelivered the main-branch push, and `lifeonabike-build-krgz8` built and
+   deployed.
+
+Open: what corrupted the filestore, and alerts for both symptoms.
+- The first resend, done from the UI, was the branch-deletion delivery, which the
+  `refs/heads/main` filter dropped. Check the payload's `ref` before redelivering.
+- `gh api ... -q '.id'` rounds 19-digit delivery IDs (404 on redeliver); take
+  them from the raw JSON.
+- `admin:repo_hook` scope granted for redelivery.
+
+**PRs:** homelab #1228 (merged). lifeonabike.ca #32 (merged, deployed).
+k8s-docs-n37 #138 (merged).
 
 ---
 
