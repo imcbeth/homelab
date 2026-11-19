@@ -149,6 +149,8 @@
 | HBONE bypass requires BOTH ends ambient-meshed | Traffic from meshed pod to non-meshed pod is direct TCP (no HBONE), so bare port 15008 ingress rule on destination is irrelevant. Destination must allow source pod IP on the actual application port | 2026-06-02 |
 | The Istio Gateway API gateway reaches EVERY ambient backend over HBONE -- the backend namespace must admit istio-system on 15008 | Check the gateway's Envoy cluster endpoints (`pilot-agent request GET clusters | grep <svc>`): `envoy://connect_originate/<pod>:<port>` = HBONE. `connection_security_policy=unknown` in istio_requests_total does NOT mean plain TCP. **2026-11-15:** the grafana cutover (#1193) returned 503 UC for every request until istio-system was added to default's 15008 allowlist (#1194); localstack had worked only because #1191 added the same entry, and #1193 removed it on a wrong "plain TCP" reading (fixed #1195). Combined with a usage-limit pause this left grafana unreachable on the LAN ~18:59-21:53Z (EndpointDown critical fired). Non-meshed backends instead need an app-port rule from istio-system. Cut over as route+policy WITH the Ingress kept (external-dns publishes both IPs, both work), verify via --resolve, THEN delete the Ingress | 2026-11-15 |
 | Finding a namespace's callers for an AuthorizationPolicy: use `count_over_time(istio_tcp_connections_opened_total{reporter="destination",destination_workload_namespace="X"}[30d])`, NOT `increase(...[30d]) > 0` | A short-lived pod (Job, CronJob, workflow step) is scraped once or twice, and `increase()` needs two samples, so its series vanish from the result. **2026-11-15:** the O8 policy for `default` was built from `increase()` and missed `argo-workflows/sa/cluster-healthcheck` -> Alertmanager 9093 (the daily healthcheck's evaluate step); a re-audit of all five namespaces with `count_over_time` found it before the next run (#1220). The metric has no port label -- take ports from the destination's container ports, or from ztunnel access logs (`dst.hbone_addr=<ip>:<port>`). For a negative test, check ztunnel's log says `policy rejection`: a wget can fail for other reasons (it did -- wrong Service name) | 2026-11-15 |
+| Between two ambient-meshed pods, NetworkPolicy APPLICATION-port rules are not enforced at all | HBONE arrives on 15008 and ztunnel delivers the connection inside the destination pod, so the only rule evaluated is the one admitting 15008 -- and on 2026-11-15 all 11 ambient namespaces admitted 15008 from anywhere, with 0 AuthorizationPolicies. Proven: meshed `default/prometheus` reached `argo-events` NATS 4222 and 8222 (both restricted to argo-events itself); a non-meshed control (cert-manager 9403, not admitted) timed out. A rule like "4222 from podSelector: {}" in an ambient namespace documents intent but enforces nothing. Port-level control there needs Istio AuthorizationPolicy; tracked as O8 in TODO.md | 2026-11-15 |
+| In ambient mode a bare TCP connect ALWAYS succeeds -- never use it to test reachability | The caller's own ztunnel accepts `connect()` locally and only then opens HBONE to the destination, so `/dev/tcp`, `nc -z` or a socket open reports CONNECTED even when NetworkPolicy drops the HBONE SYN. 2026-11-15: the O8 pilot looked like it had failed (kafka -> unipoller "CONNECTED") while ztunnel on both nodes logged `connection timed out, maybe a NetworkPolicy is blocking HBONE port 15008`. Test with something that needs the SERVER to answer (an HTTP GET, a protocol banner) or read the ztunnel log on the destination's node. Also: a newly blocked flow starts a new `istio_tcp_connections_failed_total` series, and `increase()` reads its first value as 0 | 2026-11-15 |
 | NetworkPolicy fixes need both directions — INCLUDING same-namespace | When policy declares Egress, same-ns pod-to-pod is DENIED without explicit intra-ns rule. Hit 5 times during PVC RO automation series (#736, #738, #739, #746, #747, #763). Cross-component path checklist: src egress + dst ingress + intra-ns rule (if same-ns) + HBONE (if mesh) | 2026-06-21 |
 | `/host/proc/mounts` is per-container, not host | Symlinks to `/proc/self/mounts` resolving to reader's mount ns. Use `/host/proc/1/mounts` to get HOST init's mount table regardless of PID namespace | 2026-06-05 |
 | ArgoCD "Synced + Healthy" ≠ "applied + working" | (1) SSA field-ownership disagreements can leave cluster in pre-change state silently (PR #739 broken NetPol never propagated). (2) For CronJobs, ArgoCD checks resource exists, not whether the Jobs actually succeed (16-day silent outage). Always verify NetworkPolicy with `kubectl get` after sync; alert on Job success independently | 2026-06-07 |
@@ -473,3 +475,48 @@ import json,sys
 print([n['metadata']['name'] for n in json.load(sys.stdin)['items']
        if (n['metadata'].get('labels') or {}).get('istio.io/dataplane-mode')=='ambient'])"
 ```
+
+### Keep Argo CD's deploy path out of the mesh
+
+Argo CD deploys istiod, ztunnel, istio-cni and every NetworkPolicy and
+AuthorizationPolicy. If its controller, repo-server or redis were meshed, a
+broken mesh would also stop Argo CD from syncing the revert. Only
+**argocd-server** is meshed (pod label via `server.podLabels`, 2026-11-17),
+because the gateway → server hop carries session tokens. Do not label the
+`argocd` namespace. Break-glass and `argocd --core` steps are in k8s-docs-n37
+`operations/disaster-recovery.md` ("Service mesh (Istio ambient) failure").
+
+### A check that turns errors into "OK" is worse than no check
+
+`VAR=$(kubectl get ... 2>/dev/null || echo "")` followed by "empty means
+healthy" reports OK when the API, RBAC or network fails. The daily
+cluster-healthcheck did this in all five checks until #1227 (2026-11-17), and
+its Gatekeeper check listed CRDs its SA couldn't read, so it never counted
+anything. Capture the exit status, report a failed read as ISSUES with the
+error, treat an empty result as suspicious, and print the count you checked.
+Test both paths by impersonating the SA and an unprivileged one:
+`kubectl --as=system:serviceaccount:<ns>:<sa>` via a PATH shim.
+
+### ignoreDifferences hides drift; it does not stop a sync writing it
+
+For charts that generate secrets on every render (Helm `genCA`/`randAlphaNum`, e.g.
+chaos-mesh certs), `ignoreDifferences` keeps the app Synced but every sync still
+applies the freshly rendered values. Add `RespectIgnoreDifferences=true` to
+`syncOptions` so the live values are kept. Without it chaos-mesh got a new CA
+under running daemons (2026-11-11), and that only surfaced a week later when
+the controller restarted and nothing could inject (2026-11-18, #1228). Symptom:
+"unable to flush ip sets", with x509 "unknown authority" in the controller log.
+Fix in place: restart the side that still has the old certs.
+
+### "Succeeded to publish" does not mean an event bus kept the event
+
+On 2026-11-18 the argo-events NATS filestore went corrupt (`[WRN] Filestore
+[default] indexCacheBuf corrupt record state`). From then on the event source
+logged every publish as successful while the `default` stream stayed at
+`first_seq 1, last_seq 0, messages 0`: the events were lost and no build ran.
+Nothing alerted. Check the stream itself (port-forward 8222,
+`/jsz?consumers=true`): messages/last_seq should move on a publish, and each
+sensor's consumer should show `num_waiting: 1`. Restarting `eventbus-default-js-0`
+made NATS rebuild the index. A sensor can also stop fetching after an EventBus
+restart (11-15) and still look healthy, so after any EventBus restart check
+`num_waiting` for every consumer.

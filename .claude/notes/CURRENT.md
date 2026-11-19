@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-15 (late evening: ingress-nginx replacement Phase 0 PASSED — oauth2-proxy forward-auth through an Istio Gateway API gateway, after two fixes (relative return URL; Envoy ext_authz allows only 200); EventBus non-root; first port-level mesh AuthorizationPolicy (unipoller). Earlier: HBONE allowlists in all 11 ambient namespaces, Argo CD atomic-spec diff bug, MetalLB monitoring, CVE bumps)
+**Last Updated:** 2026-11-19 00:20Z (O5: chaos-mesh CA mismatch fixed (#1228), re-check 2026-11-25 10:00Z. O20 closed: lifeonabike web on nginx 1.31.9 + http2 off, SCTP blocked on all nodes. O21 open: NATS filestore silently dropped events; EventBus restarted, cause + alert to do. Cloudflare HSTS/TLS/HTTPS steps with the user, unconfirmed)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,183 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-18: the chaos run failed on a CA swap nobody saw; nginx2root closed; NATS was dropping events
+
+**O5: the Nov 18 `network-delay-loki` run injected nothing.** `-ntvbh`:
+`AllInjected=False`, 0/5 records (loki-0 too), "unable to flush ip sets" every
+retry. The controller log had the cause: `x509: certificate signed by unknown
+authority "chaos-mesh-ca"`. The chart generates a new CA on every render, and
+the 2.8.8 sync (11-11) wrote it into the cert secrets about 2 minutes after the
+pods had restarted. The daemons kept serving old-CA certs, which went unnoticed
+until the controller crashed and restarted on 11-17 10:04Z and loaded the new
+CA. `ignoreDifferences` on the secrets hid the drift but did not stop the sync
+writing them. The user restarted `ds/chaos-daemon` (auto mode blocked it for me),
+and the controller's next retry (12:01:58Z) recovered all 5. **#1228**
+adds `RespectIgnoreDifferences=true`; merged, applied, CA unchanged. The issue
+stays open; **re-check the 2026-11-25 10:00Z run.**
+
+**O20: nginx2root.** Five nginx CVEs fixed in 1.31.9, chained with a kernel
+SCTP bug. ingress-nginx is gone, so only lifeonabike `web` (nginx 1.27.5) is
+affected. It's public, but HTTP/1.1-only with none of the vulnerable features.
+**lifeonabike.ca #32** moves it to `nginx:1.31.9-alpine` with an explicit
+`http2 off;` (nothing depends on HTTP/2: Cloudflare and Envoy terminate it).
+SCTP is not loaded on any node but can still autoload; blacklisting it is the
+user's call.
+
+**Cloudflare edge settings (scanner findings):** public traffic goes Cloudflare →
+tunnel → service and bypasses lan-gateway, so its HSTS and TLS 1.2 minimum
+don't apply. All three hosts accepted TLS 1.0/1.1 and sent no HSTS;
+build-webhook.n37.ca had no HTTP→HTTPS redirect. These are zone settings with
+no IaC or API token here, so the dashboard steps went to the user: min TLS 1.2
+on both zones, HSTS 6 months (includeSubDomains off for n37.ca), Always Use HTTPS
+on n37.ca. Not yet confirmed.
+
+**O20 closed (evening).** SCTP is blocked on all 5 nodes with
+`/etc/modprobe.d/disable-sctp.conf` (`install sctp /bin/false`), after checking
+nothing uses SCTP: no Services, pod ports, NetPols, Calico policies or open
+sockets. conntrack/IPVS SCTP support is built in, `=y`. An unprivileged SCTP
+`socket()` now fails with EPROTONOSUPPORT. Documented in k8s-docs-n37 #138.
+PR #32 then deployed: `web` runs nginx 1.31.9, `http2 off;`, both hosts 200.
+
+**O21: the site build never ran, and the cause was NATS, not the sensor.** The
+PR #32 webhook arrived (200) and the event source logged "Succeeded to publish",
+but no Workflow appeared.
+1. The `lifeonabike-build` sensor had logged nothing since the 11-15 EventBus
+   restart, and its consumer had `num_waiting: 0`. The user restarted it, and it
+   began fetching again.
+2. Still nothing arrived. After a 17:32Z `Filestore [default] indexCacheBuf
+   corrupt record state` warning, the `default` stream read
+   `first_seq 1, last_seq 0, messages 0`: publishes were acknowledged and then
+   lost. The agent build path was broken the same way.
+3. The user deleted `eventbus-default-js-0`. NATS rebuilt the index ("Stream
+   state outdated ... will rebuild"), both consumers went to `num_waiting: 1`, I
+   redelivered the main-branch push, and `lifeonabike-build-krgz8` built and
+   deployed.
+
+Open: what corrupted the filestore, and alerts for both symptoms.
+- The first resend, done from the UI, was the branch-deletion delivery, which the
+  `refs/heads/main` filter dropped. Check the payload's `ref` before redelivering.
+- `gh api ... -q '.id'` rounds 19-digit delivery IDs (404 on redeliver); take
+  them from the raw JSON.
+- `admin:repo_hook` scope granted for redelivery.
+
+**PRs:** homelab #1228 (merged). lifeonabike.ca #32 (merged, deployed).
+k8s-docs-n37 #138 (merged).
+
+---
+
+### 2026-11-17 (morning): argocd-server meshed, the deploy path deliberately not; the healthcheck was failing open
+
+**O16 closed.** #1222/#1223 had been merged the night before. Verified: two
+gateway pods on node01/node03, PDB `lan-gateway-istio` (1 allowed disruption),
+the 5 security headers on all 11 hosts, X-Powered-By gone, registry `/v2/` and
+argocd gRPC fine. The pod-delete failover probe was left to the user (cluster
+deletes are theirs). Docs #136 merged and deployed.
+
+**O17: mesh argocd, but only argocd-server.** The user chose meshing over TLS
+to the backend. A side note then pointed out the cycle: Argo CD deploys Istio
+and every policy, so a meshed Argo CD can't deploy the fix for a broken mesh.
+Final design: pod label `istio.io/dataplane-mode: ambient` on argocd-server
+only (`server.podLabels` in `argocd-config.yaml`; istio-cni's
+`AMBIENT_ENABLEMENT_SELECTOR` enrols labelled pods in unlabelled namespaces).
+The controller, repo-server, redis and dex stay TCP, so a mesh outage costs the
+UI at most. Two PRs in order: #1224 (HBONE 15008 from istio-system + default,
+169.254.7.127/32, `argocd-server-allow` AuthorizationPolicy selected onto the
+server), then #1225 (the label). Verified: ztunnel shows only argocd-server as
+HBONE; gateway → server connections are `mutual_tls` as
+`istio-system/sa/lan-gateway-istio`; UI, both gRPC modes, Uptime Kuma, all
+scrape targets and 38/38 apps fine; no RBAC denials. The `manifests/base/argocd`
+directory is only a Helm values `ref`, not rendered, so a Namespace file there
+would never have been applied. DR: k8s-docs-n37 #137 adds "Service mesh (Istio
+ambient) failure" to disaster-recovery.md, with break-glass commands and which
+namespace labels self-heal back from git.
+
+**`argocd --core` needs the kube context namespace to be argocd**, or it
+fails with `configmap "argocd-cm" not found`. Tested with an overlay
+kubeconfig that only sets the namespace; the DR doc uses `kubectl config
+set-context --current --namespace=argocd`.
+
+**O15 confirmed** from kuma.db (read-only): monitor 1 is
+`http://argocd-server.argocd:80/healthz`, UP since 11-16 03:32Z, and it held
+through the server's move into the mesh.
+
+**O18 closed.** #1226 removed the `lifeonabike-ca-tls` Certificate (its Secret
+is owner-referenced, so it went too) and zot's disabled nginx Ingress block.
+lifeonabike-agent #9 fixed the diagnose prompt and the cert-expiry alert. The
+alert was wrong before the migration too: the probes resolve over DoH, so
+they check **Cloudflare's edge certificate** (different issuer and expiry),
+not cert-manager's. The LAN hairpin now answers 10.0.10.11.
+
+**O19, found by the user: the daily healthcheck failed open.** "all 26 apps"
+was a hardcoded string (there are 38). The real problem was worse: every check
+turned a kubectl error or an empty list into OK. The Gatekeeper check listed
+CRDs, which its SA may not do, so it had always reported 0 violations (real
+count was 0, so nothing was missed). #1227 reads once, fails closed with the
+kubectl error, prints real counts, and flags a Velero schedule with no backups.
+Tested by impersonating the SA and an unprivileged SA; an in-cluster run
+reported 38 apps, 174 pods, 11 PVs, 5 constraints.
+
+Open: O5 only (`network-delay-loki` 2026-11-18 10:00Z; cloud routine opens an
+issue at 11:00Z if no record appears).
+
+### 2026-11-15 night → 2026-11-16: nginx gone, O8 finished, and two things Phase 1 quietly dropped
+
+**Night of 11-15 (#1213-#1221).** Phase 2 removed ingress-nginx (#1213, #1214;
+the namespace and `ingress-nginx-config` Application were deleted by hand, and
+10.0.10.10 is free). A PodMonitor and the "LAN Gateway (Istio)" dashboard
+replaced nginx's (#1215), and `lan-gateway-alerts` replaced its 7 rules (#1216).
+Every rate rule has a minimum count, because at ~0.03 req/s one 503 is a 100%
+error rate, and latency excludes codes 101/0 (WebSockets, aborted streams).
+argocd-server went to insecure mode, with native gRPC routed by content-type to
+the chart's h2c port 8080 (#1217). O8 policies cover trivy-system (#1218) and
+kafka, strimzi-system, localstack, flink-demo and argo-workflows (#1221).
+flink-operator has none because it isn't meshed.
+
+**The caller query missed short-lived pods.** `increase(istio_tcp_connections_opened_total[30d]) > 0`
+drops a series scraped only once or twice (Jobs, workflow steps), because
+`increase` needs two samples; `count_over_time` doesn't. Re-auditing every O8
+namespace with it found one real gap: the daily cluster-healthcheck → Alertmanager
+:9093, which the next failing run would have hit (#1220). In REFERENCE.md.
+
+**O14: kafka-to-s3 had been FAILED since 2026-08-15** (found because flink-demo
+had no callers in 30 days). With checkpointing off, Flink's restart strategy
+is none, so one lost TaskManager ended the job. A redeploy would also have
+been refused by PodSecurity restricted (#1086). Fixed with exponential-delay
+restarts and a restricted securityContext (#1219); an event went Kafka → Flink
+→ S3 end to end.
+
+**11-16 morning: O6 closed.** The 12:00Z health check passed (06:00 MST is
+12:00Z, not 13:00Z) and `ArgoWorkflowFailed` resolved. O5 prep: the 11-11
+`network-delay-loki` run never fired, because `concurrencyPolicy: Forbid`
+blocked it while the stuck 11-04 record was still active. All its records now
+read AllRecovered, so 11-18 should fire. **Mistake worth remembering:** I first
+said `pod-kill-prometheus` had also skipped 11-11, from a `| tail -8` that cut
+the newest records off the listing. It fired, twice (09:00:00 and 09:00:01).
+Pod-kill records always read `AllRecovered=False`, and Forbid ignores that.
+Check a whole listing before concluding something is missing.
+
+**Writing the docs found three gaps from the migration (O16, O17).**
+1. The gateway ran **1 replica, no PDB**; nginx had 2 + required
+   anti-affinity + PDB since 11-06. Fix: #1222, via the Gateway's
+   `infrastructure.parametersRef` ConfigMap (`deployment` + `podDisruptionBudget`
+   keys; Istio creates a PDB only if the key exists).
+2. **No security headers**: falco, status and registry sent none, while the
+   runbook said to carry them over. Fix: #1223, a `ResponseHeaderModifier` on all
+   11 route rules (Gateway API has no gateway-wide setting). TLS 1.2+ held (Envoy
+   default).
+3. **gateway → argocd-server is plaintext.** #1217 assumed HBONE, but `argocd`
+   isn't ambient and the gateway pod is `dataplane-mode: none`. Envoy speaks
+   HBONE only to ambient destinations (default, argo-workflows, flink-demo,
+   localstack). Under nginx the hop was HTTPS. Needs a decision: mesh argocd,
+   or TLS to the backend again.
+Lesson: "the mesh encrypts it" is a claim to check per namespace
+(`istio.io/dataplane-mode` plus ztunnel logs for the pod IP), not to assume.
+
+Docs: k8s-docs-n37 #136 (new lan-gateway page, ingress-nginx retired, oauth2-proxy
+rewritten for ext_authz, ~30 pages updated). Open: O5 (11-18 run), O15 (Uptime
+Kuma ArgoCD monitor URL, UI only), O16 (merge #1222/#1223), O17 (decision),
+O18 (leftover lifeonabike cert + agent prompt text).
 
 ### 2026-11-15 (late evening): Istio forward-auth works, after two bugs only a real sign-in found
 
