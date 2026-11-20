@@ -250,8 +250,14 @@ libc6, installed 11-13/14 (O24). Rolling reboot per
 `runbooks/weekend-ubuntu-kernel-reboot.md`, before or after the batch, not
 during.
 
-**For next session:** merge PR #1230 and check the rules load
-(`/api/v1/rules`); apply Renovate merges per `/renovate-apply`; decide O24;
+PR #1230 merged; all three EventBus rules loaded (`health=ok`, inactive).
+
+**Weekend plan (agreed 11-20), in `runbooks/k8s-1.37-upgrade.md`:** Sat 11-21
+Renovate batch. Sun 11-22 NAS patch with the cluster down; node OS packages
+applied before power-off (O24), then optionally k8s 1.36.3 -> 1.36.6. Weekend of
+11-28 Istio 1.30.8 -> 1.31.4 (O25: the chart repo we use froze at 1.30.8, so
+Renovate never offered 1.31; Istio 1.30 EOL 12-16), then Calico 3.33.1. Weekend
+of 12-05 k8s 1.37.1. Istio 1.31/1.32 now support 1.37, so the blocker is gone.
 O5 on 11-25.
 
 ### 2026-11-18: the chaos run failed on a CA swap nobody saw; nginx2root closed; NATS was dropping events
