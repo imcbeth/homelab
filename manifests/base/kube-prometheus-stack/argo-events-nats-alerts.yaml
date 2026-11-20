@@ -1,0 +1,85 @@
+---
+# EventBus (NATS JetStream) health, from the prometheus-nats-exporter sidecar
+# that eventbus-servicemonitor.yaml scrapes (O21, 2026-11-20).
+#
+# On 2026-11-18 at 17:32Z the JetStream filestore logged "indexCacheBuf
+# corrupt record state" and the `default` stream's last_seq fell from 1 to 0.
+# For 6.5 hours every webhook publish was acknowledged ("Succeeded to
+# publish") and then lost, so neither the site nor the agent built, and
+# nothing alerted. Backtested against that window, EventBusStreamWentBackwards
+# fires at 17:45Z.
+#
+# Signals tried and rejected:
+# - nats_consumer_num_waiting == 0 ("no waiting pull"): flips 0/1 every 20-80
+#   minutes on healthy consumers as pull requests expire and renew.
+# - last_seq < first_seq: an empty stream normally reads first = last + 1, and
+#   the corrupt state (first 1, last 0) looks just like it.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argo-events-nats-alerts
+  # Same namespace and release label as the sibling rules, or Prometheus's
+  # ruleSelector never loads it (see velero-alerts.yaml).
+  namespace: default
+  labels:
+    app: argo-events
+    prometheus: kube-prometheus
+    role: alert-rules
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: argo_events_nats
+    interval: 60s
+    rules:
+    # JetStream is on a persistent volume since #1171, so a stream's last
+    # sequence never decreases, across restarts included. If it does, stored
+    # state was lost and new publishes may be lost with it.
+    - alert: EventBusStreamWentBackwards
+      expr: |
+        max by (stream_name) (nats_stream_last_seq)
+          < max by (stream_name) (max_over_time(nats_stream_last_seq[6h]))
+      for: 5m
+      labels:
+        severity: warning
+        component: argo-events
+      annotations:
+        summary: "EventBus stream {{ $labels.stream_name }} lost its state"
+        description: |
+          JetStream stream {{ $labels.stream_name }}'s last sequence went
+          backwards. Publishes can be acknowledged and then dropped, so
+          webhook-triggered builds silently stop.
+
+          Check: kubectl logs -n argo-events eventbus-default-js-0 -c main | grep -i -e corrupt -e rebuild
+          Fix (NATS rebuilds the index on start):
+            kubectl delete pod -n argo-events eventbus-default-js-0
+          Then redeliver the missed GitHub webhooks.
+
+    # A sensor that stops fetching leaves messages pending on its consumer.
+    - alert: EventBusConsumerStalled
+      expr: max by (stream_name, consumer_name) (nats_consumer_num_pending) > 0
+      for: 15m
+      labels:
+        severity: warning
+        component: argo-events
+      annotations:
+        summary: "EventBus consumer {{ $labels.consumer_name }} is not fetching"
+        description: |
+          {{ $value }} message(s) on stream {{ $labels.stream_name }} have
+          waited 15m for consumer {{ $labels.consumer_name }}, so its sensor
+          is not triggering. Find the stuck sensor and restart it:
+            kubectl get deploy -n argo-events -l controller=sensor-controller
+            kubectl rollout restart -n argo-events deploy/<sensor deployment>
+
+    # Both rules above go quiet if the exporter or the EventBus is down.
+    - alert: EventBusMetricsAbsent
+      expr: absent(nats_stream_last_seq{stream_name="default"})
+      for: 15m
+      labels:
+        severity: warning
+        component: argo-events
+      annotations:
+        summary: "No JetStream metrics from the EventBus"
+        description: |
+          nats_stream_last_seq for the default stream has been missing for 15m:
+          the EventBus pod, its metrics sidecar, or the ServiceMonitor is down.
+            kubectl get pod -n argo-events eventbus-default-js-0
