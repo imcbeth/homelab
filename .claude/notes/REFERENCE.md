@@ -515,8 +515,22 @@ On 2026-11-18 the argo-events NATS filestore went corrupt (`[WRN] Filestore
 logged every publish as successful while the `default` stream stayed at
 `first_seq 1, last_seq 0, messages 0`: the events were lost and no build ran.
 Nothing alerted. Check the stream itself (port-forward 8222,
-`/jsz?consumers=true`): messages/last_seq should move on a publish, and each
-sensor's consumer should show `num_waiting: 1`. Restarting `eventbus-default-js-0`
-made NATS rebuild the index. A sensor can also stop fetching after an EventBus
-restart (11-15) and still look healthy, so after any EventBus restart check
-`num_waiting` for every consumer.
+`/jsz?consumers=true`): messages/last_seq should move on a publish, and a
+stream's last_seq must never go backwards (JetStream is persistent since #1171).
+Restarting `eventbus-default-js-0` made NATS rebuild the index. Do not judge a
+consumer by `num_waiting`: it flips 0/1 every 20-80 min on healthy consumers as
+pull requests expire. A stalled sensor shows as `num_pending > 0` instead. Both
+are alerted on since PR #1230 (`EventBusStreamWentBackwards`,
+`EventBusConsumerStalled`).
+
+### An egress ipBlock for a LoadBalancer IP never matches from inside the cluster
+
+A pod connecting to a MetalLB address (e.g. lan-gateway's 10.0.10.11) is DNATed
+by kube-proxy to a backend pod IP before Calico evaluates egress policy, so
+`ipBlock: 10.0.10.11/32` matches nothing, and the pod CIDR is usually in the
+`except:` of the internet rule. Allow the backend pods by namespace + pod
+selector instead. trivy-system had this for at least three weeks (ingress-nginx's
+10.0.10.10 and then 10.0.10.11): no image on registry.k8s.n37.ca was ever
+scanned, and nothing alerted because a missing report is not a failure (#1229).
+Symptom from a meshed pod: "connection reset by peer" from the app, a 10 s
+connect timeout with 0 bytes in the ztunnel log.

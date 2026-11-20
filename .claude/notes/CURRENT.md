@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-19 00:20Z (O5: chaos-mesh CA mismatch fixed (#1228), re-check 2026-11-25 10:00Z. O20 closed: lifeonabike web on nginx 1.31.9 + http2 off, SCTP blocked on all nodes. O21 open: NATS filestore silently dropped events; EventBus restarted, cause + alert to do. Cloudflare HSTS/TLS/HTTPS steps with the user, unconfirmed)
+**Last Updated:** 2026-11-20 19:45Z (O22 closed: trivy had never scanned a local-registry image, egress fixed in #1229. O21 alerts in PR #1230, awaiting merge. O23 open: flink-demo arm64 scan. O24 open: all 5 nodes pending a kernel 1068 reboot. Renovate queue for 11-21: 6 patch/minor bumps, no argo-events. O5 re-check 2026-11-25 10:00Z.)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,51 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-19/20: an alert that was wrong pointed at a scanner that had never worked
+
+**`HighVulnerabilitiesIncreased` (+12, 11-18 20:34Z) was a false positive.** The
+istio-cni (10) and ztunnel (2) 1.30.8 reports were missing from 11-17 19:40Z to
+11-18 07:30Z while they were recreated, so a day later the 24h-delta counted
+them as new. Deployed since 11-15; it cleared on its own. The 11-19 drop (994 to
+895 Highs) was all Strimzi, same tags: strimzi/operator went 31 to zero findings
+of any severity, strimzi/kafka 64 to 27. Not explained; likely a Trivy DB
+change, unverified.
+
+**O22: no image on registry.k8s.n37.ca had ever been scanned.** 45 scan
+failures/24h, "connection reset by peer"; ztunnel: `dst.addr=10.0.10.11:443
+bytes_sent=0 duration=10001ms`. The trivy-system egress rule allowed the
+LoadBalancer IP, which kube-proxy DNATs to a gateway pod IP before Calico
+looks; that pod IP is in the internet rule's excluded 192.168.0.0/16. True since
+at least 11-01 (ingress-nginx's 10.0.10.10 the same). PR #1229: egress by
+lan-gateway pod selector. Retries only happen on reconcile, so the user
+restarted trivy-operator; reports appeared within a minute (lifeonabike web
+nginx 1.31.9 0/0/0, agent 0/0/0, bitnami/kubectl 2 High). flink-demo:1.0.0 now
+fails on "only Linux amd64 images are supported" (O23). The alert re-fired
+(+7) for the newly counted findings, as expected.
+
+**O21 alerts (PR #1230, open).** Replayed against Prometheus first, and both
+planned signals were wrong: `num_waiting` flips 0/1 every 20-80 min on healthy
+consumers, and `last_seq < first_seq` is what a healthy empty stream looks like.
+The 11-18 corruption shows as `last_seq` falling 1 to 0. New rules:
+`EventBusStreamWentBackwards` (below its 6h max for 5m; backtested 17:45Z
+11-18), `EventBusConsumerStalled` (num_pending > 0 for 15m),
+`EventBusMetricsAbsent`. promtool OK. REFERENCE.md's NATS lesson, which said
+to check `num_waiting: 1`, is corrected.
+
+**Pre-Renovate check (11-20 19:30Z).** 5/5 Ready, 38/38 Synced/Healthy, no
+stuck pods, all PVCs Bound, both nightly backups Completed. Firing: only
+`HighVulnerabilitiesIncreased` (info, expected). Queue for 11-21: cloudflared
+2026.11.1, uptime-kuma 2.5.12, argo-cd chart 10.18.2, kube-prometheus-stack
+93.3.1, zot 0.1.135, and a monitoring-stack minor (kps + loki). No argo-events
+bump. **All five nodes are flagged reboot-required** for kernel 6.8.0-1068 and
+libc6, installed 11-13/14 (O24). Rolling reboot per
+`runbooks/weekend-ubuntu-kernel-reboot.md`, before or after the batch, not
+during.
+
+**For next session:** merge PR #1230 and check the rules load
+(`/api/v1/rules`); apply Renovate merges per `/renovate-apply`; decide O24;
+O5 on 11-25.
 
 ### 2026-11-18: the chaos run failed on a CA swap nobody saw; nginx2root closed; NATS was dropping events
 
