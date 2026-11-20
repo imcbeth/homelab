@@ -95,13 +95,20 @@ spec:
         - protocol: TCP
           port: 6443  # API server port
     # Allow access to internal Zot OCI registry by its hostname.
-    # registry.k8s.n37.ca resolves to the LAN gateway's MetalLB IP, which falls
-    # in the private range excluded below -- this explicit rule is required for
-    # local image scans. It was ingress-nginx's 10.0.10.10 until 2026-11-15,
-    # when the host moved to lan-gateway (10.0.10.11) and nginx was removed.
+    # registry.k8s.n37.ca resolves to the LAN gateway's MetalLB IP (10.0.10.11),
+    # but kube-proxy DNATs that to a gateway pod IP before Calico evaluates
+    # egress, so an ipBlock for the LoadBalancer IP never matched: the pod IP
+    # is in 192.168.0.0/16, excluded below, and the connection was dropped.
+    # Every scan of a registry.k8s.n37.ca image timed out (seen since at least
+    # 2026-11-01, under ingress-nginx's 10.0.10.10 too) and those images had
+    # no VulnerabilityReport. Match the gateway pods instead (2026-11-19).
     - to:
-        - ipBlock:
-            cidr: 10.0.10.11/32  # lan-gateway MetalLB LoadBalancer IP
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+          podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: lan-gateway
       ports:
         - protocol: TCP
           port: 443
