@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-20 19:45Z (O22 closed: trivy had never scanned a local-registry image, egress fixed in #1229. O21 alerts in PR #1230, awaiting merge. O23 open: flink-demo arm64 scan. O24 open: all 5 nodes pending a kernel 1068 reboot. Renovate queue for 11-21: 6 patch/minor bumps, no argo-events. O5 re-check 2026-11-25 10:00Z.)
+**Last Updated:** 2026-11-20 21:00Z (O22 closed: trivy registry egress #1229. O21 alerts live (#1230, rules loaded); corruption cause still open. O25: Istio chart repo froze at 1.30.8, Istio 1.30 EOL 12-16. Weekend plan in runbooks/k8s-1.37-upgrade.md: Sat 11-21 Renovate; Sun 11-22 NAS patch + node OS (O24), optional k8s 1.36.6; 11-28 Istio 1.31.4 + Calico 3.33.1; 12-05 k8s 1.37.1. O23 flink-demo arm64 scan open. O5 re-check 2026-11-25 10:00Z.)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
