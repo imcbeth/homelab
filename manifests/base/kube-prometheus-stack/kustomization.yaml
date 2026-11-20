@@ -28,6 +28,7 @@ resources:
   - snmp-exporter-service.yaml
   - storage-alerts.yaml
   - velero-alerts.yaml
+  - argo-events-nats-alerts.yaml
   - istio-alerts.yaml
   - lan-gateway-alerts.yaml
   - apm-alerts.yaml
