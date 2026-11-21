@@ -7,10 +7,10 @@ metadata:
     app.kubernetes.io/name: flink-demo
     app.kubernetes.io/component: file-to-kafka
 spec:
-  # Custom image: apache/flink:1.20.5-java17 + Temurin 17 JDK + Python3 + PyFlink + Kafka JAR + boto3
+  # Custom image: apache/flink:2.2.1-java17 + Temurin 17 JDK + Python3 + PyFlink + Kafka JAR + boto3
   # Built in-cluster: argo submit --from workflowtemplate/flink-demo-build -n argo-workflows -p version=<v>
-  image: registry.k8s.n37.ca/flink-demo:1.0.0
-  flinkVersion: v1_20
+  image: registry.k8s.n37.ca/flink-demo:2.0.0
+  flinkVersion: v2_2
 
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "1"
