@@ -17,7 +17,12 @@ FROM apache/flink:1.20.5-java17
 COPY --from=eclipse-temurin:17.0.21_9-jdk-jammy /opt/java/openjdk /opt/java/openjdk
 
 # Python 3 for PyFlink, plus a compiler for pemja (no arm64 wheel).
-RUN apt-get update && \
+# apt over HTTPS: the in-cluster build (flink-demo-build) may only reach the
+# internet on 443, and the image's sources.list uses http://ports.ubuntu.com
+# (port 80). The first in-cluster build failed there with "Unable to locate
+# package python3"; ca-certificates is already in the base image.
+RUN sed -i 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' /etc/apt/sources.list && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         python3 \
         python3-pip \
