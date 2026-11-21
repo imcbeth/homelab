@@ -20,7 +20,7 @@ USER root
 # pemja compiles against. 17.0.21.1 (the Java4Shell fix, CVE-2026-114938) had
 # no arm64 image on 2026-11-21; that CVE is in an x86-64 AVX-512 path and
 # does not apply on these ARM64 nodes.
-COPY --from=eclipse-temurin:17.0.21_9-jdk-noble /opt/java/openjdk /opt/java/openjdk
+COPY --from=eclipse-temurin:25.0.5.1_2-jdk-noble /opt/java/openjdk /opt/java/openjdk
 
 # Python 3 for PyFlink, plus a compiler (PyFlink and pemja have no
 # linux/aarch64 wheels and build from source).
