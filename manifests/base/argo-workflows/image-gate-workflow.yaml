@@ -11,7 +11,7 @@
 #            fixed version. Unfixed CVEs and HIGHs are printed, not gated: a
 #            build cannot act on them, and blocking on them would stop every
 #            deploy over things only upstream can fix.
-#   promote  crane retags the scanned :<sha> as :latest. The deployments run
+#   promote  crane retags the scanned :<sha> as :latest (or to-tag). The deployments run
 #            :latest, so a failed scan leaves :latest on the previous image,
 #            and even a node reboot cannot pull the unscanned one.
 #
@@ -76,6 +76,10 @@ spec:
         parameters:
           - name: image
           - name: tag
+          # The tag the deployments run. latest for lifeonabike; a pinned
+          # version for images whose manifests name one (flink-demo).
+          - name: to-tag
+            value: latest
       container:
         image: gcr.io/go-containerregistry/crane:v0.22.1
         command: [crane]
@@ -83,7 +87,7 @@ spec:
           - tag
           - --insecure
           - "{{inputs.parameters.image}}:{{inputs.parameters.tag}}"
-          - latest
+          - "{{inputs.parameters.to-tag}}"
         env:
           - name: DOCKER_CONFIG
             value: /docker
