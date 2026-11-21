@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-21 16:10Z (Renovate batch applied; CVE increase alerts count each running image once (PR #1241); builds now scan before deploy (image-gate, PR #1242/#1245); flink-demo on Flink 2.2 / Java 17.0.21, pipelines verified end to end (PR #1244-#1252). O23 narrowed: trivy-operator scan of flink-demo:2.0.0 fails on an HTTP/2 stream reset via lan-gateway. Next: Sun 11-22 NAS patch + node OS (O24), optional k8s 1.36.6; 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O5 re-check 2026-11-25 10:00Z.)
+**Last Updated:** 2026-11-21 16:30Z (wrap-up). Renovate batch applied; CVE increase alerts count each running image once (PR #1241); builds scanned before deploy (image-gate, PR #1242/#1245); flink-demo on Flink 2.2 / Java 17.0.21, verified end to end (PR #1244-#1252); Renovate caps for flink-demo (apache/flink <2.3, eclipse-temurin <18, PR #1254). Open PR: #1246 Temurin 17.0.21.1, merge when its arm64 image exists, then rebuild flink-demo 2.0.1. O23 narrowed to large-blob pulls through lan-gateway. 38/38 Synced+Healthy. Next: Sun 11-22 NAS patch + node OS (O24), optional k8s 1.36.6; 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O5 re-check 2026-11-25 10:00Z.
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -248,6 +248,16 @@ lifeonabike-build, lifeonabike-agent-build and the new flink-demo-build.
   securityContext from #1086 because it had already FINISHED (PR #1252).
 - **End to end on v2_2:** file-to-kafka published 15 records (offset 1 -> 16),
   kafka-to-s3 wrote 15 objects to s3://flink-output/events/.
+
+**Renovate follow-up (evening).** Three PRs had been opened against the
+flink-demo Dockerfile at 14:47, before the caps existed. Closed #1247 (Flink
+2.3, past the operator's v2_2) and #1248 (Temurin 25; Flink 2.2 supports Java
+11/17/21), and added `eclipse-temurin` `<18` for that Dockerfile (PR #1254).
+**PR #1246 (Temurin 17.0.21.1, the Java4Shell fix) is left open**: its noble
+tag had no arm64 image, so the in-cluster build would fail. When arm64 exists:
+merge, `argo submit --from workflowtemplate/flink-demo-build -n argo-workflows
+-p version=2.0.1`, then bump both FlinkDeployments. Not urgent (Java4Shell is
+x86-64 only).
 
 **Still open:** O23 (trivy-operator scan of 2.0.0 fails via lan-gateway, see
 TODO). Zot holds unused tags flink-demo:f080e5b (the blocked 1.20 build) and
