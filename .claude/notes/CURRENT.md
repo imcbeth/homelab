@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-20 21:00Z (O22 closed: trivy registry egress #1229. O21 alerts live (#1230, rules loaded); corruption cause still open. O25: Istio chart repo froze at 1.30.8, Istio 1.30 EOL 12-16. Weekend plan in runbooks/k8s-1.37-upgrade.md: Sat 11-21 Renovate; Sun 11-22 NAS patch + node OS (O24), optional k8s 1.36.6; 11-28 Istio 1.31.4 + Calico 3.33.1; 12-05 k8s 1.37.1. O23 flink-demo arm64 scan open. O5 re-check 2026-11-25 10:00Z.)
+**Last Updated:** 2026-11-21 13:40Z (Renovate batch applied, 38/38 Synced+Healthy. CriticalVulnerabilitiesIncreased pending from a stale uptime-kuma 2.5.11 report; expected to clear ~2026-11-22 01:00Z. Next: Sun 11-22 NAS patch + node OS (O24), optional k8s 1.36.6; 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O23 flink-demo arm64 scan open. O5 re-check 2026-11-25 10:00Z.)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,44 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-21: Renovate batch, one stale report counted twice
+
+**PRs applied** (pre-flight: rendered old and new chart with our values and diffed):
+- PR #1234: cloudflared 2026.11.0 → 2026.11.1 (image only, auto-synced)
+- PR #1235: uptime-kuma 2.5.11 → 2.5.12 (image only, auto-synced)
+- PR #1236: argo-cd chart 10.18.0 → 10.18.2 (Argo CD v3.6.1 → v3.6.2, nothing else)
+- PR #1238: zot chart 0.1.134 → 0.1.135 (no rendered change beyond labels)
+- PR #1239: kube-prometheus-stack 93.3.0 → 93.6.1 (node-exporter 1.12.1 → 1.13.1;
+  operator stays v0.95.2, so no CRD change) and Loki 7.6.0 → 7.7.0 (loki-canary
+  3.6.18 → 3.6.20; StatefulSet and PVC render identically)
+- PR #1237 (kps 93.3.1) skipped: PR #1239 already took kps further.
+
+| App | Old | New | Status |
+|-----|-----|-----|--------|
+| argocd | 10.18.0 | 10.18.2 | ✅ Synced+Healthy |
+| kube-prometheus-stack | 93.3.0 | 93.6.1 | ✅ Synced+Healthy |
+| loki | 7.6.0 | 7.7.0 | ✅ Synced+Healthy, storage-loki-0 Bound |
+| zot | 0.1.134 | 0.1.135 | ✅ Synced+Healthy |
+
+**Transient alerts, all expected:** zot EndpointDown / KubePodNotReady while
+zot-0 rolled; CPUThrottlingHighSaturated on the new application-controller
+warming its cache; NodeFilesystemSpacePredicted on node03, where the new
+node-exporter series was minutes old and extrapolated the image pulls (the old
+series predicted ~107 GB free; the disk is 42% free). All cleared by 13:32Z.
+
+**CriticalVulnerabilitiesIncreased (+6) is a double count, not a new CVE.**
+uptime-kuma 2.5.12 got its report while the 2.5.11 report (scaled-down
+ReplicaSet, no owner) is kept until its 24h TTL, about 2026-11-22 01:00Z.
+The rule sums every report, so any image bump double-counts that image for up
+to a day. 2.5.12 itself has the same 6 criticals and 3 fewer highs. Follow-up:
+dedupe the rule by image (e.g. `max by (image_repository, image_tag)` before
+summing), or count only images of running pods.
+
+**Note:** the Loki chart's own default image is still 3.6.11 (appVersion 3.6.20);
+not pinned by us.
+
+**Final state:** 38/38 apps Synced+Healthy, no non-running pods.
 
 ### 2026-11-19/20: an alert that was wrong pointed at a scanner that had never worked
 
