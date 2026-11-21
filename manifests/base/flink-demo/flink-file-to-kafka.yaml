@@ -32,6 +32,18 @@ spec:
   # Mount CSV data and pipeline script from ConfigMaps
   podTemplate:
     spec:
+      # flink-demo enforces PodSecurity "restricted" since 2026-10-29 (#1086).
+      # kafka-to-s3 got these settings then (O14); this job had already
+      # FINISHED and was not redeployed until the Flink 2.2 move (2026-11-21),
+      # when its JobManager pod was refused. Same values as kafka-to-s3. 9999
+      # is the flink user in apache/flink.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 9999
+        runAsGroup: 9999
+        fsGroup: 9999
+        seccompProfile:
+          type: RuntimeDefault
       volumes:
         - name: test-data
           configMap:
@@ -42,6 +54,10 @@ spec:
             defaultMode: 0755
       containers:
         - name: flink-main-container
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           volumeMounts:
             - name: test-data
               mountPath: /opt/flink/data
