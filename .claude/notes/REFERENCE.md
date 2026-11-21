@@ -523,6 +523,20 @@ pull requests expire. A stalled sensor shows as `num_pending > 0` instead. Both
 are alerted on since PR #1230 (`EventBusStreamWentBackwards`,
 `EventBusConsumerStalled`).
 
+### `ambient.istio.io/redirection: disabled` does not take a pod out of the mesh
+
+istio-cni writes that annotation itself as status (`enabled` on every meshed
+pod); setting it in a pod template does nothing. The Argo build workflows set it
+in `podMetadata` with a comment saying it bypasses ztunnel, and their pods were
+meshed all along: ztunnel logs "inpod::statemanager pod received, starting
+proxy" for them, and their calls to meshed services carry
+`src.identity=.../sa/argo-workflow`. Calls to non-meshed services (Zot, GitHub)
+are passthrough either way, which is why it went unnoticed. To really opt a pod
+out, label it `istio.io/dataplane-mode: none`. Found 2026-11-21 when the first
+image-gate scan timed out on HBONE 15008 to trivy-server: the rules written for
+"plain TCP on 4954" never applied (fixed by admitting argo-workflows on 15008
+and the argo-workflow identity on 4954).
+
 ### An egress ipBlock for a LoadBalancer IP never matches from inside the cluster
 
 A pod connecting to a MetalLB address (e.g. lan-gateway's 10.0.10.11) is DNATed

@@ -20,21 +20,6 @@ spec:
           port: 4954   # Trivy server port
         - protocol: TCP
           port: 8080   # Metrics port
-    # Build pods (argo-workflows) -> trivy-server, the image-gate scan that
-    # runs before a build moves :latest (2026-11-21). Build pods opt out of
-    # ambient redirection, so this arrives as plain TCP on 4954 and this rule
-    # is what admits it. The AuthorizationPolicy's notPrincipals rule allows
-    # sources without a mesh identity on 4954.
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: argo-workflows
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/component: ci
-      ports:
-        - protocol: TCP
-          port: 4954
     # Allow Istio ambient mesh HBONE tunnel traffic (port 15008)
     # In ambient mode, ztunnel tunnels ALL inter-pod traffic through port 15008.
     # Restricted 2026-11-15 (O8). Between two ambient-meshed pods this is the
@@ -43,6 +28,12 @@ spec:
     # admit 15008 from anywhere, which let any meshed pod reach any port here.
     # Sources: every meshed namespace the rules name, plus those seen in 14
     # days of ztunnel connection metrics.
+    # argo-workflows added 2026-11-21: the image-gate scan in the build
+    # workflows calls trivy-server:4954. Build pods are meshed (their
+    # `ambient.istio.io/redirection: disabled` annotation is a status
+    # istio-cni writes, not an opt-out), so the call arrives here as HBONE.
+    # The AuthorizationPolicy limits it to the argo-workflow service account
+    # on 4954.
     - from:
         - namespaceSelector:
             matchLabels:
@@ -50,6 +41,9 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: trivy-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-workflows
       ports:
         - protocol: TCP
           port: 15008  # HBONE mTLS tunnel

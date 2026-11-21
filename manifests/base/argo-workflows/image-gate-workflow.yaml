@@ -22,12 +22,13 @@
 # - a `registry-creds` volume (the dockerconfigjson for
 #   zot.zot.svc.cluster.local:5000, as in lifeonabike-build); promote needs
 #   push rights, scan does not (Zot allows anonymous reads);
-# - the pod label app.kubernetes.io/component: ci, which the argo-workflows
-#   and trivy-system NetworkPolicies use to admit build pods to
-#   trivy-server:4954;
-# - ambient.istio.io/redirection: disabled, as the build pods already set,
-#   so the connection arrives as plain TCP (trivy-system's
-#   AuthorizationPolicy admits sources without a mesh identity on 4954).
+# - the service account argo-workflow. Build pods are in the ambient mesh
+#   (their `ambient.istio.io/redirection: disabled` annotation is a status
+#   istio-cni writes, not an opt-out), so the scan reaches trivy-server over
+#   HBONE: trivy-system's NetworkPolicy admits argo-workflows on 15008, and
+#   its AuthorizationPolicy admits this service account on 4954. The first
+#   gated build (2026-11-21) failed exactly there, with an HBONE timeout,
+#   while these comments still assumed plain TCP.
 #
 # Images come from Zot's ClusterIP over HTTP (--insecure), like Kaniko's push.
 apiVersion: argoproj.io/v1alpha1
