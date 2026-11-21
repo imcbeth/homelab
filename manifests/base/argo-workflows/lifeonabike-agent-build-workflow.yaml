@@ -62,7 +62,7 @@ spec:
   podMetadata:
     labels:
       app.kubernetes.io/name: lifeonabike-agent-build
-      app.kubernetes.io/component: ci   # admits the image-gate scan to trivy-server (NetworkPolicies)
+      app.kubernetes.io/component: ci
     annotations:
       ambient.istio.io/redirection: disabled
 

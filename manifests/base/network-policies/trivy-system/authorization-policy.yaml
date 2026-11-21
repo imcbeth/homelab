@@ -6,6 +6,8 @@
 #   Prometheus      -> trivy-operator 8080 (metrics)
 #   trivy-operator  -> trivy-server 4954 (the operator and its scan Jobs share
 #                      this service account)
+#   argo-workflow   -> trivy-server 4954 (build workflows' image-gate scan,
+#                      added 2026-11-21)
 # Kubelet probes (trivy-operator's 9090 health port) come from the link-local
 # address, which ztunnel does not capture, so they need no rule here. The
 # compliance-reporter Job is not meshed; it and any other non-meshed caller
@@ -29,6 +31,17 @@ spec:
         - source:
             principals:
               - cluster.local/ns/trivy-system/sa/trivy-operator
+      to:
+        - operation:
+            ports: ["4954"]
+    # Build workflows' image-gate scan (argo-workflows/image-gate-workflow.yaml,
+    # 2026-11-21). argo-workflow is the build workflows' service account;
+    # the healthcheck and backup workflows run as their own and are not
+    # admitted.
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/argo-workflows/sa/argo-workflow
       to:
         - operation:
             ports: ["4954"]
