@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-21 13:40Z (Renovate batch applied, 38/38 Synced+Healthy. CriticalVulnerabilitiesIncreased pending from a stale uptime-kuma 2.5.11 report; expected to clear ~2026-11-22 01:00Z. Next: Sun 11-22 NAS patch + node OS (O24), optional k8s 1.36.6; 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O23 flink-demo arm64 scan open. O5 re-check 2026-11-25 10:00Z.)
+**Last Updated:** 2026-11-21 16:10Z (Renovate batch applied; CVE increase alerts count each running image once (PR #1241); builds now scan before deploy (image-gate, PR #1242/#1245); flink-demo on Flink 2.2 / Java 17.0.21, pipelines verified end to end (PR #1244-#1252). O23 narrowed: trivy-operator scan of flink-demo:2.0.0 fails on an HTTP/2 stream reset via lan-gateway. Next: Sun 11-22 NAS patch + node OS (O24), optional k8s 1.36.6; 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O5 re-check 2026-11-25 10:00Z.)
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -208,6 +208,51 @@
 ---
 
 ## Recent Sessions
+
+### 2026-11-21 (afternoon): builds are scanned before they ship, and flink-demo was two versions behind its own Dockerfile
+
+**CVE increase alerts (PR #1241).** New recording rule
+`trivy:running_image_vulnerabilities:max` (see the morning entry); live, 61
+criticals / 542 highs, rules health=ok, the pending false positive cleared.
+
+**Image gate (PR #1242, fixed by PR #1245).** Shared WorkflowTemplate
+`image-gate`: builds push `:<sha>` only, `scan` runs the trivy 0.76.2 client
+against trivy-server and fails on CRITICAL with a fixed version, `promote`
+(crane v0.22.1) retags to `:latest` or a pinned version. Used by
+lifeonabike-build, lifeonabike-agent-build and the new flink-demo-build.
+- First run failed in scan: build pods are **ambient-meshed** (the
+  `ambient.istio.io/redirection: disabled` annotation is istio-cni status, not
+  an opt-out; REFERENCE.md), so the call arrived as HBONE 15008, which
+  trivy-system did not admit. PR #1245: argo-workflows on 15008, the
+  argo-workflow identity on 4954 in the AuthorizationPolicy; the plain-TCP 4954
+  rules removed. It failed safe: `:latest` never moved.
+- Second run (lifeonabike-build-c7pkg): all five steps green, `:latest` ==
+  scanned sha digest, site 200.
+
+**flink-demo (PRs #1244, #1249, #1250, #1251, #1252).**
+- The running 1.0.0 was Flink 1.20.4 on Temurin 17.0.19 (April) while the
+  Dockerfile said Flink 2.3 (Renovate PR #784, never rebuilt). Java4Shell
+  (CVE-2026-114938) is x86-64 AVX-512 only; not exploitable on these ARM64
+  nodes, but Java was a release train behind regardless.
+- In-cluster build replaced build-and-push.sh. It first failed on apt over
+  port 80 (argo-workflows egress is 443 only): apt now uses https (PR #1249).
+- The gate then blocked the 1.20 image: pyarrow 11.0.0, CVE-2023-47248,
+  unfixable on 1.20 (PyFlink 1.20 -> apache-beam<2.49 -> pyarrow<12). Asked;
+  the user chose Flink 2.x over an expiring exception.
+- Flink 2.2.1 (the newest v2_x the operator 1.16.1 accepts), PyFlink 2.2.1,
+  pyarrow 16.1.0, connector 5.0.0-2.2, Temurin 17.0.21. 2.x images build as
+  USER flink and are Ubuntu 24.04 (ubuntu.sources, PEP 668). Renovate caps
+  apache/flink <2.3. Gate: 3 critical (none fixable) / 98 high, from 17 / 452.
+  Kaniko peak 1305 MiB of 2 GiB.
+- file-to-kafka's pod was refused by PodSecurity restricted: it never got the
+  securityContext from #1086 because it had already FINISHED (PR #1252).
+- **End to end on v2_2:** file-to-kafka published 15 records (offset 1 -> 16),
+  kafka-to-s3 wrote 15 objects to s3://flink-output/events/.
+
+**Still open:** O23 (trivy-operator scan of 2.0.0 fails via lan-gateway, see
+TODO). Zot holds unused tags flink-demo:f080e5b (the blocked 1.20 build) and
+35b1a65 (= 2.0.0); harmless. The docker/*.py copies differ from the
+ConfigMap scripts that actually run; the image does not COPY them.
 
 ### 2026-11-21: Renovate batch, one stale report counted twice
 
