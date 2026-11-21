@@ -238,9 +238,17 @@ series predicted ~107 GB free; the disk is 42% free). All cleared by 13:32Z.
 uptime-kuma 2.5.12 got its report while the 2.5.11 report (scaled-down
 ReplicaSet, no owner) is kept until its 24h TTL, about 2026-11-22 01:00Z.
 The rule sums every report, so any image bump double-counts that image for up
-to a day. 2.5.12 itself has the same 6 criticals and 3 fewer highs. Follow-up:
-dedupe the rule by image (e.g. `max by (image_repository, image_tag)` before
-summing), or count only images of running pods.
+to a day. 2.5.12 itself has the same 6 criticals and 3 fewer highs.
+
+**Fixed the same day.** A recording rule, `trivy:running_image_vulnerabilities:max`,
+takes the max per repository+tag and keeps only images some pod runs; both
+*Increased alerts use it. Raw sum 102 criticals, per running image 61 (35 were
+duplicate reports, 6 the stale uptime-kuma 2.5.11). Joined on repository+tag,
+not digest: trivy's per-platform digest differs from the kubelet's index digest
+for strimzi, python and busybox, and a digest join silently dropped those
+running images. A promtool test replaying this case: old rule fires +13, new
+rule silent, a genuinely worse image still fires. The recording rule has no
+history at first, so both alerts stay silent for 24h after it deploys.
 
 **Note:** the Loki chart's own default image is still 3.6.11 (appVersion 3.6.20);
 not pinned by us.
