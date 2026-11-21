@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-21 16:30Z (wrap-up). Renovate batch applied; CVE increase alerts count each running image once (PR #1241); builds scanned before deploy (image-gate, PR #1242/#1245); flink-demo on Flink 2.2 / Java 17.0.21, verified end to end (PR #1244-#1252); Renovate caps for flink-demo (apache/flink <2.3, eclipse-temurin <18, PR #1254). Open PR: #1246 Temurin 17.0.21.1, merge when its arm64 image exists, then rebuild flink-demo 2.0.1. O23 narrowed to large-blob pulls through lan-gateway. 38/38 Synced+Healthy. Next: Sun 11-22 NAS patch + node OS (O24), optional k8s 1.36.6; 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O5 re-check 2026-11-25 10:00Z.
+**Last Updated:** 2026-11-21 16:45Z (wrap-up). Kafka 4.2.1 -> 4.2.2 (PR #1256; broker Java 21.0.13.1, Java4Shell fix). k8s-docs synced with the cluster (k8s-docs PR #139). New O26: the NFS photo inbox has no backup. Renovate batch applied; CVE increase alerts count each running image once (PR #1241); builds scanned before deploy (image-gate, PR #1242/#1245); flink-demo on Flink 2.2 / Java 17.0.21, verified end to end (PR #1244-#1252); Renovate caps for flink-demo (apache/flink <2.3, eclipse-temurin <18, PR #1254). Open PR: #1246 Temurin 17.0.21.1, merge when its arm64 image exists, then rebuild flink-demo 2.0.1. O23 narrowed to large-blob pulls through lan-gateway. 38/38 Synced+Healthy. Next: Sun 11-22 NAS patch + node OS (O24), optional k8s 1.36.6; 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O5 re-check 2026-11-25 10:00Z.
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -258,6 +258,20 @@ tag had no arm64 image, so the in-cluster build would fail. When arm64 exists:
 merge, `argo submit --from workflowtemplate/flink-demo-build -n argo-workflows
 -p version=2.0.1`, then bump both FlinkDeployments. Not urgent (Java4Shell is
 x86-64 only).
+
+**Kafka (evening, asked to verify its Java).** Strimzi 1.3.1 (latest) and Red Hat
+OpenJDK 21.0.13 were current, but Kafka was 4.2.1 with 4.2.2 supported: Renovate does
+not track `spec.kafka.version`. PR #1256 rolled the broker to
+`strimzi/kafka:1.3.1-kafka-4.2.2`, whose Java is **21.0.13.1** (2026-11-17, the
+Java4Shell fix). The broker storage is **ephemeral**, so the roll emptied
+`flink-events` (offset 16 -> 0); the 15 objects already in S3 are unaffected, and
+kafka-to-s3 reconnected (RUNNING). The PR body wrongly said the topic was persistent.
+
+**k8s-docs synced with the cluster (k8s-docs PR #139, 27 pages).** Stale chart/app
+versions on ~20 pages, Calico on 4, wrong sync waves for chaos-mesh and oauth2-proxy,
+a wrong unipoller image, the Flink and Kafka pages, the build-pipeline pages (image
+gate, mesh annotation), and the NAS PVC table (8 listed, 11 real, incl. the NFS
+inbox). That table check found O26.
 
 **Still open:** O23 (trivy-operator scan of 2.0.0 fails via lan-gateway, see
 TODO). Zot holds unused tags flink-demo:f080e5b (the blocked 1.20 build) and
