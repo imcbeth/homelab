@@ -60,6 +60,48 @@ spec:
           Inherent operator grants (KSV041, KSV046) are expected; decide
           whether the new one is.
 
+  # Vulnerability counts per running image, counted once (2026-11-21).
+  #
+  # trivy_image_vulnerabilities has one series per VulnerabilityReport, and
+  # there is one report per ReplicaSet/DaemonSet/Job, so summing it raw
+  # counts an image once per workload that runs it (argo-events v1.9.11:
+  # 7 criticals, 5 reports, summed as 35) and keeps counting an image after
+  # its pods are gone (a report for a scaled-down ReplicaSet lives until its
+  # 24h TTL). After the 2026-11-21 Renovate batch that made
+  # CriticalVulnerabilitiesIncreased go pending at +6: uptime-kuma 2.5.12 was
+  # counted alongside the 2.5.11 report it replaced. On that day the raw sum
+  # was 102 criticals; per running image it was 61.
+  #
+  # Joined to running images on repository + tag, not digest: trivy records
+  # the per-platform manifest digest and the kubelet usually the multi-arch
+  # index digest, so a digest join silently dropped running images
+  # (strimzi/operator, strimzi/kafka, python:3.15-alpine, busybox:1.38). The
+  # regex strips the registry (a first path segment containing "." or ":")
+  # and any @sha256 pin from kube-state-metrics' `image` label, which leaves
+  # trivy's image_repository and image_tag (docker.io/library/busybox:1.38 ->
+  # library/busybox, 1.38). kube_pod_container_info covers every pod that
+  # still exists, completed CronJob pods included, so a CronJob's image does
+  # not drop out between runs. Images trivy never scanned (kube-system,
+  # O23's flink-demo) are absent here, as they were from the raw sum.
+  - name: trivy_vulnerabilities_recording
+    interval: 60s
+    rules:
+    - record: trivy:running_image_vulnerabilities:max
+      expr: |
+        max by (image_repository, image_tag, severity) (
+          trivy_image_vulnerabilities{severity=~"Critical|High"}
+        )
+        and on (image_repository, image_tag)
+        (
+          label_replace(label_replace(kube_pod_container_info,
+            "image_repository", "$1", "image", "(?:[^/]*[.:][^/]*/)?(.+?):([^:/@]+)(?:@sha256:[0-9a-f]+)?"),
+            "image_tag", "$2", "image", "(?:[^/]*[.:][^/]*/)?(.+?):([^:/@]+)(?:@sha256:[0-9a-f]+)?")
+          or
+          label_replace(label_replace(kube_pod_init_container_info,
+            "image_repository", "$1", "image", "(?:[^/]*[.:][^/]*/)?(.+?):([^:/@]+)(?:@sha256:[0-9a-f]+)?"),
+            "image_tag", "$2", "image", "(?:[^/]*[.:][^/]*/)?(.+?):([^:/@]+)(?:@sha256:[0-9a-f]+)?")
+        )
+
   - name: trivy_vulnerabilities
     interval: 60s
     rules:
@@ -92,10 +134,13 @@ spec:
     # 1. REGRESSION — the cluster got measurably worse in the last day.
     #    This is the high-signal one: it means an upgrade or new deployment
     #    introduced critical CVEs.
+    #    Counts each running image once (trivy_vulnerabilities_recording
+    #    above), so an image bump only fires if the new image is worse than
+    #    the one it replaced.
     - alert: CriticalVulnerabilitiesIncreased
       expr: |
-        sum(trivy_image_vulnerabilities{severity="Critical"})
-        - sum(trivy_image_vulnerabilities{severity="Critical"} offset 24h) > 0
+        sum(trivy:running_image_vulnerabilities:max{severity="Critical"})
+        - sum(trivy:running_image_vulnerabilities:max{severity="Critical"} offset 24h) > 0
       for: 30m
       labels:
         severity: warning
@@ -105,9 +150,11 @@ spec:
           Critical vulnerabilities across the cluster increased by {{ $value }}
           in the last 24 hours — a newly deployed or upgraded image introduced them.
 
-          Find the change:
-            sum by (image_repository,image_tag) (trivy_image_vulnerabilities{severity="Critical"})
-          compared against the same query with `offset 24h`.
+          Find the change (each running image counted once):
+            trivy:running_image_vulnerabilities:max{severity="Critical"}
+            unless on (image_repository, image_tag)
+            trivy:running_image_vulnerabilities:max{severity="Critical"} offset 24h
+          lists images that are new since yesterday.
 
     # 2. OUTLIER IMAGE — one image carrying a lot of criticals is worth a
     #    deliberate decision (pin, replace, or accept). Threshold 10 chosen
@@ -165,8 +212,8 @@ spec:
     #    the Alertmanager UI as a regression marker, nothing more.
     - alert: HighVulnerabilitiesIncreased
       expr: |
-        sum(trivy_image_vulnerabilities{severity="High"})
-        - sum(trivy_image_vulnerabilities{severity="High"} offset 24h) > 0
+        sum(trivy:running_image_vulnerabilities:max{severity="High"})
+        - sum(trivy:running_image_vulnerabilities:max{severity="High"} offset 24h) > 0
       for: 1h
       labels:
         severity: info
@@ -176,9 +223,11 @@ spec:
           High vulnerabilities across the cluster increased by {{ $value }}
           in the last 24 hours.
 
-          Find the change:
-            sum by (image_repository,image_tag) (trivy_image_vulnerabilities{severity="High"})
-          compared against the same query with `offset 24h`.
+          Find the change (each running image counted once):
+            trivy:running_image_vulnerabilities:max{severity="High"}
+            unless on (image_repository, image_tag)
+            trivy:running_image_vulnerabilities:max{severity="High"} offset 24h
+          lists images that are new since yesterday.
 
   - name: trivy_configuration_audit
     interval: 60s
