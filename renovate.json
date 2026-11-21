@@ -157,6 +157,16 @@
       "allowedVersions": "<2.3"
     },
     {
+      "description": "The JDK copied into flink-demo stays on Java 17: Flink 2.2 supports Java 11, 17 and 21, and the base image is a -java17 build. Renovate proposed Temurin 25 (PR #1248). Patch and update releases of 17 still come through; check the new tag has an arm64 image before merging, because the in-cluster build runs on arm64 (17.0.21.1 had none on 2026-11-21, PR #1246)",
+      "matchFileNames": [
+        "manifests/base/flink-demo/docker/Dockerfile"
+      ],
+      "matchPackageNames": [
+        "eclipse-temurin"
+      ],
+      "allowedVersions": "<18"
+    },
+    {
       "description": "The argo-events JetStream version map (configs.jetstream.versions) is keyed by `version`, and the EventBus selects an entry by that key. Renovate bumps the image strings without the key, so on 2026-11-15 it proposed nats:2.15.3 under the entry named 2.10.29 and rewrote the 2.10.10 rollback entry (#1159-#1163). Upgrade NATS deliberately instead: add a new version entry, then point eventbus.yaml at it",
       "matchFileNames": [
         "manifests/base/argo-events/values.yaml"
