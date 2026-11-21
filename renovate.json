@@ -147,14 +147,14 @@
       "enabled": false
     },
     {
-      "description": "flink-demo stays on Flink 1.20: its FlinkDeployments declare flinkVersion v1_20 and the Dockerfile pins PyFlink and the Kafka connector to 1.20. PR #784 moved the base image to 2.3 on its own, which would have built a broken image had anyone rebuilt it. Moving to Flink 2 changes all four together, by hand. After merging a 1.20.x patch, rebuild with the flink-demo-build workflow and bump the image tag",
+      "description": "flink-demo stays on Flink 2.2: the Flink Kubernetes Operator (1.16.1) accepts flinkVersion up to v2_2, and the Dockerfile pins PyFlink and the Kafka connector (5.0.0-2.2) to 2.2. PR #784 once moved the base image a major version on its own, which would have built a broken image had anyone rebuilt it. A new minor needs the operator to support it and all four to move together, by hand. After merging a 2.2.x patch, rebuild with the flink-demo-build workflow and bump the image tag",
       "matchFileNames": [
         "manifests/base/flink-demo/docker/Dockerfile"
       ],
       "matchPackageNames": [
         "apache/flink"
       ],
-      "allowedVersions": "<1.21"
+      "allowedVersions": "<2.3"
     },
     {
       "description": "The argo-events JetStream version map (configs.jetstream.versions) is keyed by `version`, and the EventBus selects an entry by that key. Renovate bumps the image strings without the key, so on 2026-11-15 it proposed nats:2.15.3 under the entry named 2.10.29 and rewrote the 2.10.10 rollback entry (#1159-#1163). Upgrade NATS deliberately instead: add a new version entry, then point eventbus.yaml at it",
