@@ -1,0 +1,169 @@
+# Build workflow for the flink-demo image (2026-11-21).
+#
+# Replaces manifests/base/flink-demo/docker/build-and-push.sh, a laptop
+# `docker buildx --platform linux/arm64 --push` that nobody re-ran after
+# Renovate changed the Dockerfile (PR #784), and whose arm64-only image index
+# Trivy could not scan (O23). Kaniko on the arm64 nodes pushes a
+# single-platform image, which trivy-operator scans like the others.
+#
+# Clones this repo (public, so no token), builds
+# manifests/base/flink-demo/docker/ with Kaniko, pushes
+#   registry.k8s.n37.ca/flink-demo:<git-sha>
+# then scans it (image-gate-workflow.yaml) and only if that passes tags it
+#   registry.k8s.n37.ca/flink-demo:<version>
+# Nothing restarts: the FlinkDeployments pin a version, so deploying is a PR
+# that changes `image:` in manifests/base/flink-demo/flink-*.yaml to the new
+# version, after this workflow has pushed it.
+#
+# Manual only (the Dockerfile changes rarely):
+#   argo submit --from workflowtemplate/flink-demo-build -n argo-workflows \
+#     -p version=1.1.0 --watch
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: flink-demo-build
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: flink-demo-build
+    app.kubernetes.io/component: ci
+spec:
+  entrypoint: build-and-push
+  serviceAccountName: argo-workflow   # created by the argo-workflows Helm chart
+
+  arguments:
+    parameters:
+      - name: revision
+        value: main
+      # No default: the version is the tag the FlinkDeployments will run,
+      # so it must be chosen (and must not overwrite one already deployed).
+      - name: version
+
+  volumeClaimTemplates:
+    - metadata:
+        name: workspace
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: synology-iscsi-delete-ssd
+        resources:
+          requests:
+            storage: 1Gi
+
+  volumes:
+    - name: registry-creds
+      secret:
+        secretName: lifeonabike-registry-creds
+        items:
+          - key: .dockerconfigjson
+            path: config.json
+
+  # Same as lifeonabike-build. The labels satisfy Gatekeeper require-labels.
+  # The pods are ambient-meshed regardless of the redirection annotation
+  # (istio-cni status, not an opt-out; REFERENCE.md), so the image-gate scan
+  # reaches trivy-server over HBONE as service account argo-workflow.
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: flink-demo-build
+      app.kubernetes.io/component: ci
+    annotations:
+      ambient.istio.io/redirection: disabled
+
+  templateDefaults:
+    container:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+  ttlStrategy:
+    secondsAfterSuccess: 3600    # 1h
+    secondsAfterFailure: 28800   # 8h
+
+  templates:
+    - name: build-and-push
+      steps:
+        - - name: clone
+            template: git-clone
+        - - name: build
+            template: kaniko-build
+            arguments:
+              parameters:
+                - name: image-tag
+                  value: "{{steps.clone.outputs.parameters.sha}}"
+        - - name: scan
+            templateRef:
+              name: image-gate
+              template: scan
+            arguments:
+              parameters:
+                - name: image
+                  value: zot.zot.svc.cluster.local:5000/flink-demo
+                - name: tag
+                  value: "{{steps.clone.outputs.parameters.sha}}"
+        - - name: promote
+            templateRef:
+              name: image-gate
+              template: promote
+            arguments:
+              parameters:
+                - name: image
+                  value: zot.zot.svc.cluster.local:5000/flink-demo
+                - name: tag
+                  value: "{{steps.clone.outputs.parameters.sha}}"
+                - name: to-tag
+                  value: "{{workflow.parameters.version}}"
+
+    - name: git-clone
+      outputs:
+        parameters:
+          - name: sha
+            valueFrom:
+              path: /tmp/sha
+      container:
+        image: alpine/git:v2.54.1
+        command: [sh, -c]
+        args:
+          - |
+            git clone https://github.com/imcbeth/homelab.git /workspace \
+              --branch {{workflow.parameters.revision}} \
+              --single-branch \
+              --depth 1 && \
+            git -C /workspace rev-parse --short HEAD > /tmp/sha
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+
+    - name: kaniko-build
+      inputs:
+        parameters:
+          - name: image-tag
+      container:
+        image: gcr.io/kaniko-project/executor:v1.24.0
+        # pip compiles pemja and unpacks PyFlink (~300 MB of jars); the
+        # image is ~1.3 GB compressed. The full 2Gi the container-limits constraint
+        # allows, with compressed caching off as in lifeonabike-agent-build.
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        args:
+          - --dockerfile=/workspace/manifests/base/flink-demo/docker/Dockerfile
+          - --context=/workspace/manifests/base/flink-demo/docker
+          # Zot's ClusterIP over HTTP, as in lifeonabike-build.
+          - --insecure
+          - --destination=zot.zot.svc.cluster.local:5000/flink-demo:{{inputs.parameters.image-tag}}
+          - --cache=true
+          - --cache-repo=zot.zot.svc.cluster.local:5000/flink-demo/cache
+          - --compressed-caching=false
+          - --snapshot-mode=redo
+          - --insecure-pull
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+          - name: registry-creds
+            mountPath: /kaniko/.docker
