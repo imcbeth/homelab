@@ -140,6 +140,21 @@ spec:
       ports:
         - protocol: TCP
           port: 5000
+    # Build pods -> trivy-server, for the image-gate scan before :latest
+    # moves (argo-workflows/image-gate-workflow.yaml, 2026-11-21). Plain TCP:
+    # build pods opt out of ambient redirection. Matched by the
+    # app.kubernetes.io/component: ci pod label; trivy-system's policy
+    # admits the same pods on its side.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: trivy-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: trivy-server
+      ports:
+        - protocol: TCP
+          port: 4954
     # Allow Backblaze B2 and container registries (external HTTPS)
     - to:
         - ipBlock:

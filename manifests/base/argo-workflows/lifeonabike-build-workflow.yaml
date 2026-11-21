@@ -1,9 +1,11 @@
 # Build workflow for lifeonabike.ca
 #
 # Clones https://github.com/imcbeth/lifeonabike.ca, builds the Docker image
-# with Kaniko, and pushes two tags to the local Zot registry:
+# with Kaniko, and pushes it to the local Zot registry as
 #   registry.k8s.n37.ca/lifeonabike/lifeonabike.ca:<git-sha>
+# then scans it (image-gate-workflow.yaml) and only if that passes tags it
 #   registry.k8s.n37.ca/lifeonabike/lifeonabike.ca:latest
+# and restarts deployment/web.
 #
 # Triggered by Argo Events on push to main (see manifests/base/argo-events/).
 # Can also be submitted manually:
@@ -61,6 +63,7 @@ spec:
   podMetadata:
     labels:
       app.kubernetes.io/name: lifeonabike-build
+      app.kubernetes.io/component: ci   # admits the image-gate scan to trivy-server (NetworkPolicies)
     annotations:
       ambient.istio.io/redirection: disabled
 
@@ -89,6 +92,27 @@ spec:
             arguments:
               parameters:
                 - name: image-tag
+                  value: "{{steps.clone.outputs.parameters.sha}}"
+        # image-gate-workflow.yaml: scan :<sha>, and only then move :latest.
+        - - name: scan
+            templateRef:
+              name: image-gate
+              template: scan
+            arguments:
+              parameters:
+                - name: image
+                  value: zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca
+                - name: tag
+                  value: "{{steps.clone.outputs.parameters.sha}}"
+        - - name: promote
+            templateRef:
+              name: image-gate
+              template: promote
+            arguments:
+              parameters:
+                - name: image
+                  value: zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca
+                - name: tag
                   value: "{{steps.clone.outputs.parameters.sha}}"
         - - name: deploy
             template: rollout-restart
@@ -121,7 +145,8 @@ spec:
           - name: workspace
             mountPath: /workspace
 
-    # ── Step 2: build image with Kaniko, push sha + latest tags ──────────────
+    # ── Step 2: build image with Kaniko, push the sha tag only ───────────────
+    # :latest moves in the promote step, after the image-gate scan passes.
     - name: kaniko-build
       inputs:
         parameters:
@@ -144,7 +169,6 @@ spec:
           # external registry.k8s.n37.ca hostname and are unaffected.
           - --insecure
           - --destination=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca:{{inputs.parameters.image-tag}}
-          - --destination=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca:latest
           - --cache=true
           - --cache-repo=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca/cache
           - --insecure-pull

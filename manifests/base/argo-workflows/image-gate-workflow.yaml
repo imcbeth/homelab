@@ -1,0 +1,99 @@
+# Pre-deploy image gate, shared by the build workflows (2026-11-21).
+#
+# Until this existed, every build pushed :<sha> and :latest together and then
+# restarted the deployment, so a new image was live before anything scanned
+# it; trivy-operator only reported on it afterwards. Now a build pushes
+# :<sha> only, and calls these two templates through templateRef:
+#
+#   scan     trivy (client mode, against the in-cluster trivy-server, so no
+#            vulnerability DB download per build) prints HIGH and CRITICAL
+#            findings, then fails the workflow on any CRITICAL that has a
+#            fixed version. Unfixed CVEs and HIGHs are printed, not gated: a
+#            build cannot act on them, and blocking on them would stop every
+#            deploy over things only upstream can fix.
+#   promote  crane retags the scanned :<sha> as :latest. The deployments run
+#            :latest, so a failed scan leaves :latest on the previous image,
+#            and even a node reboot cannot pull the unscanned one.
+#
+# trivy-operator stays the runtime check: new CVEs are published against
+# images that passed this gate months ago.
+#
+# Requirements on the calling workflow:
+# - a `registry-creds` volume (the dockerconfigjson for
+#   zot.zot.svc.cluster.local:5000, as in lifeonabike-build); promote needs
+#   push rights, scan does not (Zot allows anonymous reads);
+# - the pod label app.kubernetes.io/component: ci, which the argo-workflows
+#   and trivy-system NetworkPolicies use to admit build pods to
+#   trivy-server:4954;
+# - ambient.istio.io/redirection: disabled, as the build pods already set,
+#   so the connection arrives as plain TCP (trivy-system's
+#   AuthorizationPolicy admits sources without a mesh identity on 4954).
+#
+# Images come from Zot's ClusterIP over HTTP (--insecure), like Kaniko's push.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: image-gate
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: image-gate
+    app.kubernetes.io/component: ci
+spec:
+  templates:
+    - name: scan
+      inputs:
+        parameters:
+          - name: image   # e.g. zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike.ca
+          - name: tag
+      container:
+        # Same image and version as trivy-server (trivy.tag in the operator
+        # config); keep them together so client and server agree on the
+        # scan protocol.
+        image: mirror.gcr.io/aquasec/trivy:0.76.2
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            ref="{{inputs.parameters.image}}:{{inputs.parameters.tag}}"
+            common="--server http://trivy-service.trivy-system:4954 --insecure --image-src remote --scanners vuln --no-progress --cache-dir /tmp/trivy"
+            echo "== HIGH and CRITICAL findings for $ref (report only)"
+            trivy image $common --severity HIGH,CRITICAL "$ref"
+            echo "== Gate: CRITICAL with a fixed version"
+            trivy image $common --severity CRITICAL --ignore-unfixed --exit-code 1 --format table "$ref"
+        # The client unpacks layers itself (the server only matches packages
+        # against the DB); 1Gi leaves room for a large image under the 2Gi
+        # container-limits constraint.
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+
+    - name: promote
+      inputs:
+        parameters:
+          - name: image
+          - name: tag
+      container:
+        image: gcr.io/go-containerregistry/crane:v0.22.1
+        command: [crane]
+        args:
+          - tag
+          - --insecure
+          - "{{inputs.parameters.image}}:{{inputs.parameters.tag}}"
+          - latest
+        env:
+          - name: DOCKER_CONFIG
+            value: /docker
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+          - name: registry-creds
+            mountPath: /docker

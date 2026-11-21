@@ -1,10 +1,11 @@
 # Build workflow for lifeonabike-agent
 #
 # Clones https://github.com/imcbeth/lifeonabike-agent (private), builds its
-# root Dockerfile with Kaniko, and pushes two tags to the local Zot registry:
+# root Dockerfile with Kaniko, and pushes it to the local Zot registry as
 #   registry.k8s.n37.ca/lifeonabike/lifeonabike-agent:<git-sha>
+# then scans it (image-gate-workflow.yaml), only if that passes tags it
 #   registry.k8s.n37.ca/lifeonabike/lifeonabike-agent:latest
-# then restarts deployment/agent in lifeonabike if it exists.
+# and restarts deployment/agent in lifeonabike if it exists.
 #
 # Same shape as lifeonabike-build, and reuses its secrets
 # (lifeonabike-registry-creds, github-clone-token) and RBAC
@@ -61,6 +62,7 @@ spec:
   podMetadata:
     labels:
       app.kubernetes.io/name: lifeonabike-agent-build
+      app.kubernetes.io/component: ci   # admits the image-gate scan to trivy-server (NetworkPolicies)
     annotations:
       ambient.istio.io/redirection: disabled
 
@@ -89,6 +91,27 @@ spec:
             arguments:
               parameters:
                 - name: image-tag
+                  value: "{{steps.clone.outputs.parameters.sha}}"
+        # image-gate-workflow.yaml: scan :<sha>, and only then move :latest.
+        - - name: scan
+            templateRef:
+              name: image-gate
+              template: scan
+            arguments:
+              parameters:
+                - name: image
+                  value: zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike-agent
+                - name: tag
+                  value: "{{steps.clone.outputs.parameters.sha}}"
+        - - name: promote
+            templateRef:
+              name: image-gate
+              template: promote
+            arguments:
+              parameters:
+                - name: image
+                  value: zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike-agent
+                - name: tag
                   value: "{{steps.clone.outputs.parameters.sha}}"
         - - name: deploy
             template: rollout-restart
@@ -121,7 +144,8 @@ spec:
           - name: workspace
             mountPath: /workspace
 
-    # ── Step 2: build image with Kaniko, push sha + latest tags ──────────────
+    # ── Step 2: build image with Kaniko, push the sha tag only ───────────────
+    # :latest moves in the promote step, after the image-gate scan passes.
     - name: kaniko-build
       inputs:
         parameters:
@@ -146,7 +170,6 @@ spec:
           # external registry.k8s.n37.ca hostname and are unaffected.
           - --insecure
           - --destination=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike-agent:{{inputs.parameters.image-tag}}
-          - --destination=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike-agent:latest
           - --cache=true
           - --cache-repo=zot.zot.svc.cluster.local:5000/lifeonabike/lifeonabike-agent/cache
           - --compressed-caching=false
