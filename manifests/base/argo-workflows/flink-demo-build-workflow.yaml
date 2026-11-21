@@ -56,9 +56,10 @@ spec:
           - key: .dockerconfigjson
             path: config.json
 
-  # Same as lifeonabike-build: labels for Gatekeeper require-labels and for
-  # the trivy-server NetworkPolicy rule (component: ci); redirection disabled
-  # so Zot, GitHub and trivy-server are reached as plain connections.
+  # Same as lifeonabike-build. The labels satisfy Gatekeeper require-labels.
+  # The pods are ambient-meshed regardless of the redirection annotation
+  # (istio-cni status, not an opt-out; REFERENCE.md), so the image-gate scan
+  # reaches trivy-server over HBONE as service account argo-workflow.
   podMetadata:
     labels:
       app.kubernetes.io/name: flink-demo-build
