@@ -33,9 +33,24 @@ spec:
         spec:
           serviceAccountName: compliance-reporter
           restartPolicy: OnFailure
+          # Restricted Pod Security (2026-11-22). trivy-system enforces baseline
+          # but warns on restricted, and every patch to this CronJob printed the
+          # warning (seen suspending it for the NAS shutdown). uid 1001 is the
+          # bitnami/kubectl image's own user. The root filesystem stays writable:
+          # kubectl writes its discovery cache under $HOME.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            seccompProfile:
+              type: RuntimeDefault
           containers:
           - name: reporter
             image: registry.k8s.n37.ca/bitnami/kubectl:latest
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
             # memory RAISED 128Mi -> 384Mi on 2026-09-11 after OOMKills.
             #
             # MEASURED, not guessed: /sys/fs/cgroup/memory.peak in a probe pod
