@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-22 (wrap-up). NAS patched with the cluster down; node OS packages applied during the shutdown, all five on kernel 6.8.0-1068 (O24 closed). k8s 1.36.6 skipped: Phase 3 goes 1.36.3 -> 1.37.1 on 12-05. /cluster-shutdown gained the lan-gateway PDB, agent + EventBus and an NFS gate. compliance-reporter runs restricted. O26 now lower risk (inbox is staging only). 38/38 Synced+Healthy, 108/108 targets. Open PR: #1246 Temurin 17.0.21.1 (merge when its arm64 image exists, then rebuild flink-demo 2.0.1). Next: 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O5 re-check 2026-11-25 10:00Z. Token rotation 11-26.
+**Last Updated:** 2026-11-22 (wrap-up). NAS patched with the cluster down; node OS packages applied during the shutdown, all five on kernel 6.8.0-1068 (O24 closed). k8s 1.36.6 skipped: Phase 3 goes 1.36.3 -> 1.37.1 on 12-05. /cluster-shutdown gained the lan-gateway PDB, agent + EventBus and an NFS gate. compliance-reporter runs restricted. O26 now lower risk (inbox is staging only). New O27: localstack, bitnami/kubectl:latest and argo-events carry most critical CVEs. 38/38 Synced+Healthy, 108/108 targets. Open PR: #1246 Temurin 17.0.21.1 (merge when its arm64 image exists, then rebuild flink-demo 2.0.1). Next: 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O5 re-check 2026-11-25 10:00Z. Token rotation 11-26.
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -228,6 +228,8 @@ The skill (`~/.claude/commands/cluster-shutdown.md`) now has all three, plus the
 **Startup:** NAS first, then control plane, then workers. All five on 6.8.0-1068-raspi, no reboot-required. Scale-up symmetric to the shutdown; 0 read-only remounts. 38/38 Synced+Healthy after ~3 min of auto-sync correcting replica and PDB drift; **108/108 Prometheus targets** (ztunnel came up with XDS this time). 150 pods, 11/11 PVCs Bound, 10 VAs, 11/11 certs, 13/13 DS, 7/7 CronJobs active, both PDBs restored. Only `IstiodRestarted` fired (expected after a cold boot). Sites: argocd, grafana, registry, workflows, lifeonabike.ca all answer.
 
 **Also:** `compliance-reporter` now runs under restricted Pod Security (it printed a warning on every patch). k8s 1.36.6 skipped by the user's call, 1.37.1 is two weeks out; runbook updated (Phase 3 from 1.36.3, rollback pins 1.36.3). O26 lowered: inbox is staging only.
+
+**After the merge (#1259):** test run `kubectl create job --from=cronjob/compliance-reporter cr-test` completed first try as uid 1001 / RuntimeDefault and posted to Alertmanager (HTTP 200); job deleted. Its report names the worst images: localstack 4.14.0 (25 critical), bitnami/kubectl:latest (20), argo-events v1.9.11 (7, x3), now O27.
 
 ### 2026-11-21 (afternoon): builds are scanned before they ship, and flink-demo was two versions behind its own Dockerfile
 
