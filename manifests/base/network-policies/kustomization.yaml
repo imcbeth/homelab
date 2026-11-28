@@ -60,6 +60,7 @@ resources:
   - default/network-policy.yaml
   - default/authorization-policy.yaml
   - default/calico-network-policy-allow-egress-icmp.yaml
+  - calico-system/calico-network-policy-allow-prometheus.yaml
   - argocd/network-policy.yaml
   - argocd/authorization-policy.yaml
   - synology-csi/network-policy.yaml

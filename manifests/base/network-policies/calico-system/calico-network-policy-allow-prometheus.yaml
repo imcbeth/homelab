@@ -1,0 +1,34 @@
+# Let our Prometheus scrape calico-kube-controllers (2026-11-28).
+#
+# Calico 3.33 (tigera-operator v1.44) creates a `calico-system` policy tier
+# (order 100, defaultAction Deny) with `calico-system.default-deny` over every
+# non-apiserver pod in the namespace. Its `kube-controller-access` policy
+# admits port 9094 only from `tigera-prometheus` (Calico Enterprise), so our
+# Prometheus (`default`) timed out on the kube-controllers target right after
+# the upgrade. Neither the release notes nor the upgrade notes mention it.
+#
+# The allow has to live in that tier: the tier is evaluated before `default`
+# and denies what its policies leave unmatched, so a rule in our own tier is
+# never reached. Ingress only, one port, one source; the operator's own
+# policies are untouched. calico-node and Typha are hostNetwork and not
+# selected by these pod policies.
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: calico-system.allow-prometheus-kube-controllers
+  namespace: calico-system
+spec:
+  tier: calico-system
+  order: 0
+  selector: k8s-app == 'calico-kube-controllers'
+  types:
+    - Ingress
+  ingress:
+    - action: Allow
+      protocol: TCP
+      source:
+        namespaceSelector: kubernetes.io/metadata.name == 'default'
+        selector: app.kubernetes.io/name == 'prometheus'
+      destination:
+        ports:
+          - 9094
