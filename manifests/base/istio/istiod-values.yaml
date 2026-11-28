@@ -11,6 +11,12 @@
 pilot:
   env:
     PILOT_ENABLE_AMBIENT: "true"
+    # Keep 1.30's endpoint behaviour across the 1.31 upgrade (2026-11-28).
+    # 1.31 defaults this to true: unhealthy endpoints go into EDS, and with
+    # one replica a not-ready pod puts lan-gateway's Envoy into panic mode,
+    # routing to the pod instead of answering 503. One change at a time;
+    # decide on the new default separately.
+    PILOT_AUTO_SEND_UNHEALTHY_ENDPOINTS: "false"
 
 # Resource limits for istiod (actual usage ~42Mi)
 # Right-sized from 256Mi/512Mi to match actual usage with headroom
