@@ -1,6 +1,6 @@
 # Claude Code - Homelab Current Context
 
-**Last Updated:** 2026-11-22 (wrap-up). NAS patched with the cluster down; node OS packages applied during the shutdown, all five on kernel 6.8.0-1068 (O24 closed). k8s 1.36.6 skipped: Phase 3 goes 1.36.3 -> 1.37.1 on 12-05. /cluster-shutdown gained the lan-gateway PDB, agent + EventBus and an NFS gate. compliance-reporter runs restricted. O26 now lower risk (inbox is staging only). New O27: localstack, bitnami/kubectl:latest and argo-events carry most critical CVEs. 38/38 Synced+Healthy, 108/108 targets. Open PR: #1246 Temurin 17.0.21.1 (merge when its arm64 image exists, then rebuild flink-demo 2.0.1). Next: 11-28 Istio 1.31.4 + Calico 3.33.1 (O25); 12-05 k8s 1.37.1. O5 re-check 2026-11-25 10:00Z. Token rotation 11-26.
+**Last Updated:** 2026-11-28. Istio 1.30.8 -> 1.31.4 (O25 closed; #1273 repo switch to blob.istio.io, #1274 bump, PILOT_AUTO_SEND_UNHEALTHY_ENDPOINTS=false). Renovate batch #1258, #1262-#1271 applied; chaos-mesh 2.8.9 moved its default registry to cr.chaos-mesh.dev, denied by Gatekeeper, fixed with images.registry ghcr.io (#1272). lifeonabike-agent GitHub token rotated, expires 2027-11-28 (#1261). O5 closed (11-25 chaos run clean). ImageCriticalVulnerabilitiesHigh counts each running image once. 11-26 23:19Z restarts traced to the UniFi gateway rebooting (NAS unreachable ~2 min). 38/38 Synced+Healthy, 108/108 targets. Open PR: #1246 Temurin 17.0.21.1 (still no arm64). Next: Calico 3.33.1 (Phase 1), then k8s 1.37.1 weekend of 12-05. O27 bitnami/kubectl.
 **Repository:** imcbeth/homelab
 **Cluster:** 5x Raspberry Pi 5 (16GB each) Kubernetes Homelab
 
@@ -209,6 +209,22 @@
 
 ## Recent Sessions
 
+### 2026-11-28: Istio 1.31.4, a Renovate batch with one hidden registry change, and a router reboot
+
+**The 11-26 restarts were the router.** Grafana and Prometheus (node04) and Uptime Kuma (node03) restarted at 23:20Z on 11-26, all clean shutdowns. The kubelet killed them after exec liveness probes hung (`ExecSync ... DeadlineExceeded`). The NAS (10.0.1.204) was unreachable 23:18:30-23:20:30Z, and router DNS and 8.8.8.8 dropped for a sample after. UniFi Poller has `n37-gw` (the UDM) booting at 23:19Z: the nodes (10.0.10.x) reach the NAS (10.0.1.x) through the gateway, so a gateway reboot is a ~2 min iSCSI stall. 0 read-only remounts; the remediator saw none. Separate: tigera-operator lost leader election once on 11-23 08:59Z; nothing else restarted. **Node journals are in UTC-6**: pass `--since "... UTC"` or the window lands six hours off.
+
+**Token rotated (#1261).** The user put the new one-year token in `agent.env` as `Token: <value>`. Re-sealed by taking the live secret's other four keys and replacing `GITHUB_TOKEN`, through a mode-600 temp file deleted after; `kubeseal --validate` passed. Checked before sealing: 200 on the repo and its pulls, expiry header 2027-11-28 06:00 UTC, and Contents and Pull requests write confirmed without writing anything: a ref with a bad sha and a PR from a missing branch both returned 422 (403 would mean no permission). Agent restarted by the user; Strava and site checks clean.
+
+**Renovate batch.** kube-prometheus-stack 93.11.1 (#1258; operator unchanged at v0.95.2, so no CRD changes; Grafana 13.3.2 moves its probe to `/healthz`), argocd 10.18.4, argo-workflows 2.0.19, alertmanager v0.35.1, cloudflared 2026.11.2, external-snapshotter v8.7.1 (upstream's v8.7.1 manifests still pin the v8.6.0 controller image), five CSI sidecars. One `gh pr merge` returned 504 but had merged. synology-csi showed Synced while its sync operation was still Running: read `operationState.phase`, not just the sync status.
+
+**chaos-mesh 2.8.9 changed its default registry** to `cr.chaos-mesh.dev` (a proxy of ghcr.io). Gatekeeper's `allowed-repos` denied every new pod; the app sat at Synced/Progressing, one chaos-daemon and the dns-server down. `images.registry: ghcr.io` (#1272), same arm64 images. Added to the renovate-apply skill: diff the image lines of the old and new render. The cert Secrets were rewritten at 12:13:39Z and every chaos-mesh pod started after, so no daemon restart (the O5 failure mode) was needed.
+
+**Istio 1.31.4 (O25).** Step 1 (#1273): blob.istio.io at 1.30.8, identical tarball digests, no pod restarts; Renovate groups the four charts, capped `<1.32`. Step 2: the istiod Deployment, mesh ConfigMap, Service and webhooks render identically apart from version and hub; the hub moves to docker.io/istio (registry.istio.io is being switched off; scream test 12-08/09). `PILOT_AUTO_SEND_UNHEALTHY_ENDPOINTS: "false"` keeps 1.30's behaviour. Step 3 (#1274): applying `istiod.yaml` also rolls ztunnel (same file). Transient only: one ztunnel XDS connect error while istiod restarted, ~1 min of scrape resets as each node's ztunnel restarted, CNI-socket retries while istio-cni restarted. After: 7 proxies on 1.31.4, 108/108 targets, Gateway Programmed, all hosts answering.
+
+**Correction:** lan-gateway runs two replicas with required anti-affinity (#1222, since 11-16), not one; the 11-22 drain stall was the first evicted replica unable to reschedule. Fixed here and in `/cluster-shutdown`.
+
+**Alert:** `ImageCriticalVulnerabilitiesHigh` now reads `trivy:running_image_vulnerabilities:max`: bitnami/kubectl 60 -> 20 (still fires, O27); argo-events (7 unique) and argocd v3.5.6 (not running) exemptions retired.
+
 ### 2026-11-22: NAS patch, node OS updates, and three gaps in /cluster-shutdown
 
 Full shutdown for the Synology DSM update; the node OS packages went in during the same window (O24).
@@ -219,7 +235,7 @@ Full shutdown for the Synology DSM update; the node OS packages went in during t
 
 - `lifeonabike/agent` holds an iSCSI PVC and the NFS inbox. The iSCSI gate cannot see NFS, so the gate now also counts `nfs` lines in `/proc/mounts` on each node.
 - The argo-events EventBus (`eventbus-default-js`, persistent since #1171). Its StatefulSet is owned by the EventBus controller, so `argo-events-controller-manager` goes to 0 first.
-- `istio-system/lan-gateway-istio` PDB (minAvailable 1, generated by Istio from the Gateway). With every node cordoned the replacement pod cannot schedule, so draining its node always times out: node03 burned the full 120 s. Deleting the PDB is pointless (istiod recreates it); `kubectl drain --disable-eviction` on that node, or just power off, since the gateway is stateless.
+- `istio-system/lan-gateway-istio` PDB (minAvailable 1 over two replicas, generated by Istio from the Gateway). With every node cordoned the first evicted replica cannot reschedule, so draining the node with the second always times out: node03 burned the full 120 s. Deleting the PDB is pointless (istiod recreates it); `kubectl drain --disable-eviction` on that node, or just power off, since the gateway is stateless.
 
 The skill (`~/.claude/commands/cluster-shutdown.md`) now has all three, plus the 7th CronJob, 11-PVC/10-VA and 108-target baselines.
 

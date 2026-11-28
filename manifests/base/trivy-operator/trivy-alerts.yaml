@@ -163,26 +163,22 @@ spec:
     # Accepted risk, pinned to exact tags so that the next tag is checked
     # again from scratch. Remove an entry when that image is upgraded.
     #
-    # 2026-11-06, both triaged with ignoreUnfixed already on:
-    # - argoproj/argo-events:v1.9.11 is the newest release (2026-07-13).
-    #   7 unique CRITICALs, all in Go deps (amqp091-go, pgx, grpc, stdlib
-    #   1.25.6); the alert's sum of 35 counts them once per report.
-    #   Nothing newer to move to; Renovate brings the next release.
-    # - argoproj/argocd:v3.5.6 has one CRITICAL, CVE-2025-68121 in a Go
-    #   1.24.0 stdlib built into the image, repeated across 7 reports to make
-    #   the sum of 14. v3.5.7 does not bump Go. Renovate brings the next
-    #   release.
+    # Counts each running image once (trivy_vulnerabilities_recording),
+    # 2026-11-28. Until then it summed every VulnerabilityReport, so an image
+    # in three CronJobs counted three times (bitnami/kubectl: 60 for 20) and
+    # reports of old ReplicaSets counted although nothing ran them. That
+    # retired two exemptions: argo-events v1.9.11 (35 summed, 7 unique,
+    # below the threshold) and argocd v3.5.6 (no longer running).
+    #
     # - localstack/localstack:4.14.0 was pinned on purpose in #1091, because
     #   newer images require a licence. It is a LAN-only test S3 emulator
     #   holding disposable data. The real fix is to retire it, not upgrade
     #   it.
     - alert: ImageCriticalVulnerabilitiesHigh
       expr: |
-        sum by (image_repository, image_tag) (
-          trivy_image_vulnerabilities{severity="Critical"}
-            unless trivy_image_vulnerabilities{image_repository="argoproj/argo-events", image_tag="v1.9.11"}
-            unless trivy_image_vulnerabilities{image_repository="argoproj/argocd", image_tag="v3.5.6"}
-            unless trivy_image_vulnerabilities{image_repository="localstack/localstack", image_tag="4.14.0"}
+        max by (image_repository, image_tag) (
+          trivy:running_image_vulnerabilities:max{severity="Critical"}
+            unless trivy:running_image_vulnerabilities:max{image_repository="localstack/localstack", image_tag="4.14.0"}
         ) > 10
       for: 6h
       labels:
@@ -196,13 +192,9 @@ spec:
           Decide explicitly: upgrade the image, switch base, or accept and
           document. `for: 6h` avoids firing during image-rollout churn.
 
-          NOTE: reports can outlive the workload. trivy-operator writes one
-          VulnerabilityReport per ReplicaSet, and Kubernetes keeps old
-          ReplicaSets (revisionHistoryLimit, default 10). After three argocd
-          upgrades in one day there were reports for v3.4.5, v3.5.0 and
-          v3.5.2 while only v3.5.2 was running. Confirm the image is live
-          before chasing it:
-            kubectl get pods -A -o jsonpath='{range .items[*]}{.spec.containers[*].image}{"\n"}{end}' | sort -u | grep <image>
+          Each running image is counted once, from
+          trivy:running_image_vulnerabilities:max; images in VulnerabilityReports
+          that no pod runs (old ReplicaSets) are left out.
     # 3. HIGH-severity drift. Replaced `sum(Critical|High) > 50` on
     #    2026-11-15: that compared ~1,600 findings against 50, so it fired
     #    permanently and never cleared. Criticals are covered by rule 1;
