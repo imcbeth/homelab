@@ -57,6 +57,17 @@ For any **major** Helm chart version bump (e.g., Loki 6.x→7.x, uptime-kuma 2.x
 - uptime-kuma 4.x: `useDeploy`, `volume:`, `strategy:`, `ingress:` all preserved — compatible
 - Always verify with `helm show values` rather than trusting release notes alone
 
+**A patch bump can still change a default.** chaos-mesh 2.8.8 → 2.8.9 (2026-11-28) moved `images.registry` from ghcr.io to `cr.chaos-mesh.dev`. Gatekeeper's `allowed-repos` denied every new pod: the app sat at `Synced/Progressing`, one chaos-daemon and the dns-server stayed down, and the only trace was `FailedCreate` events in the namespace. Fixed by `images.registry: ghcr.io` in our values (#1272). After any chart bump, if an app stays Progressing, look for admission denials first:
+```bash
+kubectl get events -n <namespace> --field-selector reason=FailedCreate --sort-by=.lastTimestamp | tail -5
+```
+To catch it before merging, diff the image lines of the old and new render:
+```bash
+diff <(helm template x <repo>/<chart> --version <old> -f <values> | grep 'image:' | sort -u) \
+     <(helm template x <repo>/<chart> --version <new> -f <values> | grep 'image:' | sort -u)
+```
+Filter `kind: Secret` out of any wider render diff: charts generate random passwords on each `helm template`.
+
 ### Phase 3: Apply in Correct Order
 
 **Ordering rules:**
