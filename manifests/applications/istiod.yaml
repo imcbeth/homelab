@@ -26,7 +26,7 @@ spec:
         - .spec.template.metadata.labels
         - .spec.template.metadata.annotations
   sources:
-    - repoURL: https://istio-release.storage.googleapis.com/charts
+    - repoURL: https://blob.istio.io/istio-release/charts
       chart: istiod
       targetRevision: 1.30.8
       helm:
@@ -85,7 +85,7 @@ spec:
         - .spec.template.spec.volumes[].projected.defaultMode
         - .spec.template.spec.volumes[].configMap.defaultMode
   sources:
-    - repoURL: https://istio-release.storage.googleapis.com/charts
+    - repoURL: https://blob.istio.io/istio-release/charts
       chart: ztunnel
       targetRevision: 1.30.8
       helm:
