@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:2026.11.1
+          image: cloudflare/cloudflared:2026.11.2
           # --metrics pins the metrics server to 8080. Without it cloudflared
           # takes the first free port in 20241-20245, which a PodMonitor and a
           # NetworkPolicy can't follow. 8080 is the port Prometheus's egress
