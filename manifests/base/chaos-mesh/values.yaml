@@ -2,6 +2,14 @@
 # Cluster: 5x Raspberry Pi 5 (16GB, ARM64)
 # All resource limits set within Gatekeeper's 2Gi memory cap
 
+# Pull from ghcr.io (2026-11-28). Chart 2.8.9 changed the default
+# images.registry from ghcr.io to cr.chaos-mesh.dev (a proxy of ghcr.io).
+# Gatekeeper's allowed-repos does not list it, so every new chaos-mesh pod
+# was denied after the 2.8.9 sync: one chaos-daemon and chaos-dns-server
+# stayed down until this. Same images, arm64 included, on ghcr.io.
+images:
+  registry: "ghcr.io"
+
 controllerManager:
   replicaCount: 1
   resources:
