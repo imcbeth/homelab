@@ -28,7 +28,7 @@ spec:
   sources:
     - repoURL: https://blob.istio.io/istio-release/charts
       chart: istiod
-      targetRevision: 1.30.8
+      targetRevision: 1.31.4
       helm:
         releaseName: istiod
         valueFiles:
@@ -87,7 +87,7 @@ spec:
   sources:
     - repoURL: https://blob.istio.io/istio-release/charts
       chart: ztunnel
-      targetRevision: 1.30.8
+      targetRevision: 1.31.4
       helm:
         releaseName: ztunnel
         valueFiles:

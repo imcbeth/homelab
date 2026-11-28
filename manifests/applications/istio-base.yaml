@@ -16,7 +16,7 @@ spec:
   sources:
     - repoURL: https://blob.istio.io/istio-release/charts
       chart: base
-      targetRevision: 1.30.8
+      targetRevision: 1.31.4
       helm:
         releaseName: istio-base
         valuesObject:
