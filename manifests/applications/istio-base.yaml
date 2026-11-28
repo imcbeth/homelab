@@ -14,7 +14,7 @@ spec:
         - .webhooks[].clientConfig.caBundle
         - .webhooks[].failurePolicy
   sources:
-    - repoURL: https://istio-release.storage.googleapis.com/charts
+    - repoURL: https://blob.istio.io/istio-release/charts
       chart: base
       targetRevision: 1.30.8
       helm:
