@@ -32,7 +32,7 @@ spec:
     # Helm chart from Argo project
     - repoURL: https://argoproj.github.io/argo-helm
       chart: argo-workflows
-      targetRevision: 2.0.18
+      targetRevision: 2.0.19
       helm:
         releaseName: argo-workflows
         valueFiles:
